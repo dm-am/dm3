@@ -75,6 +75,7 @@
 | Файл | Что делает | Кто зовет | Подробнее |
 |------|-----------|-----------|-----------|
 | [visual/visual.mjs](visual/visual.mjs) | Точка входа: `stand`, `snap`, `diff`, `api-snap`, `api-diff`. По умолчанию мерит уже запущенный стенд и ничего в нем не меняет | человек и агенты по PROCESS.md и скиллу refactor-in-bounds | [visual/README.md](visual/README.md#команды) |
+| [visual/tsconfig.json](visual/tsconfig.json) | Проверка типов файлов стенда кадров на TypeScript: узел, Playwright и пути клиента | хук перед пушем, `gates.sh` и CI, шаг типов и линта стенда кадров | эта строка |
 | [visual/api.mjs](visual/api.mjs) | Снимок ответов API: каждый GET из слепка маршрутов от гостя, участника и модератора в виде нормализованного JSON | `visual.mjs` (`api-snap`, `api-diff`) | [visual/README.md](visual/README.md#что-снимается) |
 | [visual/api-fixture.mjs](visual/api-fixture.mjs) | Подставляет в параметры пути GET-маршрутов идентификаторы, найденные через списки самого API | `visual/api.mjs` | [visual/README.md](visual/README.md#что-снимается) |
 | [visual/api-volatile.mjs](visual/api-volatile.mjs) | Поля ответов API, которые различаются между двумя прогонами одного коммита, каждое с причиной. Значение заменяется именем поля | `visual/api.mjs`, `visual/frames.spec.ts` | [visual/README.md](visual/README.md#маски-и-изменчивые-поля) |
@@ -92,7 +93,23 @@
 | [visual/played-game.d.mts](visual/played-game.d.mts) | Типы `played-game.mjs` для стороны TypeScript | TypeScript, модуль рядом | шапка файла |
 | [visual/frames.config.ts](visual/frames.config.ts) | Конфиг Playwright кадров: один воркер и порядок файла, место для кадров различий | `visual.mjs` | шапка файла |
 | [visual/frames.spec.ts](visual/frames.spec.ts) | Сам прогон: открывает каждое состояние от каждой роли и снимает три канала (PNG, дерево DOM, вычисленный стиль) | `visual/frames.config.ts` | [visual/README.md](visual/README.md#что-снимается) |
-| [visual/states.ts](visual/states.ts) | Состояния, на которые смотрит стенд: кто смотрит, где и что делается на странице до съемки | `visual/frames.spec.ts`, `docs/build-status.mjs` (читает для STATUS.md) | [STATUS.md](../docs/STATUS.md) |
+| [visual/states.ts](visual/states.ts) | Состояния, на которые смотрит стенд, одним списком из разделов `visual/states/`: кто смотрит, где и что делается на странице до съемки | `visual/frames.spec.ts`, `docs/build-status.mjs` (читает для STATUS.md) | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/shared.ts](visual/states/shared.ts) | Общее для разделов: тип состояния, помощники (кнопка, отказ API, вход) и сидовые константы | разделы `visual/states/*.ts` | шапка файла |
+| [visual/states/guest.ts](visual/states/guest.ts) | Состояния гостя: главная, список игр с фильтром, входы и письма | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/member.ts](visual/states/member.ts) | Состояния участника: комментарии, настройки, игры и аккаунты по роли | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/staff.ts](visual/states/staff.ts) | Состояния ролей персонала на главной и в профилях | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/shell.ts](visual/states/shell.ts) | Состояния оболочки сайта: боковая панель при отказе, выделение, фокус клавишей | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/games.ts](visual/states/games.ts) | Состояния раздела игр: список, страница игры, посты, настройки | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/characters.ts](visual/states/characters.ts) | Состояния раздела персонажей игры | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/blogsForum.ts](visual/states/blogsForum.ts) | Состояния блогов и форума | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/chat.ts](visual/states/chat.ts) | Состояния чата | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/account.ts](visual/states/account.ts) | Состояния страницы аккаунта и его настроек | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/profile.ts](visual/states/profile.ts) | Состояния страниц профиля | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/moderation.ts](visual/states/moderation.ts) | Состояния модерации | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/tickets.ts](visual/states/tickets.ts) | Состояния обращений в поддержку | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/editor.ts](visual/states/editor.ts) | Состояния редактора | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/otherPages.ts](visual/states/otherPages.ts) | Состояния остальных страниц: о проекте, правила, статистика, пожертвования | `visual/states.ts` | [STATUS.md](../docs/STATUS.md) |
+| [visual/states/commonKeys.ts](visual/states/commonKeys.ts) | Узлы, у которых каждое состояние записывает вычисленный стиль | `visual/frames.spec.ts` через `visual/states.ts` | шапка файла |
 | [visual/roles.ts](visual/roles.ts) | Аккаунты, под которыми стенд смотрит, по одному на роль. Сид создает ровно их | `visual/sessions.ts`, `visual/states.ts`, `visual/api-volatile.mjs` | шапка файла |
 | [visual/sessions.ts](visual/sessions.ts) | Один раз за прогон входит каждой ролью и сохраняет сеанс так же, как глобальная настройка e2e | `visual/frames.config.ts` | шапка файла |
 | [visual/fixture.ts](visual/fixture.ts) | Вещи, которые состояния берут из сида по GUID, ищутся один раз за прогон через API | `visual/frames.spec.ts`, `visual/sessions.ts`, `visual/states.ts` | шапка файла |

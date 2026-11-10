@@ -6,6 +6,7 @@ import { readConfirmationToken } from "@/shared/lib/utils/confirmationToken";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
+import HomeButton from "./HomeButton.vue";
 import {
   PasswordInput,
   PasswordStrengthIndicator,
@@ -99,11 +100,6 @@ const submit = async () => {
 function goGuest(action: string) {
   router.push({ path: "/", query: { action } });
 }
-
-// The one way out of a dead link, as on every screen that answers one.
-function goHome() {
-  router.push("/");
-}
 </script>
 
 <template>
@@ -167,14 +163,7 @@ function goHome() {
         <p class="auth-text">
           Возможно ссылка уже была использована или срок ее действия истек
         </p>
-        <Button
-          class="auth-button auth-button--spaced"
-          type="button"
-          variant="primary"
-          @click="goHome"
-        >
-          На главную
-        </Button>
+        <HomeButton />
       </template>
 
       <!-- A label and not a placeholder; the rule of the password is on the strength line from the start. -->

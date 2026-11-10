@@ -33,10 +33,6 @@ internal static class ExpressionSplicer
         throw new InvalidOperationException(
             "Splice is a rewrite marker; run the expression through ExpressionSplicer.Expand first.");
 
-    /// <summary>
-    /// Rewrites every <see cref="Splice{T,TResult}"/> marker in the lambda
-    /// into the referenced expression's body.
-    /// </summary>
     public static Expression<TDelegate> Expand<TDelegate>(Expression<TDelegate> lambda) =>
         (Expression<TDelegate>)new SpliceRewriter().Visit(lambda);
 

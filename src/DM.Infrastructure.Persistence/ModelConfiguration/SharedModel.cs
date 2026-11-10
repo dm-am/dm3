@@ -4,10 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// What every module shares in the model: comments, subscriptions, likes, the
-/// unread markers and the outbox of domain events.
-/// </summary>
 internal static class SharedModel
 {
     internal static void Configure(ModelBuilder modelBuilder)

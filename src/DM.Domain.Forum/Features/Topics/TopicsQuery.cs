@@ -24,9 +24,6 @@ public class TopicsQuery : PagingQuery
     /// </summary>
     public IReadOnlyCollection<string>? AuthorUsernames { get; set; }
 
-    /// <summary>
-    /// Filter by created date (from) - ISO 8601 format
-    /// </summary>
     public DateTimeOffset? CreatedFromUtc { get; set; }
 
     /// <summary>

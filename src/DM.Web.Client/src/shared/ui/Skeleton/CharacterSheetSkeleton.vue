@@ -4,18 +4,13 @@
  * view mode): a caption over a value per attribute, the rows as far apart as
  * the sheet's own.
  */
-withDefaults(
-  defineProps<{
-    /** Number of attribute rows to show */
-    rows?: number;
-  }>(),
-  { rows: 4 },
-);
+/** Attribute rows shown while the sheet loads. */
+const ROWS = 4;
 </script>
 
 <template>
   <div class="sheet-skeleton" aria-hidden="true">
-    <div v-for="i in rows" :key="i" class="skeleton-row">
+    <div v-for="i in ROWS" :key="i" class="skeleton-row">
       <div class="skeleton-label" />
       <div class="skeleton-value" />
     </div>

@@ -32,10 +32,8 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
         detector = new SuspiciousLoginDetector(auditService);
     }
 
-    /// <summary>
-    /// The detector asks for successes and nothing else, so a run of failed
-    /// guesses neither proves the new address nor erases the owner's.
-    /// </summary>
+    // The detector asks for successes and nothing else, so a run of failed guesses neither proves
+    // the new address nor erases the owner's.
     [Fact]
     public async Task CallANewAddressSuspiciousThoughTheTrailAlreadyHoldsIt()
     {
@@ -72,7 +70,7 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
         suspicious.Should().BeFalse();
     }
 
-    /// <param name="newestFirst">The trail as the repository returns it</param>
+    // The trail as the repository returns it
     private void Trail(params SecurityAuditEntry[] newestFirst) =>
         auditService.GetByTypesAsync(
                 userId, SecurityEventCategories.SuccessfulLogins, Arg.Any<int>()).Returns(newestFirst);
@@ -83,12 +81,8 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
     private static SecurityAuditEntry Entry(SecurityEventType type, string address, string device) =>
         new() { EventType = type, IpAddress = address, DeviceInfo = device };
 
-    /// <summary>
-    /// A reconnection is not a new place.
-    /// </summary>
-    /// <remarks>
-    /// A home or phone address changes on the provider's schedule, and a warning on ordinary days is one nobody reads.
-    /// </remarks>
+    // A home or phone address changes on the provider's schedule, and a warning on ordinary days is
+    // one nobody reads.
     [Fact]
     public async Task TreatTheSameNetworkAsTheSamePlace()
     {

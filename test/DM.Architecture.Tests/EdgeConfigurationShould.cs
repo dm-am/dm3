@@ -10,20 +10,12 @@ using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The edge answers where the deployment needs it to, and is recreated when a
-/// container it resolves by name is replaced.
-/// </summary>
 /// <remarks>
 /// Why it is recreated is in DEPLOYMENT.md, section "Край держит адреса с момента старта"; the
 /// headers are EdgeSecurityHeadersShould's.
 /// </remarks>
 public class EdgeConfigurationShould
 {
-    /// <summary>
-    /// Every picture the API hands out, the thumbnail of an avatar as much as its
-    /// original, is served by the edge from the prefix of the bucket.
-    /// </summary>
     /// <remarks>
     /// A thumbnail lies beside its original in the store and shares its address, so the route of the
     /// store is the only one a picture needs. Every gate serves the SPA without nginx, so the route is
@@ -48,9 +40,6 @@ public class EdgeConfigurationShould
             "that answers 502");
     }
 
-    /// <summary>
-    /// What the edge has to answer is written once and read twice.
-    /// </summary>
     /// <remarks>
     /// The pipeline and the operator check the same list. The readiness probe is named: liveness
     /// answers green from a process that reaches no database.
@@ -80,9 +69,6 @@ public class EdgeConfigurationShould
             "would pass just as well against an open one");
     }
 
-    /// <summary>
-    /// A certificate can be issued, and the server that serves it is not a copy.
-    /// </summary>
     /// <remarks>
     /// The challenge path is answered over plain http before the basic-auth door by both edges;
     /// `certbot --nginx` cannot edit a read-only mounted configuration.
@@ -215,9 +201,6 @@ public class EdgeConfigurationShould
         }
     }
 
-    /// <summary>
-    /// An external heartbeat reaches the API, and nothing else about it does.
-    /// </summary>
     /// <remarks>
     /// Without its own location /_health falls into the SPA fallback, which answers 200. Exact matches:
     /// /_health/detail and /metrics stay inside.

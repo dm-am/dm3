@@ -72,9 +72,6 @@ internal class ImageProcessingService : IImageProcessingService
     /// </remarks>
     private const string PngChunksLeftOut = "bKGD,caNv,cHRM,eXIf,gAMA,iTXt,oFFs,pHYs,tEXt,tIME,vpAg,date";
 
-    /// <summary>
-    /// What each upload type accepts and what the pipeline does to it.
-    /// </summary>
     /// <param name="ContentTypes">Formats admitted, decided by magic bytes.</param>
     /// <param name="MinDimension">Smallest permitted side, 0 for no floor.</param>
     /// <param name="MaxStoredDimension">
@@ -216,10 +213,6 @@ internal class ImageProcessingService : IImageProcessingService
         return bytes.StartsWith("BM"u8) ? "image/bmp" : null;
     }
 
-    /// <summary>
-    /// Dimensions and frame count from the headers alone, and the guards that need
-    /// nothing more.
-    /// </summary>
     private static void Identify(byte[] bytes, MagickReadSettings settings, Codec codec, TypeRules rules)
     {
         uint width, height;
@@ -262,9 +255,6 @@ internal class ImageProcessingService : IImageProcessingService
         }
     }
 
-    /// <summary>
-    /// Every frame, decoded under the ceilings the static constructor set.
-    /// </summary>
     private static MagickImageCollection Decode(byte[] bytes, MagickReadSettings settings)
     {
         try
@@ -396,10 +386,6 @@ internal class ImageProcessingService : IImageProcessingService
         }
     }
 
-    /// <summary>
-    /// A square thumbnail of the stored picture: a still of its first frame, filled
-    /// to the side around the center, a smaller picture scaled up to it.
-    /// </summary>
     /// <remarks>
     /// Cut from the frame already stripped of its metadata. ImageMagick reads every
     /// frame of a WebP animation onto the whole canvas, so the first one needs no
@@ -425,9 +411,6 @@ internal class ImageProcessingService : IImageProcessingService
     private static HttpBadRequestException Refusal(string message) =>
         new(new Dictionary<string, string> { ["file"] = message });
 
-    /// <summary>
-    /// The accepted formats as a refusal names them, from the list the type enforces.
-    /// </summary>
     private static string FormatList(IReadOnlyCollection<string> contentTypes) =>
         string.Join(", ", contentTypes.Select(type => CodecByContentType[type].Name));
 

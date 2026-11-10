@@ -315,10 +315,6 @@ internal class TicketService : ITicketService
         }
     }
 
-    /// <summary>
-    /// Writes a comment into the conversation and moves the ticket to the status
-    /// that comes with it.
-    /// </summary>
     private async Task<TicketComment> WriteComment(Ticket ticket, Guid? authorId, UserRole role,
         string text, TicketStatus statusAfter, CancellationToken ct)
     {

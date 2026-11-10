@@ -4,9 +4,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The seed and the client mean the same thing by "за неделю".
-/// </summary>
 /// <remarks>
 /// The seeder places the showcase inside the client's window and the coverage outside it. A rolling seven
 /// days: a calendar boundary empties the block on Mondays and on old fixtures.

@@ -9,13 +9,16 @@
 // own spec; the page owns the controls it puts in it, offered by the server's
 // answer on the row, and no picture removal on the moderator's own record.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
-import type { Mock } from "vitest";
-import type { Ref } from "vue";
-import * as vueRouter from "vue-router";
-import { createPinia, setActivePinia } from "pinia";
+import {
+  flushPromises,
+  enableAutoUnmount,
+  type VueWrapper,
+} from "@vue/test-utils";
+import type { Router } from "vue-router";
+import { createPinia, getActivePinia, setActivePinia } from "pinia";
 import { useAuthStore } from "@/shared/stores";
 import { DEFAULT_PAGE_SIZE } from "@/shared/lib/composables/usePaging";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import ModerationWarnings from "./ModerationWarnings.vue";
 
 const getAllWarnings = vi.hoisted(() => vi.fn());
@@ -45,7 +48,9 @@ const modal = vi.hoisted(() => ({
   attrs: null as Record<string, unknown> | null,
 }));
 
-vi.mock("vue-final-modal", () => ({
+// The rest of the module stays real: the page is mounted with its container.
+vi.mock("vue-final-modal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("vue-final-modal")>()),
   useModal: (options: { attrs: Record<string, unknown> }) => {
     modal.attrs = options.attrs;
     return { open: modalOpen, close: modalClose };
@@ -64,14 +69,14 @@ vi.mock("@/shared/ui/ConfirmDialog", () => ({
   },
 }));
 
-vi.mock("vue-router", async () =>
-  (await import("./moderationLists.doubles")).vueRouter(),
-);
+const WARNINGS = "/moderation/warnings";
 
-const { routeQuery, routerPush } = vueRouter as unknown as {
-  routeQuery: Ref<Record<string, string>>;
-  routerPush: Mock;
-};
+let router: Router;
+/** Where the log stands: its route and the filter in the address. */
+const where = () => ({
+  name: router.currentRoute.value.name,
+  query: router.currentRoute.value.query,
+});
 
 vi.mock("@/shared/lib/composables/useToast", () => ({
   useToast: () => ({ success: toastSuccess, error: vi.fn() }),
@@ -100,8 +105,6 @@ const page = (resources: unknown[], total = resources.length, pages = 1) => ({
   error: null,
 });
 
-// The address is shared by every mount in this file, so a page left standing
-// would refetch when the next test moves the query under it.
 enableAutoUnmount(afterEach);
 
 // The viewer is a moderator.
@@ -111,45 +114,48 @@ beforeEach(() => {
 });
 
 /** The paging control is real only where the address it links to is the subject. */
-function render({ realPaging = false }: { realPaging?: boolean } = {}) {
-  return mount(ModerationWarnings, {
-    global: {
-      stubs: {
-        RouterLink: {
-          props: ["to"],
-          template:
-            "<a class='router-link' :data-to='JSON.stringify(to)'><slot /></a>",
-        },
-        PageTitle: { template: "<h1><slot /></h1>" },
-        "page-title": { template: "<h1><slot /></h1>" },
-        // Registered on the app, so a mount of the page alone knows neither.
-        FormField: {
-          props: ["label", "name"],
-          template:
-            "<div class='field-stub'><label>{{ label }}</label><slot /></div>",
-        },
-        Button: { template: "<button><slot /></button>" },
-        ...(realPaging
-          ? {}
-          : {
-              Paging: {
-                props: ["paging"],
-                template: "<nav class='paging-stub' />",
-              },
-            }),
-        ErrorState: { template: "<div class='error-stub' />" },
+async function render(
+  address = WARNINGS,
+  { realPaging = false }: { realPaging?: boolean } = {},
+) {
+  const mounted = await mountPage(ModerationWarnings, address, {
+    routes: [
+      ["moderation-warnings", WARNINGS],
+      ["profile", "/users/:username"],
+    ],
+    pinia: getActivePinia(),
+    stubs: {
+      PageTitle: { template: "<h1><slot /></h1>" },
+      "page-title": { template: "<h1><slot /></h1>" },
+      // Plain, so the assertions read the page's own words.
+      FormField: {
+        props: ["label", "name"],
+        template:
+          "<div class='field-stub'><label>{{ label }}</label><slot /></div>",
       },
+      Button: { template: "<button><slot /></button>" },
+      ...(realPaging
+        ? {}
+        : {
+            Paging: {
+              props: ["paging"],
+              template: "<nav class='paging-stub' />",
+            },
+          }),
+      ErrorState: { template: "<div class='error-stub' />" },
     },
   });
+  router = mounted.router;
+  return mounted.wrapper;
 }
 
 /** The field of the search line. */
-function nameField(wrapper: ReturnType<typeof render>) {
+function nameField(wrapper: VueWrapper) {
   return wrapper.find<HTMLInputElement>("form input");
 }
 
-async function rendered(options?: { realPaging?: boolean }) {
-  const wrapper = render(options);
+async function rendered(address?: string, options?: { realPaging?: boolean }) {
+  const wrapper = await render(address, options);
   await flushPromises();
   return wrapper;
 }
@@ -160,15 +166,12 @@ describe("the moderation warnings page", () => {
     modalOpen.mockReset();
     modalClose.mockReset();
     toastSuccess.mockReset();
-    routerPush.mockClear();
-    routeQuery.value = {};
   });
 
   it("asks for the page named in the address, at the size of the list", async () => {
-    routeQuery.value = { number: "3" };
     getAllWarnings.mockResolvedValue(page([warning()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?number=3`);
 
     expect(getAllWarnings).toHaveBeenCalledWith({
       skip: 2 * PAGE_SIZE,
@@ -235,10 +238,9 @@ describe("the moderation warnings page", () => {
 
   // A warning is never withdrawn, so the page re-read is the one the moderator is on.
   it("re-reads the page the moderator is on after a correction", async () => {
-    routeQuery.value = { number: "2" };
     getAllWarnings.mockResolvedValue(page([warning()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?number=2`);
     await wrapper.find(".caption-action").trigger("click");
     await (modal.attrs?.onSuccess as () => Promise<void>)();
     await flushPromises();
@@ -268,18 +270,14 @@ describe("the moderation warnings page", () => {
 
   // The page says so and offers the way back instead of moving the reader.
   it("offers the first page when this one is past the end of a filled log", async () => {
-    routeQuery.value = { number: "4" };
     getAllWarnings.mockResolvedValue(page([], 3));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?number=4`);
 
     expect(wrapper.text()).toContain("На этой странице предупреждений нет");
     const back = wrapper.find(".warnings-empty a");
     expect(back.text()).toBe("Вернуться на первую страницу");
-    expect(JSON.parse(back.attributes("data-to") ?? "null")).toEqual({
-      name: "moderation-warnings",
-      query: {},
-    });
+    expect(back.attributes("href")).toBe(WARNINGS);
   });
 
   // A second click of the paging control is enough to put two pages on the wire.
@@ -292,10 +290,10 @@ describe("the moderation warnings page", () => {
         }),
     );
 
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
-    routeQuery.value = { number: "2" };
+    await router.push(`${WARNINGS}?number=2`);
     await flushPromises();
 
     answers.get(PAGE_SIZE)?.(page([warning({ id: "w-2", reason: "Новое" })]));
@@ -332,17 +330,13 @@ describe("the moderation warnings page", () => {
 
   // An emptied field drops the filter without "Найти".
   it("drops the name at once when the field is emptied", async () => {
-    routeQuery.value = { username: "Нарушитель", number: "2" };
     getAllWarnings.mockResolvedValue(page([warning()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?username=Нарушитель&number=2`);
     await wrapper.find("form .clear-input-btn").trigger("click");
     await flushPromises();
 
-    expect(routerPush).toHaveBeenCalledWith({
-      name: "moderation-warnings",
-      query: {},
-    });
+    expect(where()).toEqual({ name: "moderation-warnings", query: {} });
     expect(getAllWarnings).toHaveBeenLastCalledWith({
       username: undefined,
       skip: 0,
@@ -358,15 +352,14 @@ describe("the moderation warnings page", () => {
     await nameField(wrapper).setValue("Нару");
     await flushPromises();
 
-    expect(routerPush).not.toHaveBeenCalled();
+    expect(where()).toEqual({ name: "moderation-warnings", query: {} });
     expect(getAllWarnings).toHaveBeenCalledTimes(1);
   });
 
   it("asks for the name the address names", async () => {
-    routeQuery.value = { username: "Нарушитель" };
     getAllWarnings.mockResolvedValue(page([warning()]));
 
-    await rendered();
+    await rendered(`${WARNINGS}?username=Нарушитель`);
 
     expect(getAllWarnings).toHaveBeenCalledWith({
       username: "Нарушитель",
@@ -377,25 +370,23 @@ describe("the moderation warnings page", () => {
 
   /** A link handed to another moderator opens with the filter already applied. */
   it("shows the name the address names in the field", async () => {
-    routeQuery.value = { username: "Нарушитель" };
     getAllWarnings.mockResolvedValue(page([warning()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?username=Нарушитель`);
 
     expect(nameField(wrapper).element.value).toBe("Нарушитель");
   });
 
   // The page number counted pages of the list being left, so it stays behind.
   it("puts the name in the address without the page number of the previous list", async () => {
-    routeQuery.value = { number: "3" };
     getAllWarnings.mockResolvedValue(page([warning()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?number=3`);
     await nameField(wrapper).setValue("  Нарушитель  ");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
 
-    expect(routerPush).toHaveBeenCalledWith({
+    expect(where()).toEqual({
       name: "moderation-warnings",
       query: { username: "Нарушитель" },
     });
@@ -409,18 +400,14 @@ describe("the moderation warnings page", () => {
   });
 
   it("takes the name out of the address when the field is emptied", async () => {
-    routeQuery.value = { username: "Нарушитель", number: "2" };
     getAllWarnings.mockResolvedValue(page([warning()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?username=Нарушитель&number=2`);
     await nameField(wrapper).setValue("");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
 
-    expect(routerPush).toHaveBeenCalledWith({
-      name: "moderation-warnings",
-      query: {},
-    });
+    expect(where()).toEqual({ name: "moderation-warnings", query: {} });
     expect(getAllWarnings).toHaveBeenLastCalledWith({
       username: undefined,
       skip: 0,
@@ -430,10 +417,9 @@ describe("the moderation warnings page", () => {
 
   // The address is already there, so the router hands nothing back; the field still shows the trimmed name.
   it("shows the trimmed name when the address is already the one asked for", async () => {
-    routeQuery.value = { username: "Нарушитель" };
     getAllWarnings.mockResolvedValue(page([warning()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?username=Нарушитель`);
     await nameField(wrapper).setValue("  Нарушитель  ");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -443,26 +429,25 @@ describe("the moderation warnings page", () => {
 
   // The filter and the page number share one address, and the next-page link carries both.
   it("keeps the name in the address the paging control links to", async () => {
-    routeQuery.value = { username: "Нарушитель" };
     getAllWarnings.mockResolvedValue(page([warning()], 25, 2));
 
-    const wrapper = await rendered({ realPaging: true });
+    const wrapper = await rendered(`${WARNINGS}?username=Нарушитель`, {
+      realPaging: true,
+    });
 
     const second = wrapper
       .findAll(".paging a")
       .find((link) => link.text() === "2");
-    expect(JSON.parse(second?.attributes("data-to") ?? "null")).toEqual({
-      name: "moderation-warnings",
-      query: { username: "Нарушитель", number: "2" },
-    });
+    expect(decodeURI(second?.attributes("href") ?? "")).toBe(
+      `${WARNINGS}?username=Нарушитель&number=2`,
+    );
   });
 
   // An empty list under a filter is not an empty log.
   it("says nothing was found when the filter matches nobody", async () => {
-    routeQuery.value = { username: "Нарушитель" };
     getAllWarnings.mockResolvedValue(page([]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?username=Нарушитель`);
 
     expect(wrapper.text()).toContain(
       "Предупреждений по заданным фильтрам не найдено",
@@ -489,11 +474,9 @@ describe("the picture of a record of a profile", () => {
   beforeEach(() => {
     getAllWarnings.mockReset();
     removeWarningProfilePicture.mockReset();
-    routerPush.mockClear();
-    routeQuery.value = {};
   });
 
-  const actionOf = (wrapper: ReturnType<typeof render>, index: number) =>
+  const actionOf = (wrapper: VueWrapper, index: number) =>
     wrapper
       .findAll(".card-stub")
       [index].find(".record-controls-stub .caption-action");
@@ -550,11 +533,10 @@ describe("the picture of a record of a profile", () => {
 
   // The window prints a refusal in itself; the page is read again after the server agrees.
   it("takes the picture out of the record and re-reads the page", async () => {
-    routeQuery.value = { number: "2" };
     getAllWarnings.mockResolvedValue(page([onProfile()]));
     removeWarningProfilePicture.mockResolvedValue({ data: null, error: null });
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${WARNINGS}?number=2`);
     await actionOf(wrapper, 0).trigger("click");
     await wrapper.get(".confirm-go").trigger("click");
     await flushPromises();

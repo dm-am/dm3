@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Whoever opens an SMTP session has to be able to close it.
-/// </summary>
 /// <remarks>
 /// MailKit ends a session on Disconnect or Dispose only, and a container releases only what is
 /// disposable. Reflection: the holder is internal to a worker this project cannot see.
@@ -23,16 +20,12 @@ public class MailTransportOwnershipShould
         .Where(HoldsAMailTransport)
         .ToArray();
 
-    /// <summary>
-    /// Only types somebody wrote: DisposeAsync's generated state machine captures the same field.
-    /// </summary>
+    // Only types somebody wrote: DisposeAsync's generated state machine captures the same field.
     private static bool IsWritten(Type type) =>
         type.GetCustomAttribute<CompilerGeneratedAttribute>() is null &&
         !type.Name.Contains('<', StringComparison.Ordinal);
 
-    /// <summary>
-    /// A rule that matches nothing passes.
-    /// </summary>
+    // A rule that matches nothing passes.
     [Fact]
     public void FindTheTransportOwners() =>
         TransportOwners.Should().NotBeEmpty(

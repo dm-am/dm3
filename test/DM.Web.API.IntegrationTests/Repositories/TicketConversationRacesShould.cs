@@ -11,30 +11,20 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The conversation of a ticket and its closing are decided by the database, the queue leaves out complaints about
-/// its reader, and a removed account is told from the guest.
-/// </summary>
 /// <remarks>
 /// Under READ COMMITTED a read holds nothing (DATA_STORAGE.md, "Транзакция не снимок"), so these are conditional
 /// UPDATEs under another writer.
 /// </remarks>
 public class TicketConversationRacesShould : IntegrationTestBase
 {
-    /// <summary>
-    /// Enough callers that the interleaving the defect needs is reached rather
-    /// than left to which of two the scheduler happens to start first.
-    /// </summary>
+    // Enough callers that the interleaving the defect needs is reached rather than left to which of
+    // two the scheduler happens to start first.
     private const int Parallelism = 8;
 
     public TicketConversationRacesShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// The ticket was read open, closed beside the comment, and the comment is
-    /// then refused: nothing written, the status the closing left untouched.
-    /// </summary>
     [Fact]
     public async Task RefuseACommentToATicketClosedAfterItWasRead()
     {
@@ -64,10 +54,8 @@ public class TicketConversationRacesShould : IntegrationTestBase
             "and does not open it again");
     }
 
-    /// <summary>
-    /// Of closings sent together, one closes the ticket and the rest close nothing,
-    /// so the service behind them refuses the rest and announces the closing once.
-    /// </summary>
+    // Of closings sent together, one closes the ticket and the rest close nothing, so the service
+    // behind them refuses the rest and announces the closing once.
     [Fact]
     public async Task CloseATicketOnceUnderConcurrentClosings()
     {
@@ -89,10 +77,6 @@ public class TicketConversationRacesShould : IntegrationTestBase
             "the ticket names the moderator whose closing went through");
     }
 
-    /// <summary>
-    /// Comments sent together to a conversation near its ceiling: as many land as
-    /// there is room for, and the status moves with each of them.
-    /// </summary>
     [Fact]
     public async Task TakeNoCommentPastTheCeilingUnderConcurrentWrites()
     {
@@ -138,9 +122,6 @@ public class TicketConversationRacesShould : IntegrationTestBase
         ticket.CommentsCount.Should().Be(1);
     }
 
-    /// <summary>
-    /// A comment that ends the ticket closes it in its author's name in one statement; of such answers at once one lands.
-    /// </summary>
     [Fact]
     public async Task CloseTheTicketOnceWithTheCommentThatEndsIt()
     {
@@ -188,9 +169,6 @@ public class TicketConversationRacesShould : IntegrationTestBase
         ticket.ResolvedUtc.Should().BeNull();
     }
 
-    /// <summary>
-    /// A removed account's comment is signed by nobody, and the guest's has no author at all.
-    /// </summary>
     [Fact]
     public async Task TellTheCommentOfARemovedAccountFromTheGuests()
     {
@@ -232,11 +210,6 @@ public class TicketConversationRacesShould : IntegrationTestBase
         comments[1].Author.Should().BeNull("nothing of a removed account is shown");
     }
 
-    /// <summary>
-    /// The ticket of a removed account is not taken for a guest's either: its
-    /// signature says "Аккаунт удален", the guest's says "гость", and both have no
-    /// reporter to show.
-    /// </summary>
     [Fact]
     public async Task TellTheTicketOfARemovedAccountFromTheGuests()
     {
@@ -261,9 +234,6 @@ public class TicketConversationRacesShould : IntegrationTestBase
         removedTicket.Reporter.Should().BeNull("nothing of a removed account is shown");
     }
 
-    /// <summary>
-    /// The queue and its counters leave out the complaints that name the moderator.
-    /// </summary>
     [Fact]
     public async Task LeaveTheComplaintsAboutTheReaderOutOfTheQueueAndItsCounters()
     {
@@ -299,10 +269,8 @@ public class TicketConversationRacesShould : IntegrationTestBase
         CreatedUtc = DateTimeOffset.UtcNow
     };
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private async Task<Guid> AddUserAsync()
     {
         var userId = Guid.NewGuid();

@@ -1,24 +1,41 @@
-// The page of a character; its specs mock vue-router with the doubles.
+// The page of a character, mounted on the real router at its address.
 import { vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia, type Pinia } from "pinia";
+import type { Router } from "vue-router";
 import {
   characterApi,
   useGameDetailsStore,
   GameStatus,
   type Character,
-  type Game,
+  type GameParticipation,
 } from "@/entities/game";
+import {
+  createMockCharacter,
+  createMockGame,
+} from "@/entities/game/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import { useAuthStore } from "@/entities/user";
+import { asServed } from "@/shared/api/models";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import CharacterEdit from "./CharacterEdit.vue";
-import { routed } from "./CharacterEdit.doubles";
 
 // The confirmation is the real window; the sheet answers its own save.
 const stubs = {
   CharacterForm: true,
   Teleport: true,
 };
+
+/** The sheet of char-1, where every test opens the page. */
+export const SHEET = "/game/the-game/characters/char-1/edit";
+export const ROSTER = "/game/the-game/characters";
+const routes: [string, string][] = [
+  ["game-character-edit", "/game/:id/characters/:characterId/edit"],
+  ["game-characters", "/game/:id/characters"],
+];
+
+export const address = (router: Router) => router.currentRoute.value.fullPath;
 
 export const FLAGS = { ownsRefusal: true, ownsRateLimit: true };
 
@@ -42,31 +59,66 @@ type CharacterOverrides = Partial<{
   privacy: { isNpc: boolean; editByMaster: boolean; editPostByMaster: boolean };
 }>;
 
-export const character = (over: CharacterOverrides = {}): Character =>
-  ({
-    id: "char-1",
-    name: "Ронин",
-    status: "Active",
-    isDead: false,
-    isPlayerLeft: false,
-    isPlayerExiled: false,
-    isNpc: false,
-    author: { id: VIEWER, username: "gamer", role: "Player" },
-    attributes: [],
-    privacy: { isNpc: false, editByMaster: false, editPostByMaster: false },
-    totalPostsCount: 0,
-    ...over,
-  }) as unknown as Character;
+export const character = (over: CharacterOverrides = {}): Character => ({
+  ...createMockCharacter("char-1", "Ронин"),
+  author: asServed(createMockUser(VIEWER, "gamer")),
+  attributes: asServed([]),
+  privacy: { isNpc: false, editByMaster: false, editPostByMaster: false },
+  ...(over as Partial<Character>),
+});
 
-export function render({
+/** A running game the viewer takes part in, with the roster its page reads. */
+function runningGame(
+  pinia: Pinia,
+  participation: GameParticipation[],
+  blacklisted: boolean,
+  roster: Character[],
+) {
+  useAuthStore(pinia).user = { id: VIEWER } as never;
+  const store = useGameDetailsStore(pinia);
+  store.game = {
+    ...createMockGame("the-game-guid", "Игра"),
+    publicId: asServed("the-game"),
+    status: GameStatus.Active,
+    participation: asServed(participation),
+    schema: { specifications: [], version: 0 },
+    viewerBlacklisted: asServed(blacklisted),
+  };
+  store.characters = roster;
+  return store;
+}
+
+/** The read the form is fed from; held, it answers when the returned call is made. */
+function stubRead(
+  subject: Character,
+  read: { data: unknown; error: unknown } | undefined,
+  held: boolean,
+) {
+  const answer = (read ?? {
+    data: { resource: subject },
+    error: null,
+  }) as never;
+  let answerRead = () => {};
+  vi.spyOn(characterApi, "getCharacterForEdit").mockImplementation(() =>
+    held
+      ? new Promise((resolve) => {
+          answerRead = () => resolve(answer);
+        })
+      : Promise.resolve(answer),
+  );
+  return () => answerRead();
+}
+
+export async function render({
   participation = [],
   subject = character(),
   others = [],
   becomes,
   blacklisted = false,
   read,
+  held = false,
 }: {
-  participation?: string[];
+  participation?: GameParticipation[];
   blacklisted?: boolean;
   subject?: Character;
   others?: Character[];
@@ -74,25 +126,15 @@ export function render({
   becomes?: Character;
   /** The answer of the read the form is fed from; left out, the subject. */
   read?: { data: unknown; error: unknown };
+  /** The read waits for answerRead, so the first render is the wait. */
+  held?: boolean;
 } = {}) {
   const pinia = createPinia();
-  setActivePinia(pinia);
-  useAuthStore().user = { id: VIEWER } as never;
-
-  const store = useGameDetailsStore();
-  store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    status: GameStatus.Active,
-    participation,
-    schema: { specifications: [] },
-    viewerBlacklisted: blacklisted,
-  } as unknown as Game;
-  store.characters = [subject, ...others];
-
-  vi.spyOn(characterApi, "getCharacterForEdit").mockResolvedValue(
-    (read ?? { data: { resource: subject }, error: null }) as never,
-  );
+  const store = runningGame(pinia, participation, blacklisted, [
+    subject,
+    ...others,
+  ]);
+  const answerRead = stubRead(subject, read, held);
 
   const loadCharacters = vi
     .spyOn(store, "loadCharacters")
@@ -105,23 +147,33 @@ export function render({
   // The roster page reuses a loaded roster: this is the list the reader sees.
   let rosterAtDeparture: string[] = [];
   let pageAtDeparture = { empty: false, status: false, window: false };
-  routed.push.mockImplementation(() => {
-    rosterAtDeparture = store.characters.map((c) => c.name);
-    const section = wrapper.find(".status-section");
-    pageAtDeparture = {
-      empty: wrapper.find(".empty").exists(),
-      status: section.exists() && section.isVisible(),
-      window: wrapper.find(".dialog-container").exists(),
-    };
-  });
+  // Read at the call: a guard runs turns later, after the window began to close.
+  const departure = (router: Router) => {
+    const push = router.push.bind(router);
+    vi.spyOn(router, "push").mockImplementation((to) => {
+      rosterAtDeparture = store.characters.map((c) => c.name);
+      const section = wrapper.find(".status-section");
+      pageAtDeparture = {
+        empty: wrapper.find(".empty").exists(),
+        status: section.exists() && section.isVisible(),
+        window: wrapper.find(".dialog-container").exists(),
+      };
+      return push(to);
+    });
+  };
 
-  const wrapper = mount(CharacterEdit, {
-    global: { plugins: [pinia], stubs },
+  const { wrapper, router } = await mountPage(CharacterEdit, SHEET, {
+    routes,
+    pinia,
+    stubs,
+    beforeMount: departure,
   });
 
   return {
     wrapper,
+    router,
     store,
+    answerRead,
     loadCharacters,
     roster: () => rosterAtDeparture,
     page: () => pageAtDeparture,
@@ -130,16 +182,13 @@ export function render({
 
 export function resetPage() {
   for (const shown of [...toast.toasts.value]) toast.dismiss(shown.id);
-  routed.push.mockReset();
-  routed.replace.mockReset();
   vi.restoreAllMocks();
 }
 
+export type Page = Awaited<ReturnType<typeof render>>["wrapper"];
+
 /** Pressed through its confirmation where it asks one. */
-export async function press(
-  wrapper: ReturnType<typeof render>["wrapper"],
-  label: string,
-) {
+export async function press(wrapper: Page, label: string) {
   const button = wrapper.findAll(".status-btn").find((b) => b.text() === label);
   if (!button) throw new Error(`no lifecycle button reading "${label}"`);
   await button.trigger("click");
@@ -148,9 +197,7 @@ export async function press(
   await flushPromises();
 }
 
-export function statusInWords(
-  wrapper: ReturnType<typeof render>["wrapper"],
-): string | null {
+export function statusInWords(wrapper: Page): string | null {
   const line = wrapper.find(".status-value");
   return line.exists() ? line.text() : null;
 }
@@ -161,5 +208,5 @@ export function changesStatus() {
     .mockResolvedValue({ data: null, error: null } as never);
 }
 
-export const buttons = (wrapper: ReturnType<typeof render>["wrapper"]) =>
+export const buttons = (wrapper: Page) =>
   wrapper.findAll(".status-btn").map((b) => b.text());

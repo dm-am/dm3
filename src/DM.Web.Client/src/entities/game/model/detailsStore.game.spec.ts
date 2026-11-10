@@ -8,14 +8,13 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Room } from "./roomTypes";
-import type { Post } from "./postTypes";
 import {
   mockGetGame,
   mockGetPosts,
   mockSubscribe,
   mockUnsubscribe,
 } from "./store.doubles";
-import { createMockGame, freshPinia } from "./store.fixtures";
+import { createMockGame, createMockPost, freshPinia } from "./store.fixtures";
 import { useGameDetailsStore } from "./detailsStore";
 import { deferred } from "@/shared/lib/testing/tasks";
 import { asServed } from "@/shared/api/models";
@@ -283,20 +282,8 @@ describe("useGameDetailsStore", () => {
         { id: "room-3", title: "Room 3", roomNumber: 3 },
       ] as unknown as Room[];
 
-      const postsOfTwo = [
-        {
-          id: "post-2",
-          gameText: "Room 2",
-          createdUtc: "2024-01-01T00:00:00Z",
-        },
-      ] as unknown as Post[];
-      const postsOfThree = [
-        {
-          id: "post-3",
-          gameText: "Room 3",
-          createdUtc: "2024-01-01T00:00:00Z",
-        },
-      ] as unknown as Post[];
+      const postsOfTwo = [createMockPost("post-2", "Room 2")];
+      const postsOfThree = [createMockPost("post-3", "Room 3")];
 
       const older = deferred<unknown>();
       const newer = deferred<unknown>();

@@ -9,11 +9,8 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Tests.Dsl;
 
-/// <summary>
-/// Builds a room together with its access rows. Access is a three level nest
-/// (row -> character -> author), so spelling it out inline hides the one field
-/// a test is actually about.
-/// </summary>
+// Access is a three level nest (row -> character -> author), so spelling it out inline hides the
+// one field a test is actually about.
 public class RoomBuilder
 {
     private readonly List<RoomAccess> accesses = [];
@@ -45,10 +42,7 @@ public class RoomBuilder
         return this;
     }
 
-    /// <summary>
-    /// Grants a character the right to be posted as in this room. The character
-    /// is in play unless the case says otherwise.
-    /// </summary>
+    // The character is in play unless the case says otherwise.
     public RoomBuilder WithCharacterAccess(
         Guid characterId,
         Guid authorId,
@@ -74,9 +68,6 @@ public class RoomBuilder
         return this;
     }
 
-    /// <summary>
-    /// Grants a user reader access: a spectator row with no character behind it.
-    /// </summary>
     public RoomBuilder WithReaderAccess(Guid userId, RoomAccessPolicy policy = RoomAccessPolicy.Full)
     {
         accesses.Add(new RoomAccess
@@ -90,11 +81,8 @@ public class RoomBuilder
         return this;
     }
 
-    /// <summary>
-    /// A reader row that carries no user. The user is filled by a projection and
-    /// not by a schema constraint, so an empty one is reachable and every overload
-    /// that walks the row has to deny on it.
-    /// </summary>
+    // The user is filled by a projection and not by a schema constraint, so an empty one is
+    // reachable and every overload that walks the row has to deny on it.
     public RoomBuilder WithReaderAccessMissingItsUser()
     {
         accesses.Add(new RoomAccess

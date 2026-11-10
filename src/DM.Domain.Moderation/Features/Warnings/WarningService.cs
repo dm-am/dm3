@@ -20,9 +20,6 @@ namespace DM.Domain.Moderation.Features.Warnings;
 /// <inheritdoc />
 internal class WarningService : IWarningService
 {
-    /// <summary>
-    /// Said by the reads that look for the warning and by the writes that find it gone.
-    /// </summary>
     private const string WarningNotFound = "Предупреждение не найдено";
 
     /// <summary>
@@ -136,9 +133,6 @@ internal class WarningService : IWarningService
         }
     }
 
-    /// <summary>
-    /// A page of the log as stored, before anything is derived for it.
-    /// </summary>
     private async Task<(IReadOnlyList<Warning> Warnings, PagingResult Paging)> ReadLog(
         string? username, PagingQuery paging, CancellationToken ct)
     {
@@ -244,10 +238,6 @@ internal class WarningService : IWarningService
         return (await DescribeEntities([warning], ct)).Single();
     }
 
-    /// <summary>
-    /// The object of a warning: the kind the request named and the identifier of
-    /// the offending object.
-    /// </summary>
     private static (WarningEntityType EntityType, Guid EntityId) ResolveObject(
         CreateWarning createWarning, GeneralUser targetUser)
     {

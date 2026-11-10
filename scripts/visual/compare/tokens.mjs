@@ -228,9 +228,47 @@ function cssTokens(text, tokens = new Tokens(text), base = 0) {
   return tokens;
 }
 
+/**
+ * The template block of a component: an HTML template as a production build
+ * compiles it, with the directive comments the tools read; a template in
+ * another language as it is written.
+ */
+function templateTokens(descriptor, fileName, tokens) {
+  const { template } = descriptor;
+  const start = template.loc.start.offset;
+  if (template.lang && template.lang !== "html") {
+    tokens.push(template.content, start);
+    return;
+  }
+  for (const match of template.content.matchAll(/<!--([\s\S]*?)-->/g)) {
+    if (TEMPLATE_DIRECTIVES.some((pattern) => pattern.test(match[1]))) {
+      tokens.push(match[0], start + match.index);
+    }
+  }
+  const compiled = compilerSfc().compileTemplate({
+    source: template.content,
+    filename: fileName,
+    id: "data-v-00000000",
+    scoped: descriptor.styles.some((style) => style.scoped),
+    slotted: descriptor.slotted,
+    isProd: true,
+    compilerOptions: { comments: false },
+  });
+  if (compiled.errors.length > 0) {
+    const [error] = compiled.errors;
+    throw new LexError(
+      start + (error.loc?.start.offset ?? 0),
+      String(error.message ?? error),
+    );
+  }
+  // The compiled code has no positions in the file; a difference in it is
+  // reported at the template.
+  for (const line of compiled.code.split("\n")) tokens.push(line, start);
+}
+
 /** A single file component, block by block. */
 function vueTokens(text, fileName) {
-  const { parse, compileTemplate } = compilerSfc();
+  const { parse } = compilerSfc();
   const { descriptor, errors } = parse(text, {
     filename: fileName,
     sourceMap: false,
@@ -249,39 +287,9 @@ function vueTokens(text, fileName) {
       .join(" ");
     tokens.push(`${MARK}<${block.type} ${attributes}>`, block.loc.start.offset);
   };
-  const scoped = descriptor.styles.some((style) => style.scoped);
-  const template = descriptor.template;
-  if (template) {
-    header(template);
-    const start = template.loc.start.offset;
-    if (template.lang && template.lang !== "html") {
-      tokens.push(template.content, start);
-    } else {
-      for (const match of template.content.matchAll(/<!--([\s\S]*?)-->/g)) {
-        if (TEMPLATE_DIRECTIVES.some((pattern) => pattern.test(match[1]))) {
-          tokens.push(match[0], start + match.index);
-        }
-      }
-      const compiled = compileTemplate({
-        source: template.content,
-        filename: fileName,
-        id: "data-v-00000000",
-        scoped,
-        slotted: descriptor.slotted,
-        isProd: true,
-        compilerOptions: { comments: false },
-      });
-      if (compiled.errors.length > 0) {
-        const [error] = compiled.errors;
-        throw new LexError(
-          start + (error.loc?.start.offset ?? 0),
-          String(error.message ?? error),
-        );
-      }
-      // The compiled code has no positions in the file; a difference in it is
-      // reported at the template.
-      for (const line of compiled.code.split("\n")) tokens.push(line, start);
-    }
+  if (descriptor.template) {
+    header(descriptor.template);
+    templateTokens(descriptor, fileName, tokens);
   }
   for (const script of [descriptor.script, descriptor.scriptSetup]) {
     if (!script) continue;

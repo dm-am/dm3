@@ -1,13 +1,12 @@
+import type { SortDirection } from "@/shared/lib/filters/types";
+
 export interface DropdownItemProps {
   label: string;
   hint?: string;
   avatarUrl?: string;
   highlighted?: boolean;
-  /** Whether to indent this item (for hierarchy) */
-  indent?: boolean;
   /** Whether this item has sub-options (shows arrow) */
   hasSubOptions?: boolean;
-  searchQuery?: string;
 }
 
 export interface DateRangePickerProps {
@@ -15,8 +14,6 @@ export interface DateRangePickerProps {
   fromValue: string | null;
   /** To date value (YYYY-MM-DD format) */
   toValue: string | null;
-  fromLabel?: string;
-  toLabel?: string;
   showClearButton?: boolean;
   /**
    * Days after today can be picked. Off everywhere but the dates of a poll,
@@ -51,13 +48,13 @@ export interface SortOption {
   value: string;
   label: string;
   hint?: string;
-  defaultDirection?: "asc" | "desc";
+  defaultDirection?: SortDirection;
 }
 
 export interface SortButtonProps {
   options: readonly SortOption[];
   sortBy: string;
-  sortOrder: "asc" | "desc";
+  sortOrder: SortDirection;
 }
 
 export interface ListOption {
@@ -69,6 +66,5 @@ export interface ListOption {
 
 export interface OptionsListProps {
   options: ListOption[];
-  highlightedIndex?: number;
   filterQuery?: string;
 }

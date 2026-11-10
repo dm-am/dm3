@@ -5,9 +5,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A refusal the caller can act on, not one the host reports as its own fault.
-/// </summary>
 /// <remarks>
 /// The error middleware maps HttpException and nothing else, so any other refusal answers 500.
 /// Scanned as source: the type is either named in a throw or it is not.

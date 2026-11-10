@@ -12,17 +12,11 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Authorization;
 
-/// <summary>
-/// Gates reviews of a game and reviews of a post. The two resolvers are separate
-/// types with identical rules, so every case here runs against both: the day one
-/// of them is edited alone, the half of the table belonging to the other fails
-/// and the divergence has to be argued for instead of arriving silently.
-/// </summary>
+// The two resolvers are separate types with identical rules, so every case here runs against both:
+// the day one of them is edited alone, the half of the table belonging to the other fails and the
+// divergence has to be argued for instead of arriving silently.
 public class ReviewIntentionResolversShould
 {
-    /// <summary>
-    /// Which of the two resolvers a case is being run against.
-    /// </summary>
     public enum ReviewKind
     {
         Game,

@@ -14,7 +14,5 @@ public interface ITokenMaintenanceRepository
     /// <paramref name="issuedBefore" /> whatever their state.
     /// </summary>
     /// <param name="issuedBefore">Cutoff the caller derived from the retention policy.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Number of rows removed.</returns>
     Task<int> DeleteWithdrawnOrIssuedBefore(DateTimeOffset issuedBefore, CancellationToken cancellationToken = default);
 }

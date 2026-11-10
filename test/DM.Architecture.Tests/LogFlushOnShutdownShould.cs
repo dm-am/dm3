@@ -6,9 +6,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A host that borrows the static logger has to give it back.
-/// </summary>
 /// <remarks>
 /// UseSerilog() takes Log.Logger with dispose: false, so the Loki sink dies with its last batch.
 /// Source text: the call lives in Main, which no test runs.

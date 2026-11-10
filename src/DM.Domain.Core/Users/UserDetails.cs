@@ -19,9 +19,6 @@ public class UserDetails : GeneralUser
     /// </summary>
     public string Info { get; set; } = null!;
 
-    /// <summary>
-    /// User settings
-    /// </summary>
     public UserSettings Settings { get; set; } = null!;
 }
 

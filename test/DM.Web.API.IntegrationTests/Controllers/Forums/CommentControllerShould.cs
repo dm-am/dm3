@@ -34,9 +34,6 @@ public class CommentControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// Get non-existent comment should return NotFound, the code its delete answers.
-    /// </summary>
     [Fact]
     public async Task GetForumCommentWithNonExistentIdReturnsNotFound()
     {

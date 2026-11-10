@@ -8,10 +8,6 @@ using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Awards;
 
-/// <summary>
-/// The year of a contest series runs from the opening of the site to a year past the
-/// current one, on creation and on change alike.
-/// </summary>
 public class ContestSeriesYearShould
 {
     private readonly IDateTimeProvider dateTimeProvider = Substitute.For<IDateTimeProvider>();

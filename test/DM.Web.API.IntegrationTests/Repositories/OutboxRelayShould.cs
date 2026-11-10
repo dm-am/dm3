@@ -150,9 +150,7 @@ public class OutboxRelayShould : IntegrationTestBase
             "only know that if both publications carry the stored id");
     }
 
-    /// <summary>
-    /// The unique index on (EventId, EventType) turns at-least-once into one notification.
-    /// </summary>
+    // The unique index on (EventId, EventType) turns at-least-once into one notification.
     [Fact]
     public async Task LeanOnTheIndexThatSwallowsADuplicateDelivery()
     {

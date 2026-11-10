@@ -11,22 +11,14 @@ using Topic = DM.Domain.Forum.Features.Topics.Topic;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
-/// <summary>
-/// A board's denormalized topic count and "last topic" block follow every create, delete and move.
-/// </summary>
 public class BoardTopicSummaryShould : IntegrationTestBase
 {
-    /// <summary>
-    /// How long the queued call is watched before it is called blocked.
-    /// </summary>
     private static readonly TimeSpan Probe = TimeSpan.FromSeconds(2);
 
-    /// <summary>The bound on the whole wait, so a lock nobody releases fails.</summary>
+    // The bound on the whole wait, so a lock nobody releases fails.
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    /// How many topics share one timestamp in the tie-break case: more than two.
-    /// </summary>
+    // How many topics share one timestamp in the tie-break case: more than two.
     private const int TiedTopics = 5;
 
     public BoardTopicSummaryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -133,10 +125,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A topic created while another is being deleted is in the count the delete
-    /// leaves behind.
-    /// </summary>
     /// <remarks>
     /// The create is held open by hand in the repository's lock order; only a live server shows whether the
     /// delete's lock waits for it.
@@ -194,10 +182,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A recompute asked for from outside empties the block when the board has
-    /// nothing left to name.
-    /// </summary>
     /// <remarks>The topic is marked removed behind the repository's back, leaving the board naming a filtered row.</remarks>
     [Fact]
     public async Task EmptyTheSummaryOfABoardWhoseTopicsAreAllGone()
@@ -226,10 +210,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The recompute asked for from outside reads "the last topic" the way the
-    /// topic paths do, tie-break included.
-    /// </summary>
     /// <remarks>The digest backdates a topic to midnight of the first, so timestamps tie.</remarks>
     [Fact]
     public async Task NameTheSameLastTopicTheTopicPathsWouldOnATie()
@@ -267,10 +247,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A topic moved into a board that already numbers a topic the way it is
-    /// numbered takes the next free number there.
-    /// </summary>
     /// <remarks>
     /// The number is per board under the unique index on (BoardId, TopicNumber); the old address stops resolving,
     /// links by identifier still open it.
@@ -323,7 +299,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>The same moment at the resolution the column stores.</summary>
     private static DateTimeOffset Microseconds(DateTimeOffset moment) =>
         new(moment.Ticks - moment.Ticks % TimeSpan.TicksPerMicrosecond, moment.Offset);
 
@@ -334,9 +309,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         await repository.RefreshBoardSummary(boardId);
     }
 
-    /// <summary>
-    /// Soft-delete straight to the row, which the repository's own deletion would have repaired.
-    /// </summary>
+    // Soft-delete straight to the row, which the repository's own deletion would have repaired.
     private async Task MarkRemoved(Guid topicId)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -346,7 +319,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true));
     }
 
-    /// <summary>Every topic of the board stamped with one and the same moment.</summary>
     private async Task StampAtOneMoment(Guid boardId, DateTimeOffset moment)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -356,10 +328,8 @@ public class BoardTopicSummaryShould : IntegrationTestBase
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.CreatedUtc, moment));
     }
 
-    /// <summary>
-    /// The comment counter and the last-comment block are computed on read, so a
-    /// new comment has to show up on the very next render.
-    /// </summary>
+    // The comment counter and the last-comment block are computed on read, so a new comment has to
+    // show up on the very next render.
     [Fact]
     public async Task CountCommentsOfTheBoardAsSoonAsTheyAppear()
     {

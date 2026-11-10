@@ -7,9 +7,13 @@ import {
   RoomAccessType,
   RoomType,
   type Character,
-  type Game,
   type Room,
 } from "@/entities/game";
+import {
+  createMockCharacter,
+  createMockGame,
+} from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
 import RoomsSection from "./RoomsSection.vue";
@@ -51,8 +55,8 @@ export function aRoom(
   } as unknown as Room;
 }
 
-const aCharacter = (id: string, name: string) =>
-  ({ id, name, status: "Active" }) as unknown as Character;
+const aCharacter = (id: string, name: string): Character =>
+  createMockCharacter(id, name);
 
 export const ELF = aCharacter("c-1", "Эльвира");
 export const RANGER = aCharacter("c-2", "Арагорн");
@@ -67,10 +71,9 @@ export function mountSection(
   setActivePinia(pinia);
   const store = useGameDetailsStore();
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    title: "Игра",
-  } as unknown as Game;
+    ...createMockGame("the-game-guid", "Игра"),
+    publicId: asServed("the-game"),
+  };
   store.rooms = rooms;
   store.characters = characters;
   vi.spyOn(store, "loadRooms").mockReturnValue(reread);

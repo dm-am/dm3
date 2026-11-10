@@ -1,3 +1,8 @@
+import type { SortDirection } from "@/shared/lib/filters/types";
+
+/** Text alignment of a table column, shared by DataTable and ExpandableList */
+export type ColumnAlign = "left" | "center" | "right";
+
 /**
  * Column definition for DataTable
  */
@@ -16,7 +21,7 @@ export interface Column {
    */
   width?: string;
   /** Text alignment */
-  align?: "left" | "center" | "right";
+  align?: ColumnAlign;
 }
 
 /**
@@ -25,6 +30,5 @@ export interface Column {
 export interface SortState {
   /** Column key being sorted */
   key: string;
-  /** Sort direction */
-  direction: "asc" | "desc";
+  direction: SortDirection;
 }

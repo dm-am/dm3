@@ -52,6 +52,17 @@ const SNAPSHOT_MODULE = join(
 );
 const SHOWN = 20;
 
+/** The lines of a saved base, refused when another normalizer stamped it. */
+function readBaseline(path, stamp) {
+  const [header, ...lines] = readFileSync(path, "utf8").split("\n");
+  if (header !== stamp) {
+    throw new UsageError(
+      `${path} was saved by another version of cssSnapshot.ts; save the base again`,
+    );
+  }
+  return lines;
+}
+
 async function main() {
   const options = readArguments(process.argv.slice(2), {
     values: ["--save-base", "--baseline"],
@@ -74,15 +85,7 @@ async function main() {
     let base;
     let baseLabel;
     if (options.baseline) {
-      const [header, ...lines] = readFileSync(options.baseline, "utf8").split(
-        "\n",
-      );
-      if (header !== stamp) {
-        throw new UsageError(
-          `${options.baseline} was saved by another version of cssSnapshot.ts; save the base again`,
-        );
-      }
-      base = lines;
+      base = readBaseline(options.baseline, stamp);
       baseLabel = `baseline ${options.baseline}`;
     } else {
       base = cssSnapshot(

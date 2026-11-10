@@ -18,6 +18,24 @@ const aliasUrl = (url: string): URL | null =>
 
 const VITE_CONFIG = resolve(CLIENT_SRC, "..", "vite.config.ts");
 
+/**
+ * The style text of a file, comments out: a sheet whole, and of a .vue file the
+ * <style> blocks alone, since its script may carry a hex (App.vue's theme-color).
+ */
+export function styleTextOf(file: string): string {
+  const source = readFileSync(file, "utf8");
+  const styles = file.endsWith(".vue")
+    ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+        .map((found) => found[1])
+        .join("\n")
+    : source;
+  return styles
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .map((one) => one.replace(/\/\/.*$/, ""))
+    .join("\n");
+}
+
 /** One declaration block, property to value. */
 export type Declarations = Record<string, string>;
 

@@ -97,9 +97,6 @@ internal class MessageRepository : IMessageRepository
             .Select(m => new Anchor(m.MessageId, m.CreatedUtc))
             .FirstOrDefaultAsync(ct);
 
-    /// <summary>
-    /// Position of a message in the total page order
-    /// </summary>
     private sealed record Anchor(Guid MessageId, DateTimeOffset CreatedUtc);
 
     /// <inheritdoc />
@@ -211,9 +208,6 @@ internal class MessageRepository : IMessageRepository
         return await CreateCursorResult(result, hasPrev: hasPrev, hasNext: hasMore, ct);
     }
 
-    /// <summary>
-    /// Get messages around a specific message
-    /// </summary>
     private async Task<CursorResult<Message>> GetAround(ChatScope chat, Guid messageId, int limit, CancellationToken ct = default)
     {
         var referenceMessage = await ChatMessageAnchor(chat, messageId, ct);
@@ -262,9 +256,6 @@ internal class MessageRepository : IMessageRepository
         return await CreateCursorResult(result.ToArray(), hasPrev, hasNext, ct);
     }
 
-    /// <summary>
-    /// Get messages near a specific timestamp
-    /// </summary>
     private async Task<CursorResult<Message>> GetNearTimestamp(ChatScope chat, DateTimeOffset timestampUtc, int limit, CancellationToken ct = default)
     {
         // Find the first message on or after the timestamp. The tie-break makes the
@@ -326,9 +317,6 @@ internal class MessageRepository : IMessageRepository
         };
     }
 
-    /// <summary>
-    /// Single-message overload of the backfill below.
-    /// </summary>
     private Task FillLikes(Message? message, CancellationToken ct) =>
         message is null
             ? Task.CompletedTask

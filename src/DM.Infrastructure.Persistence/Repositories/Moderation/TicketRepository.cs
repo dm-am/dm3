@@ -18,7 +18,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 /// <inheritdoc />
 internal class TicketRepository : ITicketRepository
 {
-    /// <summary>Waiting for moderation or for the user</summary>
     private static readonly Expression<Func<DbTicket, bool>> IsOpen = t =>
         t.Status == TicketStatus.WaitingForModeration || t.Status == TicketStatus.WaitingForUser;
 

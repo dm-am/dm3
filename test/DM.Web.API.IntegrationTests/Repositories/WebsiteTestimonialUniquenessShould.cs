@@ -10,11 +10,8 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// One participant is signed under one testimonial, and the refusal of a second
-/// one comes from the schema rather than from a read.
-/// </summary>
-/// <remarks>Creating is check-then-insert, so the partial unique index by author decides, and the repository answers in the domain's terms.</remarks>
+// Creating is check-then-insert, so the partial unique index by author decides, and the repository
+// answers in the domain's terms.
 public class WebsiteTestimonialUniquenessShould : IntegrationTestBase
 {
     public WebsiteTestimonialUniquenessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -46,10 +43,8 @@ public class WebsiteTestimonialUniquenessShould : IntegrationTestBase
             .Should().Be(1);
     }
 
-    /// <summary>
-    /// A removed entry frees the participant: the index is filtered by IsRemoved,
-    /// and a moderator who deleted a testimonial can accept a new one.
-    /// </summary>
+    // A removed entry frees the participant: the index is filtered by IsRemoved, and a moderator
+    // who deleted a testimonial can accept a new one.
     [Fact]
     public async Task AcceptATestimonialAfterThePreviousOneWasDeleted()
     {
@@ -72,9 +67,7 @@ public class WebsiteTestimonialUniquenessShould : IntegrationTestBase
     private static CreateWebsiteTestimonialEntity NewEntity(Guid authorId, string text) =>
         TestimonialEntities.New(authorId, text);
 
-    /// <summary>
-    /// A participant of this test's own: the fixture database is shared and
-    /// seeded, so a fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A participant of this test's own: the fixture database is shared and seeded, so a fixed
+    // identifier would depend on whoever else wrote one.
     private static Task<Guid> AddUserAsync(DmDbContext dbContext) => UserRows.AddAsync(dbContext, "wt");
 }

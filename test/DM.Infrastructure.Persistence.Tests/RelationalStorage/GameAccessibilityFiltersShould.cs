@@ -13,19 +13,14 @@ using DbRoomAccess = DM.Infrastructure.Persistence.Entities.Game.Links.RoomAcces
 
 namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 
-/// <summary>
-/// The storage filters and ModuleVisibility.IsPubliclyVisible answer one question twice, because EF
-/// translates expression trees and not method calls; every combination is compared. The room filter also
-/// decides whether a closed room is named in the menu.
-/// </summary>
+// The storage filters and ModuleVisibility.IsPubliclyVisible answer one question twice, because EF
+// translates expression trees and not method calls; every combination is compared.
 public class GameAccessibilityFiltersShould
 {
     private static readonly Guid Stranger = Guid.NewGuid();
 
-    /// <summary>The master of the game, who holds no room grant of his own.</summary>
     private static readonly Guid Master = Guid.NewGuid();
 
-    /// <summary>A member the closed room was granted to.</summary>
     private static readonly Guid Reader = Guid.NewGuid();
 
     public static TheoryData<ModuleStatus, PremoderationStatus, DraftVisibility> ModuleStates()
@@ -69,10 +64,6 @@ public class GameAccessibilityFiltersShould
         available.Should().Be(ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility));
     }
 
-    /// <summary>
-    /// A closed room is named to everybody by default; its master may take it off the menu, and then it
-    /// leaves the query itself.
-    /// </summary>
     [Fact]
     public void NameAClosedRoomToAStrangerUntilItsMasterHidesIt()
     {
@@ -82,11 +73,9 @@ public class GameAccessibilityFiltersShould
         Listed(ClosedRoom(game, hidden: true), Stranger).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The switch hides the room from those it was already closed to and from
-    /// nobody else: whoever may open it still finds it in the menu, the master
-    /// included, who is admitted by his role and not by a grant.
-    /// </summary>
+    // The switch hides the room from those it was already closed to and from nobody else: whoever
+    // may open it still finds it in the menu, the master included, who is admitted by his role and
+    // not by a grant.
     [Fact]
     public void KeepAHiddenRoomListedForEveryoneWhoMayOpenIt()
     {
@@ -96,11 +85,7 @@ public class GameAccessibilityFiltersShould
         Listed(ClosedRoom(game, hidden: true), Master).Should().BeTrue();
     }
 
-    /// <summary>
-    /// The rank that passes premoderation verdicts opens the games awaiting one, by the premoderation status
-    /// alone, the set PremoderationAccess.IsPending names.
-    /// </summary>
-    /// <remarks>The row has to reach the reader before any gate can be asked about it.</remarks>
+    // The row has to reach the reader before any gate can be asked about it.
     [Theory]
     [MemberData(nameof(ModuleStates))]
     public void ListTheGameToAJudgeExactlyWhenItAwaitsAPremoderationVerdict(
@@ -116,9 +101,7 @@ public class GameAccessibilityFiltersShould
             ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility));
     }
 
-    /// <summary>
-    /// A private draft is hidden by its author, not by premoderation, so the rank does not reach it.
-    /// </summary>
+    // A private draft is hidden by its author, not by premoderation, so the rank does not reach it.
     [Fact]
     public void KeepAPrivateDraftShutToAJudge()
     {
@@ -131,10 +114,8 @@ public class GameAccessibilityFiltersShould
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// A removed game is gone for everybody, whatever it was awaiting when it
-    /// went: the soft-delete flag guards the whole filter and no arm reopens it.
-    /// </summary>
+    // A removed game is gone for everybody, whatever it was awaiting when it went: the soft-delete
+    // flag guards the whole filter and no arm reopens it.
     [Theory]
     [InlineData(PremoderationStatus.AwaitingEdits)]
     [InlineData(PremoderationStatus.AwaitingApproval)]
@@ -183,10 +164,6 @@ public class GameAccessibilityFiltersShould
             ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility));
     }
 
-    /// <summary>
-    /// The same over the listing question: the menu of a game awaiting a verdict
-    /// names its rooms to the judge, and the two asks the room list makes agree.
-    /// </summary>
     [Theory]
     [MemberData(nameof(ModuleStates))]
     public void ListTheRoomToAJudgeExactlyWhenItsGameAwaitsAPremoderationVerdict(
@@ -202,10 +179,8 @@ public class GameAccessibilityFiltersShould
             ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility));
     }
 
-    /// <summary>
-    /// A private draft is its author's own concealment and not premoderation's, so
-    /// its rooms stay shut to the rank exactly as the game does.
-    /// </summary>
+    // A private draft is its author's own concealment and not premoderation's, so its rooms stay
+    // shut to the rank exactly as the game does.
     [Fact]
     public void KeepTheRoomsOfAPrivateDraftShutToAJudge()
     {
@@ -218,11 +193,8 @@ public class GameAccessibilityFiltersShould
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// A removed game takes its rooms with it, and a removed room stays removed
-    /// inside a game still awaiting a verdict: both flags guard the whole filter
-    /// and the rank reopens neither.
-    /// </summary>
+    // A removed game takes its rooms with it, and a removed room stays removed inside a game still
+    // awaiting a verdict: both flags guard the whole filter and the rank reopens neither.
     [Theory]
     [InlineData(PremoderationStatus.AwaitingEdits)]
     [InlineData(PremoderationStatus.AwaitingApproval)]
@@ -243,11 +215,8 @@ public class GameAccessibilityFiltersShould
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// The rank answers for the game and not for the room: a closed room the judge
-    /// holds no grant to is named to them and stays shut, the way it is for every
-    /// other reader of the game.
-    /// </summary>
+    // The rank answers for the game and not for the room: a closed room the judge holds no grant to
+    // is named to them and stays shut, the way it is for every other reader of the game.
     [Fact]
     public void KeepAClosedRoomOfAJudgedGameNamedButShut()
     {
@@ -339,7 +308,6 @@ public class GameAccessibilityFiltersShould
         AccessType = RoomAccessType.Open
     };
 
-    /// <summary>Whether the game's room list may name the room to the user.</summary>
     private static bool Listed(DbRoom room, Guid userId) => new[] { room }
         .AsQueryable()
         .Any(GameAccessibilityFilters.RoomAvailable(userId, listingOnly: true));
@@ -354,7 +322,6 @@ public class GameAccessibilityFiltersShould
         PremoderationStatus = PremoderationStatus.Approved
     };
 
-    /// <summary>A private room, granted to at most one reader.</summary>
     private static DbRoom ClosedRoom(DbGame game, bool hidden, Guid? grantedTo = null)
     {
         var room = new DbRoom

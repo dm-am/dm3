@@ -6,9 +6,10 @@ import type {
   RecruitmentFilter,
   ClosedReasonFilter,
   StatusValue,
+  GamesFilterKey,
 } from "../model";
 
-const navPath = defineModel<FilterNavPath | null>("navPath", {
+const navPath = defineModel<FilterNavPath<GamesFilterKey> | null>("navPath", {
   required: true,
 });
 

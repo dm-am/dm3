@@ -215,8 +215,9 @@ $bubble-padding-x: $medium + $small
 .bubble-card
   margin: 0
 
-// Every entry renders at the same height, so the gallery's rotation shifts nothing; the toggle lives
-// inside the bottom padding (the owner's rule: the chevron must not grow the bottom space).
+// Every entry renders at the same height, so the gallery's rotation shifts
+// nothing; the toggle lives inside the bottom padding (the chevron must not
+// grow the bottom space).
 .bubble
   position: relative
   display: flex
@@ -258,7 +259,8 @@ $bubble-padding-x: $medium + $small
     border-top-color: $bg-highlight-green
     border-left-color: $bg-highlight-green
 
-// Inside the bottom padding strip, lifted $tiny off the edge; the tap target is the 18px strip by the owner's rule.
+// Inside the bottom padding strip, lifted $tiny off the edge; the tap target is
+// the 18px strip.
 .bubble-toggle
   position: absolute
   left: 50%

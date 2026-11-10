@@ -2,21 +2,14 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { defineComponent } from "vue";
+import { flushPromises } from "@vue/test-utils";
+import type { Router } from "vue-router";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 
-const { push, currentMeta, signOutMock, signOutAllMock } = vi.hoisted(() => ({
-  push: vi.fn(),
-  currentMeta: { value: {} as Record<string, unknown> },
+const { signOutMock, signOutAllMock } = vi.hoisted(() => ({
   signOutMock: vi.fn(),
   signOutAllMock: vi.fn(),
-}));
-
-vi.mock("vue-router", () => ({
-  useRouter: () => ({ push }),
-  useRoute: () => ({
-    get meta() {
-      return currentMeta.value;
-    },
-  }),
 }));
 
 vi.mock("@/entities/user", () => ({
@@ -26,35 +19,59 @@ vi.mock("@/entities/user", () => ({
 
 import { useSessionExit } from "./useSessionExit";
 
+const routes: Address[] = [
+  ["home", "/"],
+  ["notifications", "/notifications", { meta: { requiresAuth: true } }],
+  ["rules", "/rules"],
+];
+
+/** The exits of a page mounted at the address, and the router it stands on. */
+async function exitsAt(address: string) {
+  let exits!: ReturnType<typeof useSessionExit>;
+  const Shell = defineComponent({
+    setup() {
+      exits = useSessionExit();
+      return () => null;
+    },
+  });
+  const { router } = await mountPage(Shell, address, { routes });
+  return { exits, router };
+}
+
+const address = (router: Router) => router.currentRoute.value.fullPath;
+
 describe("useSessionExit", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("leaves a page that required the session", async () => {
-    currentMeta.value = { requiresAuth: true };
     signOutMock.mockResolvedValue(true);
+    const { exits, router } = await exitsAt("/notifications");
 
-    await useSessionExit().signOut();
+    await exits.signOut();
+    await flushPromises();
 
-    expect(push).toHaveBeenCalledWith({ name: "home" });
+    expect(address(router)).toBe("/");
   });
 
   it("stays put on a page a guest may read", async () => {
-    currentMeta.value = {};
     signOutMock.mockResolvedValue(true);
+    const { exits, router } = await exitsAt("/rules");
 
-    await useSessionExit().signOut();
+    await exits.signOut();
+    await flushPromises();
 
-    expect(push).not.toHaveBeenCalled();
+    expect(address(router)).toBe("/rules");
   });
 
   it("stays put when the server refused to end the session", async () => {
-    currentMeta.value = { requiresAuth: true };
     signOutAllMock.mockResolvedValue(false);
+    const { exits, router } = await exitsAt("/notifications");
 
-    await useSessionExit().signOutAll();
+    await exits.signOutAll();
+    await flushPromises();
 
-    expect(push).not.toHaveBeenCalled();
+    expect(address(router)).toBe("/notifications");
   });
 });

@@ -60,12 +60,8 @@ public class BlogIntentionResolverShould
         resolver.IsAllowed(user, BlogIntention.ViewDraft, blog).Should().BeTrue();
     }
 
-    /// <summary>
-    /// Asking for a premoderation verdict is the owner's move and nobody else's.
-    /// </summary>
-    /// <remarks>
-    /// Senior moderation may edit the blog but does not speak for its author, hence an intention of its own.
-    /// </remarks>
+    // Senior moderation may edit the blog but does not speak for its author, hence an intention of
+    // its own.
     [Fact]
     public void AllowSubmitForApprovalToTheBlogOwnerAlone()
     {
@@ -85,9 +81,8 @@ public class BlogIntentionResolverShould
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// The guest's empty id is no identity: it matches no lead even where nobody filled the author or an assistant.
-    /// </summary>
+    // The guest's empty id is no identity: it matches no lead even where nobody filled the author
+    // or an assistant.
     [Theory]
     [InlineData(ModuleStatus.Draft, BlogIntention.SetStatusActive)]
     [InlineData(ModuleStatus.Closed, BlogIntention.SetStatusActive)]
@@ -423,11 +418,8 @@ public class BlogIntentionResolverShould
         result.Should().BeTrue();
     }
 
-    /// <summary>
-    /// The draft visibility closes a blog while it is a draft and nothing after:
-    /// a blog started from a private draft takes comments from anybody, as it is
-    /// read by anybody.
-    /// </summary>
+    // The draft visibility closes a blog while it is a draft and nothing after: a blog started from
+    // a private draft takes comments from anybody, as it is read by anybody.
     [Fact]
     public void AllowCommentingABlogStartedFromAPrivateDraft()
     {
@@ -523,9 +515,6 @@ public class BlogIntentionResolverShould
         resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
     }
 
-    /// <summary>
-    /// Whoever may pass the verdict may open the blog it is pending on.
-    /// </summary>
     [Theory]
     [InlineData(UserRole.Mentor, true)]
     [InlineData(UserRole.Moderator, true)]

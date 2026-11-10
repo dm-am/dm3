@@ -15,14 +15,12 @@ import {
   submitRegistration,
   toPasswordStep,
 } from "./RegistrationForm.fixtures";
+import RegistrationForm from "./RegistrationForm.vue";
 import { register } from "./authForms.doubles";
 import { problem } from "./authForms.fixtures";
 
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
-);
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
 );
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
@@ -45,7 +43,9 @@ describe("RegistrationForm", () => {
     expect(login).toBeDefined();
     await login?.trigger("click");
 
-    expect(wrapper.emitted("openLogin")?.[0]).toEqual(["reader@dm.am"]);
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("openLogin")?.[0],
+    ).toEqual(["reader@dm.am"]);
   });
 
   // The check on blur can be skipped by Enter, so the submit has to offer the way in too.
@@ -62,7 +62,9 @@ describe("RegistrationForm", () => {
     const login = control(wrapper, "Войти");
     expect(login).toBeDefined();
     await login?.trigger("click");
-    expect(wrapper.emitted("openLogin")?.[0]).toEqual(["reader@dm.am"]);
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("openLogin")?.[0],
+    ).toEqual(["reader@dm.am"]);
   });
 
   // A removed account's address answers as taken: the server sends "Taken" for both.
@@ -116,7 +118,9 @@ describe("RegistrationForm", () => {
 
     const wrapper = await submitRegistration();
 
-    expect(wrapper.emitted("success")).toBeUndefined();
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("success"),
+    ).toBeUndefined();
     expect(wrapper.find("#registration-email").exists()).toBe(true);
     expect(wrapper.find("#registration-email-message").text()).toBe(
       "Аккаунт с этой почтой уже существует",
@@ -125,7 +129,7 @@ describe("RegistrationForm", () => {
   });
 
   it("shows the address it is about, and lets the reader back to it", async () => {
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await toPasswordStep(wrapper);
 
     expect(wrapper.find(".auth-value").text()).toBe("reader@dm.am");
@@ -139,7 +143,7 @@ describe("RegistrationForm", () => {
   });
 
   it("checks the address once when Enter arrives twice", async () => {
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     const email = wrapper.find("#registration-email");
     await email.setValue("reader@dm.am");
 
@@ -155,7 +159,7 @@ describe("RegistrationForm", () => {
   it("takes the first press while the check is still on the wire", async () => {
     const answer = heldCheck();
 
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     const email = wrapper.find("#registration-email");
     await email.setValue("reader@dm.am");
 
@@ -185,7 +189,7 @@ describe("RegistrationForm", () => {
       error: null,
     });
 
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     const email = wrapper.find("#registration-email");
 
     await email.setValue("reader@");
@@ -212,7 +216,7 @@ describe("RegistrationForm", () => {
     // The answer about the address he had lands after he kept typing.
     const answer = heldCheck();
 
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     const email = wrapper.find("#registration-email");
     await email.setValue("reader@dm.am");
     await email.trigger("blur");

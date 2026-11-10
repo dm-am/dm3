@@ -52,6 +52,48 @@ const BLOCK_HTML: ReadonlySet<string> = new Set([
   "H6",
 ]);
 
+/** Marks of the visual mode written back as the same tag around their content. */
+const MARKED_WRAPS: ReadonlySet<string> = new Set([
+  "b",
+  "i",
+  "u",
+  "strike",
+  "nsfw",
+  "mod",
+  "quote",
+  "li",
+  "code",
+]);
+
+/** Pasted HTML tags that are a BBCode tag around their content. */
+const PASTED_WRAPS: ReadonlyMap<string, string> = new Map([
+  ["STRONG", "b"],
+  ["B", "b"],
+  ["EM", "i"],
+  ["I", "i"],
+  ["U", "u"],
+  ["S", "strike"],
+  ["STRIKE", "strike"],
+  ["DEL", "strike"],
+  ["CODE", "code"],
+  ["PRE", "code"],
+  ["LI", "li"],
+  ["BLOCKQUOTE", "quote"],
+]);
+
+/** Pasted lists, whose items alone are written, without lines between them. */
+const PASTED_LISTS: ReadonlyMap<string, string> = new Map([
+  ["UL", "ul"],
+  ["OL", "ol"],
+]);
+
+/** Pasted HTML that holds no text a reader sees. */
+const DROPPED_HTML: ReadonlySet<string> = new Set([
+  "SCRIPT",
+  "STYLE",
+  "TEMPLATE",
+]);
+
 type Kind = "p" | "block" | "inline";
 
 function kindOf(node: Node): Kind | null {
@@ -179,30 +221,21 @@ class BbcodeWriter {
   private node(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) return node.nodeValue ?? "";
     const element = node as Element;
+    return this.marked(element) ?? this.pasted(element);
+  }
 
-    switch (element.getAttribute("data-bb-tag")) {
-      case "b":
-      case "i":
-      case "u":
-      case "strike":
-      case "nsfw":
-      case "mod":
-      case "quote":
-        return this.wrap(
-          element.getAttribute("data-bb-tag") as string,
-          element,
-        );
+  /** An element the visual mode drew, read by its data-bb-tag; null for none. */
+  private marked(element: Element): string | null {
+    const tag = element.getAttribute("data-bb-tag");
+    if (tag !== null && MARKED_WRAPS.has(tag)) return this.wrap(tag, element);
+    switch (tag) {
       case "ul":
       case "ol":
         return this.wrap(
-          element.getAttribute("data-bb-tag") as string,
+          tag,
           element,
           flag(element, "data-bb-loose") ? "container" : "list",
         );
-      case "li":
-        return this.wrap("li", element);
-      case "code":
-        return this.wrap("code", element);
       case "noparse":
         return this.example(element);
       case "tab":
@@ -218,79 +251,67 @@ class BbcodeWriter {
       case "private":
         return this.hidden(element);
     }
+    return null;
+  }
 
-    const classes = element.classList;
+  /** Pasted HTML, read by its tag and class. */
+  private pasted(element: Element): string {
+    const wrap = PASTED_WRAPS.get(element.tagName);
+    if (wrap) return this.wrap(wrap, element);
+    const list = PASTED_LISTS.get(element.tagName);
+    if (list) return this.wrap(list, element, "list");
+    if (DROPPED_HTML.has(element.tagName)) return "";
     switch (element.tagName) {
-      case "P":
-        return this.children(element, "container");
       case "BR":
         return "\n";
-      case "STRONG":
-      case "B":
-        return this.wrap("b", element);
-      case "EM":
-      case "I":
-        return this.wrap("i", element);
-      case "U":
-        return this.wrap("u", element);
-      case "S":
-      case "STRIKE":
-      case "DEL":
-        return this.wrap("strike", element);
-      case "CODE":
-      case "PRE":
-        return this.wrap("code", element);
-      case "UL":
-        return this.wrap("ul", element, "list");
-      case "OL":
-        return this.wrap("ol", element, "list");
-      case "LI":
-        return this.wrap("li", element);
-      case "BLOCKQUOTE":
-        return this.wrap("quote", element);
       case "A":
-        return classes.contains("bb-mention")
+        return element.classList.contains("bb-mention")
           ? this.mention(element)
           : this.plainLink(element);
       case "IMG":
         return this.plainImage(element);
-      case "SCRIPT":
-      case "STYLE":
-      case "TEMPLATE":
-        return "";
       case "DIV":
-        if (classes.contains("spoiler") || classes.contains("bb-spoiler")) {
-          return this.spoiler(element);
-        }
-        if (classes.contains("nsfw-spoiler") || classes.contains("bb-nsfw")) {
-          return this.wrap("nsfw", element);
-        }
-        if (classes.contains("mod-block") || classes.contains("bb-mod")) {
-          return this.wrap("mod", element);
-        }
-        if (classes.contains("private-message")) return this.hidden(element);
-        return this.children(element, "container");
+        return this.pastedBlock(element);
       case "SPAN":
-        if (classes.contains("bb-image-frame")) {
-          const img = element.querySelector("img");
-          return img ? this.image(img, element) : "";
-        }
-        if (classes.contains("bb-tab")) {
-          return kept(element, "data-bb-open", "[tab]");
-        }
-        if (classes.contains("bb-noparse")) {
-          return this.example(element);
-        }
-        if (
-          classes.contains("bb-private") ||
-          classes.contains("private-text")
-        ) {
-          return this.hidden(element);
-        }
-        return this.children(element, "container");
+        return this.pastedSpan(element);
       default:
         return this.children(element, "container");
     }
+  }
+
+  /** A pasted <div>: a block of the site's own by its class, else a container. */
+  private pastedBlock(element: Element): string {
+    const classes = element.classList;
+    if (classes.contains("spoiler") || classes.contains("bb-spoiler")) {
+      return this.spoiler(element);
+    }
+    if (classes.contains("nsfw-spoiler") || classes.contains("bb-nsfw")) {
+      return this.wrap("nsfw", element);
+    }
+    if (classes.contains("mod-block") || classes.contains("bb-mod")) {
+      return this.wrap("mod", element);
+    }
+    if (classes.contains("private-message")) return this.hidden(element);
+    return this.children(element, "container");
+  }
+
+  /** A pasted <span>: an inline mark of the site's own by its class, else a container. */
+  private pastedSpan(element: Element): string {
+    const classes = element.classList;
+    if (classes.contains("bb-image-frame")) {
+      const img = element.querySelector("img");
+      return img ? this.image(img, element) : "";
+    }
+    if (classes.contains("bb-tab")) {
+      return kept(element, "data-bb-open", "[tab]");
+    }
+    if (classes.contains("bb-noparse")) {
+      return this.example(element);
+    }
+    if (classes.contains("bb-private") || classes.contains("private-text")) {
+      return this.hidden(element);
+    }
+    return this.children(element, "container");
   }
 
   private spoiler(element: Element): string {
@@ -336,14 +357,7 @@ class BbcodeWriter {
 
   private markedLink(element: Element): string {
     const href = element.getAttribute("href") ?? "";
-    let text: string | null;
-    if (flag(element, "data-bb-selfref")) text = null;
-    else if (element.hasAttribute("data-bb-text")) {
-      text = element.getAttribute("data-bb-text");
-    } else {
-      const shown = element.textContent ?? "";
-      text = shown === DEFAULT_LINK_TEXT ? null : shown;
-    }
+    let text = markedCaption(element);
     if (!isSafeAddress(href)) return text ?? "";
     if (text !== null && !isWritableValue(text)) text = null;
     const canonical = writeLink(trimWhiteSpace(href), text);
@@ -421,6 +435,16 @@ class BbcodeWriter {
     const src = trimWhiteSpace(img.getAttribute("src") ?? "");
     return isSafeAddress(src) ? `[img]${src}[/img]` : "";
   }
+}
+
+/** The caption of a marked link, null for none: the default caption shown stands for none. */
+function markedCaption(element: Element): string | null {
+  if (flag(element, "data-bb-selfref")) return null;
+  if (element.hasAttribute("data-bb-text")) {
+    return element.getAttribute("data-bb-text");
+  }
+  const shown = element.textContent ?? "";
+  return shown === DEFAULT_LINK_TEXT ? null : shown;
 }
 
 /** Whether a kept spoiler opening still says what the element says. */

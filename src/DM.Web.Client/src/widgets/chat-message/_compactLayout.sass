@@ -1,0 +1,42 @@
+// The compact layout of a message. A mixin, so its rules keep their place after the full layout's.
+@use "@/assets/styles/Variables" as *
+
+// gutter + .msg-gap ($small) = 88px, the full layout's avatar column, so text starts on one x.
+$compact-time-gutter: 80px
+
+=compact-layout
+  .chat-message.compact
+    .msg-layout-compact
+      display: block
+    .msg-body
+      display: block
+    .msg-header-compact
+      margin-bottom: 0
+      line-height: 1.4
+    .msg-time-group
+      width: $compact-time-gutter
+      text-align: left
+    .msg-content
+      display: block
+      margin-left: calc(#{$compact-time-gutter} + #{$small})
+      margin-top: 0
+    .msg-edit
+      margin-left: calc(#{$compact-time-gutter} + #{$small})
+    .msg-text
+      display: block
+    .msg-text :deep(.bb-quote),
+    .msg-text :deep(.bb-mod),
+    .msg-text :deep(.bb-private)
+      display: block
+      margin: 0
+      padding: 0
+      line-height: 1.4
+    .msg-text :deep(ul),
+    .msg-text :deep(ol)
+      display: block
+      margin: 0
+      padding-left: $big
+      line-height: 1.4
+    .msg-reactions
+      display: block
+      margin-top: $tiny

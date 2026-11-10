@@ -8,7 +8,6 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 /// </summary>
 internal static class StoredCounters
 {
-    /// <summary>The same counter, one higher.</summary>
     public static Expression<Func<TOwner, int>> Raised<TOwner>(Expression<Func<TOwner, int>> counter) =>
         Expression.Lambda<Func<TOwner, int>>(
             Expression.Add(counter.Body, Expression.Constant(1)), counter.Parameters);

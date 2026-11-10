@@ -135,9 +135,7 @@ describe("Private: the bare block and a broken spelling", () => {
 });
 
 // A hidden block around a code sample or a noparse example has to stay on the
-// text: the code mark of the kit and the noparse mark used to exclude every
-// other mark, and a [private] written around either came off it in the visual
-// mode and was published on the next save.
+// text
 describe("The marks of the visual mode", () => {
   const editor = (): Editor => {
     const created = new Editor({ extensions: createEditorExtensions() });
@@ -196,9 +194,8 @@ describe("The marks of the visual mode", () => {
     expect(rank[rank.length - 1]).toBe("noparse");
   });
 
-  // A block inside another is read by those who read both, and the save
-  // refuses it. The visual mode used to put the inner block beside the outer
-  // one, which the save takes, and the addressee of the inner block read it.
+  // A block inside another is read by those who read both, and the save refuses
+  // it.
   it("hold a hidden block inside another", () => {
     const created = editor();
     created.commands.setContent(
@@ -226,8 +223,7 @@ describe("The marks of the visual mode", () => {
   });
 
   // A hidden block written around blocks stands on the blocks: the nodes that
-  // hold blocks take the private mark on them, and no other mark. It used to
-  // stand on the text inside them, and the blocks came back outside it.
+  // hold blocks take the private mark on them, and no other mark.
   it("put a hidden block on the blocks it holds", () => {
     const { nodes, marks } = editor().schema;
     for (const holder of [

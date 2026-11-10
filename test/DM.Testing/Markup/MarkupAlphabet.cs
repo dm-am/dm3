@@ -9,7 +9,6 @@ namespace DM.Testing.Markup;
 /// <summary>
 /// What generated markup is made of, read from the list the client reads too.
 /// </summary>
-/// <remarks>Read from markupAlphabet.ts in the client, as strict JSON between two marker comments.</remarks>
 public sealed class MarkupAlphabet
 {
 
@@ -40,7 +39,6 @@ public sealed class MarkupAlphabet
     /// <summary>The list as the file holds it now.</summary>
     public static MarkupAlphabet Shared => Loaded.Value;
 
-    /// <summary>Where the list is written.</summary>
     public static string File => Path.Combine(RepositoryLayout.Root,
         "src", "DM.Web.Client", "src", "shared", "lib", "testing", "markupAlphabet.ts");
 
@@ -68,7 +66,6 @@ public sealed class MarkupAlphabet
     /// <summary>The two lists, written with items only.</summary>
     public IReadOnlyList<(string Open, string Close)> ValidLists { get; }
 
-    /// <summary>An item of a list.</summary>
     public IReadOnlyList<(string Open, string Close)> ValidItems { get; }
 
     /// <summary>[mod], for the surfaces that have it.</summary>

@@ -23,7 +23,6 @@ public partial class AgentToolingShould
     private static string ClientPath(string file) =>
         Path.Combine(RepositoryLayout.Root, "src", "DM.Web.Client", file);
 
-    /// <summary>The port the owner's server pins, read out of the config that pins it.</summary>
     private static string OwnerPort()
     {
         var declaration = Regex.Match(
@@ -34,11 +33,8 @@ public partial class AgentToolingShould
         return declaration.Groups[1].Value;
     }
 
-    /// <summary>
-    /// The npm scripts that start that server. "vite build" and "vite preview" are
-    /// other programs sharing the executable, and a script pointed at another
-    /// config is pointed at another port.
-    /// </summary>
+    // "vite build" and "vite preview" are other programs sharing the executable, and a script
+    // pointed at another config is pointed at another port.
     private static bool StartsTheDevServer(string command)
     {
         var words = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -61,7 +57,6 @@ public partial class AgentToolingShould
     private static string[] Briefs() =>
         Directory.GetFiles(Path.Combine(RepositoryLayout.Root, ".claude", "agents"), "*.md");
 
-    /// <summary>The lines a brief hands over to be run, as opposed to the prose about them.</summary>
     private static IEnumerable<(string Brief, string Line)> FencedLines(string path)
     {
         var brief = new FileInfo(path).Name;
@@ -105,11 +100,7 @@ public partial class AgentToolingShould
             "owner's browser is pointed at, see the class remarks");
     }
 
-    /// <summary>
-    /// Commands that destroy the owner's data, spelled however the project spells
-    /// them.
-    /// </summary>
-    /// <remarks>Matched on the wrapper and on the compose flag alike: a brief may use either.</remarks>
+    // Matched on the wrapper and on the compose flag alike: a brief may use either.
     private static readonly string[] DestroysTheStand =
     {
         "dm.ps1 reset",
@@ -202,10 +193,8 @@ public partial class AgentToolingShould
             "a failed run that opens its report waits on Ctrl+C instead of ending");
     }
 
-    /// <summary>
-    /// The stand check reads the stack and changes nothing in it.
-    /// </summary>
-    /// <remarks>The hook names the command to fix the stand; running it would restart the stack under an open tab.</remarks>
+    // The hook names the command to fix the stand; running it would restart the stack under an open
+    // tab.
     [Fact]
     public void LeaveTheStandAsTheCheckFoundIt()
     {
@@ -222,10 +211,8 @@ public partial class AgentToolingShould
             "running that command is the developer's call");
     }
 
-    /// <summary>
-    /// The offenders as one line, because an empty-collection failure prints the
-    /// first item and these lists exist to name every place at once.
-    /// </summary>
+    // The offenders as one line, because an empty-collection failure prints the first item and
+    // these lists exist to name every place at once.
     private static string Named(IEnumerable<string> offenders) =>
         string.Join("; ", offenders.OrderBy(offender => offender, StringComparer.Ordinal));
 }

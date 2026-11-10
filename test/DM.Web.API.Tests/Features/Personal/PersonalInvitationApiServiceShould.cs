@@ -13,9 +13,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
-/// <summary>
-/// An invitation the account page presses that is in neither list was settled elsewhere or never was.
-/// </summary>
+// An invitation the account page presses that is in neither list was settled elsewhere or never
+// was.
 public class PersonalInvitationApiServiceShould : UnitTestBase
 {
     private readonly IGameInvitationService _games = Mock<IGameInvitationService>();

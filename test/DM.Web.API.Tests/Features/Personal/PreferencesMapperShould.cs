@@ -7,10 +7,8 @@ using ServiceUserSettings = DM.Domain.Core.Identity.UserSettings;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
-/// <summary>
-/// The preferences are the settings document, and a document that never had a
-/// page size reads as a reader who never chose one.
-/// </summary>
+// The preferences are the settings document, and a document that never had a page size reads as a
+// reader who never chose one.
 public class PreferencesMapperShould
 {
     [Fact]

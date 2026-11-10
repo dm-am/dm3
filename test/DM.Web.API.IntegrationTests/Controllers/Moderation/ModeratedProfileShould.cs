@@ -11,9 +11,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// The moderated profile answers with login records present, which is where its aggregates run.
-/// </summary>
+// The moderated profile answers with login records present, which is where its aggregates run.
 public class ModeratedProfileShould : IntegrationTestBase
 {
     public ModeratedProfileShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -94,9 +92,8 @@ public class ModeratedProfileShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The buttons offer a warning and a ban by the rank rule the services refuse by (ModerationRank).
-    /// </summary>
+    // The buttons offer a warning and a ban by the rank rule the services refuse by
+    // (ModerationRank).
     [Theory]
     [InlineData("moderator", TestConstants.TestUserLogin, true, false)]
     [InlineData("moderator", TestConstants.ModeratorUserLogin, false, false)]
@@ -127,13 +124,7 @@ public class ModeratedProfileShould : IntegrationTestBase
         permissions.GetProperty("canIssueBan").GetBoolean().Should().Be(canBan);
     }
 
-    /// <summary>
-    /// What each rank is shown of a profile and offered on it, flag by flag.
-    /// </summary>
-    /// <remarks>
-    /// The same rank thresholds decide the flags and the refusals. The subject is an ordinary member with a note from
-    /// each caller.
-    /// </remarks>
+    // The same rank thresholds decide the flags and the refusals.
     [Theory]
     [InlineData(UserRole.Moderator, new[]
     {
@@ -172,7 +163,6 @@ public class ModeratedProfileShould : IntegrationTestBase
             $"this is what a {rank} is shown and offered on the profile of a member below every rank");
     }
 
-    /// <summary>The ranks below a moderator are not let in, and a guest is asked to sign in.</summary>
     [Theory]
     [InlineData(UserRole.Mentor, HttpStatusCode.Forbidden)]
     [InlineData(UserRole.RegularUser, HttpStatusCode.Forbidden)]
@@ -235,10 +225,6 @@ public class ModeratedProfileShould : IntegrationTestBase
         return granted.OrderBy(name => name, StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>
-    /// A member of no rank with an address and a note from each caller, made per test.
-    /// </summary>
-    /// <returns>The member's username.</returns>
     private async Task<string> SeedSubjectWithNotesAsync()
     {
         await using var db = DatabaseFixture.CreateDbContext();

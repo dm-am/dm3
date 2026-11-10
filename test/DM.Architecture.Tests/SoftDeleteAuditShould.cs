@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Who removed a row and when is written in one place.
-/// </summary>
 /// <remarks>
 /// SoftDelete.Mark and MarkWhere write the pair with the flag so no delete path forgets one.
 /// Over the two audit columns, which exist only where the audit does.

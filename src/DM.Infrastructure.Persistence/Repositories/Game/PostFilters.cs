@@ -9,9 +9,6 @@ using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
-/// <summary>
-/// Helper class for rated posts projection
-/// </summary>
 internal class PostWithRating
 {
     public required Entities.Game.Posts.Post Post { get; init; }
@@ -20,10 +17,6 @@ internal class PostWithRating
     public DateTimeOffset? LastReviewUtc { get; init; }
 }
 
-/// <summary>
-/// The filters a list of posts takes, and the review figures they filter by:
-/// shared by a room's list and the rated feed.
-/// </summary>
 internal static class PostFilters
 {
     /// <summary>

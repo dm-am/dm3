@@ -16,9 +16,8 @@ public class MessagingMapperShould : UnitTestBase
     private static MessagingMapper CreateMapper() =>
         new(new UserMapper());
 
-    /// <summary>
-    /// PATCH carries "not sent" as null and the write model keeps saying it: an empty list removes everybody.
-    /// </summary>
+    // PATCH carries "not sent" as null and the write model keeps saying it: an empty list removes
+    // everybody.
     [Fact]
     public void KeepUnsentParticipantListsNull()
     {
@@ -45,11 +44,9 @@ public class MessagingMapperShould : UnitTestBase
         update.RemoveParticipants.Should().BeNull();
     }
 
-    /// <summary>
-    /// The text carrier is surface-specific: global chat gets the safe-image
-    /// surface, direct chats the one with neither [mod] nor [private], and
-    /// the envelope names the sender so the author_edit round-trip works.
-    /// </summary>
+    // The text carrier is surface-specific: global chat gets the safe-image surface, direct chats
+    // the one with neither [mod] nor [private], and the envelope names the sender so the
+    // author_edit round-trip works.
     [Theory]
     [InlineData(ChatType.Global, typeof(GlobalChatBbText))]
     [InlineData(ChatType.Direct, typeof(DirectMessageBbText))]

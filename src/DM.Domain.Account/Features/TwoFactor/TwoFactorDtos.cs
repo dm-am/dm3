@@ -104,7 +104,6 @@ public class TwoFactorChallengeState
     /// <summary>How many codes have already failed</summary>
     public int Attempts { get; set; }
 
-    /// <summary>Address the first step came from</summary>
     public string? IpAddress { get; set; }
 
     /// <summary>User agent the first step came from</summary>

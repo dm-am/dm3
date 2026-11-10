@@ -151,7 +151,6 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
         await _dbContext.SaveChangesAsync(ct);
     }
 
-    /// <summary>The fields a decision on the request writes.</summary>
     private static void ApplyDecision(DbUsernameChangeRequest entity, UsernameChangeRequest request)
     {
         entity.RequestedUsername = request.RequestedUsername;

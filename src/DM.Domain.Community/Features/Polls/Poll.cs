@@ -14,9 +14,6 @@ public class Poll
     /// </summary>
     public Guid Id { get; set; }
 
-    /// <summary>
-    /// Start moment (UTC)
-    /// </summary>
     public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
@@ -53,7 +50,6 @@ public class Poll
     /// page calls the poll open by the same answer. The storage's listing restates
     /// it in SQL, which cannot call this.
     /// </remarks>
-    /// <param name="now">Moment to judge the poll at</param>
     public PollStatus StatusAt(DateTimeOffset now)
     {
         if (now < StartsUtc)

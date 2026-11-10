@@ -71,10 +71,6 @@ public class BbMismatchedClosingTagShould
         html.Should().NotMatchRegex("<em>[^<]*дальше");
     }
 
-    /// <summary>
-    /// A closing tag naming nothing that is open closes nothing, and in
-    /// particular does not end a block it stands inside.
-    /// </summary>
     [Fact]
     public void CloseNothingWhenNoAncestorCarriesThatName()
     {

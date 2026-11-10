@@ -8,17 +8,7 @@ namespace DM.Domain.Core.Likes;
 /// </summary>
 public interface ILikeOperations
 {
-    /// <summary>
-    /// Like an entity
-    /// </summary>
-    /// <param name="entity">Likable entity</param>
-    /// <param name="eventType">Event type to generate after like</param>
-    /// <returns>User who liked</returns>
     Task<GeneralUser> LikeAsync(ILikable entity, EventType eventType);
 
-    /// <summary>
-    /// Unlike an entity
-    /// </summary>
-    /// <param name="entity">Likable entity</param>
     Task UnlikeAsync(ILikable entity);
 }

@@ -30,9 +30,6 @@ import {
 vi.mock("@/entities/game/api/roomApi", async () =>
   (await import("./GameChatRoom.doubles")).roomApi(),
 );
-vi.mock("vue-router", async () =>
-  (await import("./GameChatRoom.doubles")).vueRouter(),
-);
 
 describe("GameChatRoom admission", () => {
   beforeEach(standInRoomOne);

@@ -13,37 +13,24 @@ using DbUserBlacklist = DM.Infrastructure.Persistence.Entities.Account.UserBlack
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// What each of the three blacklists does, action by action, through the real
-/// routes.
-/// </summary>
-/// <remarks>
-/// A list closes the minimum: the game's the discussion and the application, the blog's comments; a topic is
-/// public, and a personal list closes private messages and hides what it was asked to. Every row sends the
-/// request a page would send; each case seeds its own blacklisted user.
-/// </remarks>
+// A list closes the minimum: the game's the discussion and the application, the blog's comments; a
+// topic is public, and a personal list closes private messages and hides what it was asked to.
 public partial class BlacklistRuleShould : IntegrationTestBase
 {
     public BlacklistRuleShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>What the list does to one action.</summary>
     public enum Outcome
     {
-        /// <summary>The action goes through.</summary>
         Allowed,
 
-        /// <summary>Refused in the words of the game's list.</summary>
         RefusedByGameList,
 
-        /// <summary>Refused in the words of the blog's list.</summary>
         RefusedByBlogList,
 
-        /// <summary>Refused by another rule, and not in the words of any list.</summary>
         RefusedByAnotherRule,
 
-        /// <summary>The comment is not there to this route.</summary>
         NotFound
     }
 
@@ -142,10 +129,8 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The flag the page leaves the closed forms out by is about the viewer: true
-    /// for the person on the list, false for anybody else and for a guest.
-    /// </summary>
+    // The flag the page leaves the closed forms out by is about the viewer: true for the person on
+    // the list, false for anybody else and for a guest.
     [Fact]
     public async Task TellOnlyTheBlacklistedViewerThatHeIsOnTheList()
     {
@@ -169,9 +154,8 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The flag stands where something it closes is offered, the game's details and the blog, and nowhere else.
-    /// </summary>
+    // The flag stands where something it closes is offered, the game's details and the blog, and
+    // nowhere else.
     [Fact]
     public async Task KeepTheFlagOffTheShapesThatOfferNothingTheListsClose()
     {
@@ -201,10 +185,7 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The owner blacklists a subscriber, and the subscription stays.
-    /// </summary>
-    /// <remarks>The game subscribes a player who leaves by itself, and the list is not for subscriptions.</remarks>
+    // The game subscribes a player who leaves by itself, and the list is not for subscriptions.
     [Fact]
     public async Task BlacklistASubscriberAndKeepTheSubscription()
     {
@@ -242,12 +223,6 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// "Скрывать игры", "Скрывать блоги" and "Скрывать сообщения в чате": the
-    /// games, blogs and general chat messages of the people on the viewer's list
-    /// leave what the viewer browses, and a list asked for by that person's name
-    /// still answers in full.
-    /// </summary>
     [Fact]
     public async Task HideWhatTheViewerAskedToHide()
     {
@@ -307,15 +282,12 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>The request a page sends for one row, asked of the list the row is about.</summary>
     private Task<HttpResponseMessage> SendAsync(string action, Seed seed) =>
         GameRequest(action, seed) ?? BlogRequest(action, seed) ?? ForumRequest(action, seed)
         ?? throw new ArgumentOutOfRangeException(nameof(action), action, "no request for this row");
 
-    /// <summary>
-    /// A review is written on a closed game alone, so the shared game is closed for the one request and
-    /// opened again after it.
-    /// </summary>
+    // A review is written on a closed game alone, so the shared game is closed for the one request
+    // and opened again after it.
     private async Task<HttpResponseMessage> WhileTheGameIsClosed(Func<Task<HttpResponseMessage>> send)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -336,7 +308,6 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>The rows of the game's list, or null for a row of another list.</summary>
     private Task<HttpResponseMessage>? GameRequest(string action, Seed seed)
     {
         var game = TestConstants.TestGameId;
@@ -392,7 +363,6 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         };
     }
 
-    /// <summary>The rows of the blog's list, or null for a row of another list.</summary>
     private Task<HttpResponseMessage>? BlogRequest(string action, Seed seed)
     {
         var blog = TestConstants.TestBlogId;
@@ -428,7 +398,6 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         };
     }
 
-    /// <summary>The rows of a personal list in the forum, or null for a row of another list.</summary>
     private Task<HttpResponseMessage>? ForumRequest(string action, Seed seed)
     {
         const string text = "Текст, который пишет пользователь из черного списка";
@@ -475,11 +444,9 @@ public partial class BlacklistRuleShould : IntegrationTestBase
         return document.RootElement.GetProperty("resource").GetProperty("viewerBlacklisted").GetBoolean();
     }
 
-    /// <summary>A search of the general chat for a word two fixture authors wrote.</summary>
     private static readonly string GreetingSearch =
         $"/v1/search/messages?search={Uri.EscapeDataString("Привет")}&in=global&limit=100";
 
-    /// <summary>The general chat messages of one author that carry the word.</summary>
     private async Task<IReadOnlyCollection<Guid>> GlobalChatIdsAsync(Guid authorId, string word)
     {
         await using var db = DatabaseFixture.CreateDbContext();

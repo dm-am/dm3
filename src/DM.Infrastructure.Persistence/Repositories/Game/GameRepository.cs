@@ -19,9 +19,6 @@ using DbTag = DM.Infrastructure.Persistence.Entities.Game.Links.GameTag;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
-/// <summary>
-/// Repository for game operations
-/// </summary>
 internal partial class GameRepository : IGameRepository
 {
     private readonly DmDbContext _dbContext;
@@ -358,10 +355,6 @@ internal partial class GameRepository : IGameRepository
         UpdatedUtc = game.CreatedUtc
     };
 
-    /// <summary>
-    /// The place of the game in its lifecycle: status, premoderation, closure
-    /// and the dates and mentor that go with them
-    /// </summary>
     private static void ApplyStatus(DbGame game, UpdateGameEntity updateGame)
     {
         if (updateGame.Status.HasValue)
@@ -394,10 +387,6 @@ internal partial class GameRepository : IGameRepository
             game.MentorId = updateGame.MentorId;
     }
 
-    /// <summary>
-    /// What the settings page writes: recruitment, the information form and
-    /// privacy
-    /// </summary>
     private static void ApplySettings(DbGame game, UpdateGameEntity updateGame)
     {
         if (updateGame.IsRecruitmentOpen.HasValue)
@@ -437,9 +426,6 @@ internal partial class GameRepository : IGameRepository
             game.RecruitmentStartedUtc = null;
     }
 
-    /// <summary>
-    /// The tags of the game, when the update names them
-    /// </summary>
     private async Task ReplaceTags(UpdateGameEntity updateGame, CancellationToken ct)
     {
         if (updateGame.TagIds != null)

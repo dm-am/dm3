@@ -10,6 +10,7 @@ import type { GeneralError } from "@/shared/api/models/common";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { PeriodDigestBoards } from "@/features/leaderboard/@x/topic";
 import TopicCard from "./TopicCard.vue";
+import type { HeadingLevel } from "./headingLevel";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import Button from "@/shared/ui/Button/Button.vue";
@@ -28,7 +29,7 @@ const props = withDefaults(
     topic: Topic;
     truncatable?: boolean;
     maxHeight?: number;
-    headingLevel?: "h1" | "h2" | "h3";
+    headingLevel?: HeadingLevel;
     /** Off on the topic page itself, where the title would link to itself. */
     titleLink?: boolean;
     previewOnly?: boolean;

@@ -9,10 +9,6 @@ import { type BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import { MARKUP_ALPHABET } from "./markupAlphabet";
 import { asBothSidesRead } from "./markupCorpus";
 
-// ============================================================================
-// ARBITRARIES
-// ============================================================================
-
 const ALPHABET = MARKUP_ALPHABET;
 
 /** The piece with its placeholders filled: a list of names, a surrogate with no partner. */
@@ -176,10 +172,6 @@ export function markupValid(context: BBCodeContext): fc.Arbitrary<string> {
   };
   return level(0, false);
 }
-
-// ============================================================================
-// RUNNING A CHECK
-// ============================================================================
 
 /** A seed from a name, the same on every run: FNV-1a over its code units. */
 function seedOf(name: string): number {

@@ -11,22 +11,15 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// One person is on one event's list once, and one event is live at a time.
-/// </summary>
-/// <remarks>
-/// The rules sit in the schema: a unique pair, a partial unique index over the live status, ON CONFLICT DO NOTHING
-/// and a transition carrying its start status. Only a live database shows a write refused or made to wait.
-/// </remarks>
+// The rules sit in the schema: a unique pair, a partial unique index over the live status, ON
+// CONFLICT DO NOTHING and a transition carrying its start status.
 public class GlobalChatEventRacesShould : IntegrationTestBase
 {
-    /// <summary>
-    /// Enough callers that the interleaving the defect needs is reached rather
-    /// than left to which of two the scheduler happens to start first.
-    /// </summary>
+    // Enough callers that the interleaving the defect needs is reached rather than left to which of
+    // two the scheduler happens to start first.
     private const int Parallelism = 8;
 
-    /// <summary>A moment with no sub-microsecond part, so it survives the round trip.</summary>
+    // A moment with no sub-microsecond part, so it survives the round trip.
     private static readonly DateTimeOffset Moment =
         new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
 
@@ -34,11 +27,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Simultaneous joins of one person leave one row, and one of them answers
-    /// that it wrote it.
-    /// </summary>
-    /// <remarks>A join that wrote nothing must not tell the chat somebody arrived.</remarks>
+    // A join that wrote nothing must not tell the chat somebody arrived.
     [Fact]
     public async Task SeatOnePersonOnceHoweverManyClicksArrive()
     {
@@ -66,10 +55,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Leaving leaves, and the person can join again afterwards.
-    /// </summary>
-    /// <remarks>The delete is over the pair, and the unique index is about the list as it stands.</remarks>
+    // The delete is over the pair, and the unique index is about the list as it stands.
     [Fact]
     public async Task LetThePersonBackAfterTheyLeave()
     {
@@ -99,11 +85,8 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Two events starting at the same moment leave one live event, and the other
-    /// start is refused rather than answered with a 500.
-    /// </summary>
-    /// <remarks>The partial unique index refuses the second, and the repository answers with the read's sentence.</remarks>
+    // The partial unique index refuses the second, and the repository answers with the read's
+    // sentence.
     [Fact]
     public async Task LeaveOneLiveEventWhenTwoOfThemStartTogether()
     {
@@ -134,11 +117,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Of the starts that meet on one event, exactly one moves it, and the moment
-    /// stored is that one's.
-    /// </summary>
-    /// <remarks>The announcement and the stored moment are the one start that moved the event.</remarks>
+    // The announcement and the stored moment are the one start that moved the event.
     [Fact]
     public async Task MoveTheEventInExactlyOneOfTheStartsThatMeet()
     {
@@ -170,16 +149,12 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>What one call to start an event can come back with.</summary>
     private enum StartOutcome
     {
-        /// <summary>This call moved the event into the live status.</summary>
         Started,
 
-        /// <summary>The event was no longer the scheduled one this call read.</summary>
         Missed,
 
-        /// <summary>Another event holds the live status.</summary>
         Refused
     }
 
@@ -221,9 +196,6 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
         JoinedUtc = Moment
     };
 
-    /// <summary>
-    /// An event of this test's own, with the organiser it needs to exist.
-    /// </summary>
     private async Task<Guid> SeedEvent(GlobalChatEventStatus status)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -252,10 +224,8 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
         return await AddUserAsync(db);
     }
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
     {
         var userId = Guid.NewGuid();
@@ -272,9 +242,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
         return userId;
     }
 
-    /// <summary>
-    /// Takes the test's events back out: one left live is a second live event to the next test.
-    /// </summary>
+    // Takes the test's events back out: one left live is a second live event to the next test.
     private async Task RemoveEvents(params Guid[] eventIds)
     {
         await using var db = DatabaseFixture.CreateDbContext();

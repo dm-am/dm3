@@ -13,16 +13,10 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
-/// <summary>
-/// The conversation of a ticket: whose turn a comment passes to, how it is
-/// stored, who may write it and with what, and where it stops.
-/// </summary>
 public class TicketConversationShould : TicketServiceTestBase
 {
-    /// <summary>
-    /// A comment of a moderator is stored as typed, [mod] in whatever case he
-    /// wrote it (BBCODE_RENDERING.md, "Регистр имен").
-    /// </summary>
+    // A comment of a moderator is stored as typed, [mod] in whatever case he wrote it
+    // (BBCODE_RENDERING.md, "Регистр имен").
     [Fact]
     public async Task StoreTheCommentAsTyped()
     {
@@ -33,10 +27,6 @@ public class TicketConversationShould : TicketServiceTestBase
         captured().Text.Should().Be("[MOD]Разобрались[/MOD]");
     }
 
-    /// <summary>
-    /// The author's comment leaves the ticket waiting for moderation, a moderator's
-    /// waiting for the author: the state says whose move it is.
-    /// </summary>
     [Theory]
     [InlineData(true, TicketStatus.WaitingForModeration)]
     [InlineData(false, TicketStatus.WaitingForUser)]
@@ -59,10 +49,8 @@ public class TicketConversationShould : TicketServiceTestBase
         written().TicketId.Should().Be(ticketId);
     }
 
-    /// <summary>
-    /// A moderator who filed a ticket is its side: his comment is a reply of the
-    /// author, not an answer of moderation.
-    /// </summary>
+    // A moderator who filed a ticket is its side: his comment is a reply of the author, not an
+    // answer of moderation.
     [Fact]
     public async Task TakeTheCommentOfAModeratorWhoFiledTheTicketAsAReply()
     {
@@ -115,10 +103,6 @@ public class TicketConversationShould : TicketServiceTestBase
         await ticketRepository.DidNotReceiveWithAnyArgs().AddComment(default!, default, default, default);
     }
 
-    /// <summary>
-    /// [mod] stays in the comment of a moderator, and the comment of a user loses
-    /// the block and keeps its words, as in every comment of the site.
-    /// </summary>
     [Theory]
     [InlineData(UserRole.RegularUser, "Текст служебное")]
     [InlineData(UserRole.Moderator, "Текст [mod]служебное[/mod]")]
@@ -197,10 +181,6 @@ public class TicketConversationShould : TicketServiceTestBase
         await ticketRepository.DidNotReceiveWithAnyArgs().AddComment(default!, default, default, default);
     }
 
-    /// <summary>
-    /// The answer of moderation is news to an author with an account; a guest
-    /// reads it on his tracking page, and nobody is told of a comment refused.
-    /// </summary>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -222,11 +202,6 @@ public class TicketConversationShould : TicketServiceTestBase
         await eventProducer.DidNotReceive().SendAsync(EventType.TicketReplied, Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// The repository decides whether the comment lands: a ticket closed beside
-    /// the comment and a conversation at its ceiling both refuse it, and nothing
-    /// is announced.
-    /// </summary>
     [Theory]
     [InlineData(TicketCommentOutcome.Closed, "Обращение закрыто")]
     [InlineData(TicketCommentOutcome.Full, "100 ответов")]
@@ -244,9 +219,6 @@ public class TicketConversationShould : TicketServiceTestBase
         await eventProducer.DidNotReceiveWithAnyArgs().SendAsync(default(EventType), default(Guid));
     }
 
-    /// <summary>
-    /// The ceiling the repository holds is the hundred of the conversation.
-    /// </summary>
     [Fact]
     public async Task HoldTheConversationToAHundredComments()
     {
@@ -258,10 +230,6 @@ public class TicketConversationShould : TicketServiceTestBase
             Arg.Any<TicketStatus>(), TicketTextLimits.MaxComments, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A closed ticket takes no comment, and the form is not offered on it; a full
-    /// conversation offers no form either.
-    /// </summary>
     [Fact]
     public async Task OfferTheFormOnlyWhereACommentLands()
     {
@@ -284,10 +252,6 @@ public class TicketConversationShould : TicketServiceTestBase
         (await service.GetTicket(ticketId)).CanComment.Should().BeFalse();
     }
 
-    /// <summary>
-    /// The guest page offers what the guest may do and nothing of moderation's,
-    /// whoever is signed in while reading it.
-    /// </summary>
     [Fact]
     public async Task OfferTheHolderOfTheTokenTheFormAndNoClosing()
     {

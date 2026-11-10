@@ -9,11 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A hand-written document carries none of the marks that read as machine text:
-/// the semicolon in prose, the long and the short dash, the curly quotes and the
-/// ellipsis typed as one character.
-/// </summary>
 /// <remarks>
 /// CODE_STYLE sets the rules; the client counts its own dashes, U+0451 and guillemets are
 /// InterfaceVocabularyShould's. A semicolon in code is code, the other marks count everywhere.
@@ -26,7 +21,6 @@ public class DocumentPunctuationShould
     private const string CurlyQuote = "curly quote";
     private const string Ellipsis = "ellipsis";
 
-    /// <summary>The marks counted wherever they stand, by number.</summary>
     private static readonly (string Mark, char[] Characters)[] Typographic =
     [
         (EmDash, [(char)0x2014]),
@@ -50,7 +44,6 @@ public class DocumentPunctuationShould
             "write a comma, a colon, a full stop or straight quotes instead");
     }
 
-    /// <summary>What is counted and what is code.</summary>
     [Theory]
     [InlineData("Одна фраза; вторая.", Semicolon, 1)]
     [InlineData("Код `a; b;` в строке.", Semicolon, 0)]
@@ -70,7 +63,6 @@ public class DocumentPunctuationShould
         return [.. lockFile.RootElement.GetProperty("skills").EnumerateObject().Select(skill => $".claude/skills/{skill.Name}/")];
     }
 
-    /// <summary>The count of every mark the lines hold, the marks they do not hold left out.</summary>
     private static Dictionary<string, int> Count(IEnumerable<HandwrittenDocuments.DocumentLine> lines)
     {
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);

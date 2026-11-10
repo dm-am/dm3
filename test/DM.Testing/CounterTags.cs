@@ -3,7 +3,6 @@ using System.Diagnostics.Metrics;
 
 namespace DM.Testing;
 
-/// <summary>Collects one tag of every measurement of one counter, while the listener lives.</summary>
 public static class CounterTags
 {
     public static MeterListener Listen(string instrument, string tag, ICollection<string?> collected)

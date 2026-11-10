@@ -4,12 +4,7 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests;
 
-/// <summary>
-/// A private block that is not a block is refused before it is stored.
-/// </summary>
-/// <remarks>
-/// Search cuts private text out by matching whole blocks, so an unclosed or nested one would leak.
-/// </remarks>
+// Search cuts private text out by matching whole blocks, so an unclosed or nested one would leak.
 public class PrivateBlockBalanceShould
 {
     [Theory]
@@ -60,10 +55,8 @@ public class PrivateBlockBalanceShould
         PrivateBlockMarkup.IsBalanced(source).Should().BeFalse();
     }
 
-    /// <summary>
-    /// [code] is no example: it changes the font, as on DM2, and a hidden block
-    /// inside it, closed or not, is read as a block and judged as one.
-    /// </summary>
+    // [code] is no example: it changes the font, as on DM2, and a hidden block inside it, closed or
+    // not, is read as a block and judged as one.
     [Theory]
     [InlineData("[code][private=\"Чак\"]СЕКРЕТ[/private]", true)]
     [InlineData("[Code]пример [b]жирно[/b] [private=\"Чак\"]СЕКРЕТ[/private] хвост", true)]
@@ -94,11 +87,8 @@ public class PrivateBlockBalanceShould
             .Should().Equal("Вася", "Петя");
     }
 
-    /// <summary>
-    /// A block inside a closed [code] is a block on the page, so its addressees
-    /// are frozen as well; one inside a closed [noparse] is an example and names
-    /// nobody.
-    /// </summary>
+    // A block inside a closed [code] is a block on the page, so its addressees are frozen as well;
+    // one inside a closed [noparse] is an example and names nobody.
     [Fact]
     public void ReadTheBlockInsideACodeAndNotTheOneInsideANoparse()
     {
@@ -158,11 +148,8 @@ public class PrivateBlockBalanceShould
         }
     }
 
-    /// <summary>
-    /// A block closed only by a misspelled closing tag is refused at that tag:
-    /// it is the one the author meant to close the block with, and the place to
-    /// fix. The editor's check names the same tag.
-    /// </summary>
+    // A block closed only by a misspelled closing tag is refused at that tag: it is the one the
+    // author meant to close the block with, and the place to fix.
     [Theory]
     [InlineData("[private]тайна[/private=\"x\"] хвост", "[/private=\"x\"]")]
     [InlineData("[private=\"Вася\"]тайна[/PRIVATE =\"x\"] и [/private =\"y\"] хвост", "[/PRIVATE =\"x\"]")]
@@ -173,10 +160,8 @@ public class PrivateBlockBalanceShould
         refusal.Should().Be($"{spelling} не закрывает скрытый блок, закрывает только [/private].");
     }
 
-    /// <summary>
-    /// A misspelled closing tag after a block that is properly closed leaves no
-    /// block open, so the refusal, if any, is about something else.
-    /// </summary>
+    // A misspelled closing tag after a block that is properly closed leaves no block open, so the
+    // refusal, if any, is about something else.
     [Fact]
     public void KeepTheUnclosedRefusalWhenTheMisspelledClosingTagStandsOutsideTheBlock()
     {
@@ -186,9 +171,7 @@ public class PrivateBlockBalanceShould
             .Should().Be("Скрытый блок не закрыт: [private]. Добавьте [/private].");
     }
 
-    /// <summary>
-    /// Null is what an edit that does not touch the text hands in.
-    /// </summary>
+    // Null is what an edit that does not touch the text hands in.
     [Fact]
     public void AcceptNothingToCheck()
     {

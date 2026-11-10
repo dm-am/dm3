@@ -15,10 +15,6 @@ using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAt
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// A game whose roster holds an NPC answers with its details, and the NPC line
-/// says it has no owner rather than naming one.
-/// </summary>
 /// <remarks>
 /// The character row holds no author for an NPC, and Mapperly throws on a null into a non-nullable member. Both
 /// kinds are seeded into one game: an NPC alone passes a mapper that drops every owner.
@@ -74,9 +70,6 @@ public class GameNpcRosterShould : IntegrationTestBase
         string PlayerCharacterName,
         string PlayerUsername);
 
-    /// <summary>
-    /// One public game with an NPC and a character its player owns; fresh identifiers.
-    /// </summary>
     private async Task<SeededGame> SeedAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -131,19 +124,6 @@ public class GameNpcRosterShould : IntegrationTestBase
         return new SeededGame(game.PublicId!, npcName, playerCharacterName, player.Username);
     }
 
-    private static DbUser AddUser(DmDbContext dbContext, string prefix)
-    {
-        var userId = Guid.NewGuid();
-        var user = new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id pads the prefix.
-            Username = $"{prefix}{userId:N}"[..20],
-            Email = $"{userId:N}@npc-roster.example",
-            PasswordHash = "hash",
-            Salt = "salt"
-        };
-        dbContext.Users.Add(user);
-        return user;
-    }
+    private static DbUser AddUser(DmDbContext dbContext, string prefix) =>
+        UserRows.Add(dbContext, prefix, "npc-roster.example");
 }

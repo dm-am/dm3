@@ -39,10 +39,6 @@ public class BbLineBreakAfterBlockShould
 
     private string Comment(string bbCode) => Html(BbSurface.Comment, bbCode, Author);
 
-    /// <summary>
-    /// A hidden block is text in the line, green and followed by who reads it,
-    /// and ends no line: the break typed after it ends its line, as after text.
-    /// </summary>
     [Fact]
     public void KeepTheBreakAfterAHiddenBlockWhichStandsInTheLine() =>
         Post("перед\n[private]секрет[/private]\nпосле").Should().Be(
@@ -53,10 +49,8 @@ public class BbLineBreakAfterBlockShould
         Post("перед\r\n[private]секрет[/private]\r\nпосле").Should().Be(
             Post("перед\n[private]секрет[/private]\nпосле"));
 
-    /// <summary>
-    /// A CR alone is no line break on the page (BbParserProvider draws only CR LF
-    /// and LF), so it is no break to leave out either.
-    /// </summary>
+    // A CR alone is no line break on the page (BbParserProvider draws only CR LF and LF), so it is
+    // no break to leave out either.
     [Fact]
     public void KeepACarriageReturnAlone() =>
         Comment("[quote]раз[/quote]\rдва").Should().Be("<div class=\"quote\">раз</div>\rдва");
@@ -65,18 +59,11 @@ public class BbLineBreakAfterBlockShould
     public void DrawTheSecondLineBreakTheEmptyLineTheAuthorAskedFor() =>
         Comment("[quote]раз[/quote]\n\nпосле").Should().Be("<div class=\"quote\">раз</div><br />после");
 
-    /// <summary>
-    /// The break at the end of a sentence written after the block, on its line, ends that sentence.
-    /// </summary>
     [Fact]
     public void KeepTheBreakAtTheEndOfTextWrittenAfterTheBlock() =>
         Post("[private]секрет[/private] и замечают.\nДверь").Should().Be(
             Opening + "секрет</span> и замечают.<br />Дверь");
 
-    /// <summary>
-    /// A reader who does not see a block on a line of its own gets the text without that line and one of
-    /// its breaks (BbErasedBlockShould holds the rest).
-    /// </summary>
     [Fact]
     public void DropTheLineTheBlockStoodOnForAReaderTheBlockIsHiddenFrom() =>
         Html(BbSurface.GamePost, "перед\n[private]секрет[/private]\nпосле", Stranger)
@@ -114,18 +101,11 @@ public class BbLineBreakAfterBlockShould
     public void KeepTheBreakAfterATagThatStandsInTheLine(string bbCode, string html) =>
         Comment(bbCode).Should().Be(html);
 
-    /// <summary>
-    /// Only a break straight after the closing tag belongs to the block: one
-    /// behind another tag is that tag's content.
-    /// </summary>
     [Fact]
     public void KeepTheBreakBehindAnotherTag() =>
         Comment("[quote]раз[/quote][b]\nдва[/b]").Should().Be(
             "<div class=\"quote\">раз</div><strong><br />два</strong>");
 
-    /// <summary>
-    /// A block the grammar did not accept is text, and ends no line.
-    /// </summary>
     [Fact]
     public void KeepTheBreakAfterABlockThatIsText() =>
         Comment("[quote=\"Вася\"]раз[/quote]\nдва").Should().Be("[quote=\"Вася\"]раз[/quote]<br />два");

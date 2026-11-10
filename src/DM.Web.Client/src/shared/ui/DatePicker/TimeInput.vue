@@ -9,12 +9,10 @@ const props = withDefaults(
   defineProps<{
     /** The time, "HH:mm" (null for none). */
     modelValue: string | null;
-    /** Input placeholder. */
-    placeholder?: string;
     /** Accessible label for the field. */
     ariaLabel?: string;
   }>(),
-  { placeholder: "чч:мм", ariaLabel: undefined },
+  { ariaLabel: undefined },
 );
 
 const emit = defineEmits<{
@@ -101,7 +99,7 @@ function settleText() {
     inputmode="numeric"
     autocomplete="off"
     maxlength="5"
-    :placeholder="placeholder"
+    placeholder="чч:мм"
     :aria-label="ariaLabel"
     @input="onInput"
     @blur="settleText"

@@ -120,10 +120,8 @@ internal class TopicCommentService : ITopicCommentService
         return comment;
     }
 
-    /// <summary>
-    /// The comment by its identifier, among the comments of topics only, so this
-    /// route cannot edit a comment of a game or a blog past that discussion's blacklist.
-    /// </summary>
+    // The comment by its identifier, among the comments of topics only, so this route cannot edit a
+    // comment of a game or a blog past that discussion's blacklist.
     private async Task<Comment> FindAsync(Guid commentId) =>
         await _repository.Get(commentId) ??
         throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));

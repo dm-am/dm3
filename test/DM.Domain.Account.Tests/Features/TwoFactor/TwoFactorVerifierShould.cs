@@ -15,15 +15,9 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.TwoFactor;
 
-/// <summary>
-/// The one place a presented second factor is judged.
-/// </summary>
-/// <remarks>
-/// Covers the two replay guards, which are the substance of the feature: a
-/// time step is good for one use across every session and every challenge of
-/// the account, and a recovery code is spent exactly once because spending it
-/// is a conditional update over one row.
-/// </remarks>
+// Covers the two replay guards, which are the substance of the feature: a time step is good for one
+// use across every session and every challenge of the account, and a recovery code is spent exactly
+// once because spending it is a conditional update over one row.
 public class TwoFactorVerifierShould : UnitTestBase
 {
     private static readonly Guid UserId = Guid.Parse("2f1c0d3e-4b5a-4c6d-8e7f-90a1b2c3d4e5");
@@ -89,14 +83,8 @@ public class TwoFactorVerifierShould : UnitTestBase
             Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The same code twice is refused the second time.
-    /// </summary>
-    /// <remarks>
-    /// The refusal is the storage answering "the recorded step is not smaller
-    /// than this one", which is what makes it hold across sessions and across
-    /// challenges rather than inside one request.
-    /// </remarks>
+    // The refusal is the storage answering "the recorded step is not smaller than this one", which
+    // is what makes it hold across sessions and across challenges rather than inside one request.
     [Fact]
     public async Task RefuseACodeWhoseStepWasAlreadyAccepted()
     {
@@ -110,9 +98,6 @@ public class TwoFactorVerifierShould : UnitTestBase
             "and the step it belongs to is what stops it");
     }
 
-    /// <summary>
-    /// Two requests carrying one code give one success.
-    /// </summary>
     [Fact]
     public async Task LetOnlyOneOfTwoSimultaneousCodesWin()
     {
@@ -146,12 +131,8 @@ public class TwoFactorVerifierShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>
-    /// Every spend says how many codes are left.
-    /// </summary>
-    /// <remarks>
-    /// The count is taken after the spend, so the entry names what is left rather than what was left.
-    /// </remarks>
+    // The count is taken after the spend, so the entry names what is left rather than what was
+    // left.
     [Fact]
     public async Task SayHowManyRecoveryCodesAreLeftInTheJournalEntry()
     {
@@ -182,9 +163,7 @@ public class TwoFactorVerifierShould : UnitTestBase
         (await verifier.Accept(State(), code, null)).Should().BeFalse();
     }
 
-    /// <summary>
-    /// For a recovery code the conditional update decides, not the read.
-    /// </summary>
+    // For a recovery code the conditional update decides, not the read.
     [Fact]
     public async Task RefuseARecoveryCodeThatAnotherRequestSpentFirst()
     {

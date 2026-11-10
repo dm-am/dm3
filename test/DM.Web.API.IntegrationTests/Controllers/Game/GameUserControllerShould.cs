@@ -10,10 +10,7 @@ public class GameUserControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// A role the roster does not hold is refused, not answered with an empty list. Applicant names
-    /// nobody on the roster and is no role at all.
-    /// </summary>
+    // Applicant names nobody on the roster and is no role at all.
     [Fact]
     public async Task RefuseARoleTheRosterDoesNotHold()
     {

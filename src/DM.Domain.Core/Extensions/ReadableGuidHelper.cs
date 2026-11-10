@@ -8,12 +8,6 @@ namespace DM.Domain.Core.Extensions;
 /// </summary>
 public static class ReadableGuidHelper
 {
-    /// <summary>
-    /// Encode Guid to readable format
-    /// </summary>
-    /// <param name="guid">Guid</param>
-    /// <param name="readableText">Custom text</param>
-    /// <returns>Readable guid</returns>
     public static string EncodeToReadable(this Guid guid, string? readableText = null)
     {
         var base64Guid = Convert.ToBase64String(guid.ToByteArray()).Replace("/", "-").Replace("+", "_")
@@ -23,10 +17,6 @@ public static class ReadableGuidHelper
             : $"{Transliterate(readableText.ToLower())}~{base64Guid}";
     }
 
-    /// <summary>
-    /// Decode guid from readable format
-    /// </summary>
-    /// <returns>Guid</returns>
     public static Guid DecodeFromReadableGuid(this string encodedGuid)
     {
         var base64Guid = encodedGuid.Split(new[] { "~" }, StringSplitOptions.None)
@@ -36,12 +26,6 @@ public static class ReadableGuidHelper
         return new Guid(Convert.FromBase64String(base64Guid));
     }
 
-    /// <summary>
-    /// Try decode guid from readable format
-    /// </summary>
-    /// <param name="encodedGuid">Encoded guid</param>
-    /// <param name="result">Guid</param>
-    /// <returns>Can be decoded</returns>
     public static bool TryDecodeFromReadableGuid(this string encodedGuid, out Guid result)
     {
         try
@@ -49,7 +33,8 @@ public static class ReadableGuidHelper
             result = DecodeFromReadableGuid(encodedGuid);
             return true;
         }
-        catch (Exception)
+        // Not Base64 from Convert.FromBase64String, not 16 bytes from the Guid constructor.
+        catch (Exception e) when (e is FormatException or ArgumentException)
         {
             result = Guid.Empty;
             return false;

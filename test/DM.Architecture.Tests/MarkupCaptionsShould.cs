@@ -5,10 +5,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The words the page draws on a spoiler, a [nsfw] block and a link without a
-/// text are the words the editor's preview, its help and the client's toggle draw.
-/// </summary>
 /// <remarks>
 /// The server renders the page, the client renders the preview and swaps the
 /// words of an open block, so both spell them. The client keeps them in one file,
@@ -37,7 +33,6 @@ public class MarkupCaptionsShould
     private static string Render(string bbCode) =>
         Page.RenderHtml(bbCode, new RenderContext { Audience = RenderAudience.Display, Surface = BbSurface.Comment });
 
-    /// <summary>The string a client constant is declared with, on its line or the next.</summary>
     private static string Text(string constant)
     {
         var match = Regex.Match(ClientCopies.Source(ConstantsFile),

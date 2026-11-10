@@ -222,10 +222,6 @@ internal class PostReviewRepository : IPostReviewRepository
             .FirstAsync();
     }
 
-    /// <summary>
-    /// Lock the review row until the transaction ends, and read what it holds
-    /// under the lock.
-    /// </summary>
     private async Task<LockedReview> ReadLocked(Guid postReviewId)
     {
         // First statement of the transaction: whoever else is editing or
@@ -254,13 +250,8 @@ internal class PostReviewRepository : IPostReviewRepository
         return stored;
     }
 
-    /// <summary>What <see cref="ReadLocked"/> found the row holding.</summary>
     private sealed record LockedReview(short SignValue, bool IsRemoved, Guid PostAuthorId);
 
-    /// <summary>
-    /// Assign the fields the caller named to the row loaded under the lock, and
-    /// nothing else.
-    /// </summary>
     private void ApplyChanges(DbPostReview dbReview, UpdatePostReviewEntity entity, bool wasRemoved)
     {
         if (entity.Sign.HasValue)

@@ -9,9 +9,6 @@ using ArchitectureModel = ArchUnitNET.Domain.Architecture;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Whoever builds a message producer has to be able to release it.
-/// </summary>
 /// <remarks>
 /// A producer opens an AMQP channel on first send and closes it only in Dispose. The registration
 /// lifetime is ProducerScopeResolutionShould's.
@@ -35,9 +32,7 @@ public class MessageProducerOwnershipShould
             "not the messaging plumbing itself")
         .As("classes that build a message producer");
 
-    /// <summary>
-    /// A rule that matches nothing passes, so the owners are counted first.
-    /// </summary>
+    // A rule that matches nothing passes, so the owners are counted first.
     [Fact]
     public void FindTheProducerOwners() =>
         ProducerOwners.GetObjects(Solution).Should().NotBeEmpty();

@@ -5,10 +5,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Community;
 
-/// <summary>
-/// The four sorts over a counted number order the list by that number, and drop
-/// nobody for having none of it.
-/// </summary>
 /// <remarks>
 /// The order comes from a left join in SQL and the number from a separate batched GROUP BY, so a counter wired
 /// to the wrong table orders against the numbers it shows.
@@ -54,9 +50,8 @@ public class UserListCountedSortShould : IntegrationTestBase
             "asking for the other direction reverses the number, not the meaning of it");
     }
 
-    /// <summary>
-    /// Counted by the reported total: the ascending list opens with the users an inner join would drop.
-    /// </summary>
+    // Counted by the reported total: the ascending list opens with the users an inner join would
+    // drop.
     [Theory]
     [InlineData("GamesHosting")]
     [InlineData("BlogsHosting")]
@@ -75,10 +70,6 @@ public class UserListCountedSortShould : IntegrationTestBase
             "them — an inner join would open it with the few who have rows");
     }
 
-    /// <summary>
-    /// The counter is the one that belongs to the sort: the seeded master is on the
-    /// page his hosting count entitles him to, and that page is short.
-    /// </summary>
     /// <remarks>
     /// The window is computed from the whole list, so a sort wired to the neighbouring counter puts him outside
     /// the short page.

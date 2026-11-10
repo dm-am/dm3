@@ -10,10 +10,6 @@ using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 
-/// <summary>
-/// The description of a blog is optional: an edit without it keeps it, an empty one clears it, and what
-/// the author sends is stored as he sent it.
-/// </summary>
 public class BlogDescriptionShould : IntegrationTestBase
 {
     public BlogDescriptionShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -50,7 +46,6 @@ public class BlogDescriptionShould : IntegrationTestBase
         return (await Client.SendAsync(request)).StatusCode;
     }
 
-    /// <summary>The stored description, as its author gets it for editing.</summary>
     private async Task<string?> Description(string publicId)
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Get, $"/v1/blogs/{publicId}");
@@ -61,7 +56,6 @@ public class BlogDescriptionShould : IntegrationTestBase
             .GetProperty("resource").GetProperty("description").GetString();
     }
 
-    /// <summary>A blog of the test user, active and open to everybody.</summary>
     private async Task<string> SeedBlog(string description)
     {
         var publicId = Guid.NewGuid().ToString("N")[..10];

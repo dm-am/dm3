@@ -65,11 +65,11 @@ describe("the skeleton of a form", () => {
     );
   });
 
-  it("draws the fields and the buttons asked for, hidden from assistive reading", () => {
-    const wrapper = mount(FormSkeleton, { props: { fields: 4, actions: 1 } });
+  it("draws the fields asked for and two buttons, hidden from assistive reading", () => {
+    const wrapper = mount(FormSkeleton, { props: { fields: 4 } });
 
     expect(wrapper.findAll(".skeleton-field")).toHaveLength(4);
-    expect(wrapper.findAll(".skeleton-button")).toHaveLength(1);
+    expect(wrapper.findAll(".skeleton-button")).toHaveLength(2);
     expect(wrapper.attributes("aria-hidden")).toBe("true");
   });
 
@@ -88,7 +88,7 @@ describe("the skeleton of a form", () => {
     }
     expect(skeleton.get(".skeleton-tab")?.["border-bottom"]).toMatch(
       new RegExp(
-        "^" + modeSwitch.get(".mode-tabs")?.["border-bottom"]?.split(" ")[0],
+        `^${modeSwitch.get(".mode-tabs")?.["border-bottom"]?.split(" ")[0]}`,
       ),
     );
 

@@ -80,9 +80,6 @@ public class StatValue
 /// </summary>
 public class PostHighlight
 {
-    /// <summary>
-    /// Post identifier
-    /// </summary>
     public Guid PostId { get; set; }
 
     /// <summary>

@@ -6,9 +6,12 @@
 // the description after a dash separator, the status through the shared badge.
 import { describe, it, expect, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
+import { UserRole } from "@/shared/api/models/common";
 import { createPinia, setActivePinia } from "pinia";
 import BlogDetails from "./BlogDetails.vue";
 import { useBlogDetailsStore, type Blog } from "@/entities/blog";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 
 const stubs = {
   "router-link": {
@@ -18,12 +21,13 @@ const stubs = {
   Tooltip: { template: "<span><slot /></span>", props: ["text"] },
 };
 
-const blog = {
-  id: "b-1",
+const blog: Blog = {
+  ...createMockBlog("b-1", "Дневник приключенца"),
   publicId: "aaaab",
-  title: "Дневник приключенца",
-  status: "Active",
-  author: { id: "u-1", username: "TestSeniorMod", role: "SeniorModerator" },
+  author: {
+    ...createMockUser("u-1", "TestSeniorMod"),
+    role: UserRole.SeniorModerator,
+  },
   assistants: [],
   createdUtc: "2025-12-08T22:54:58Z",
   publicationCount: 6,
@@ -39,7 +43,7 @@ const blog = {
       unreadCommentsCount: 3,
     },
   ],
-} as unknown as Blog;
+};
 
 function mountDetails() {
   useBlogDetailsStore().blog = blog;

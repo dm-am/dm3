@@ -4,20 +4,92 @@
 
 // A sidebar button answers a refusal with a plate: a line would push every row below it down.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
+import { createPinia, setActivePinia, type Pinia } from "pinia";
+import type { Router } from "vue-router";
 import {
+  GameStatus,
   useGameDetailsStore,
   type Character,
   type Game,
 } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
 import { personalApi, useAuthStore } from "@/entities/user";
 import type { ReceivedInvitation } from "@/shared/api/models/personal";
 import { useToast } from "@/shared/lib/composables/useToast";
-import type { GeneralError } from "@/shared/api/models/common";
+import {
+  UserRole,
+  type GeneralError,
+  type UserRef,
+  type Username,
+} from "@/shared/api/models/common";
+import { asServed } from "@/shared/api/models";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import GameJoinActions from "./GameJoinActions.vue";
 
-vi.mock("vue-router", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const ROUTES: Parameters<typeof mountPage>[2]["routes"] = [
+  ["game", "/game/:id"],
+  ["game-character-create", "/game/:id/characters/create"],
+  ["game-character-edit", "/game/:id/characters/:characterId/edit"],
+];
+
+// The public id is what the strip links by; recruitment is shut unless the case opens it.
+const gameOf = (
+  over: {
+    status?: GameStatus;
+    recruiting?: boolean;
+    blacklisted?: boolean;
+  } = {},
+): Game => {
+  const game = createMockGame("g-1", "Хроники");
+  return {
+    ...game,
+    publicId: asServed("abcde"),
+    status: over.status ?? game.status,
+    recruitment: asServed({
+      ...game.recruitment,
+      isOpen: over.recruiting ?? false,
+    }),
+    viewerBlacklisted: asServed(over.blacklisted ?? false),
+  };
+};
+
+const me: UserRef = {
+  id: "me",
+  username: "me" as Username,
+  lastActivityUtc: "2024-01-01T00:00:00Z",
+  role: UserRole.RegularUser,
+  isNewbie: false,
+};
+
+const characterOf = (status: Character["status"]): Character => ({
+  id: asServed("c-1"),
+  status,
+  author: asServed(me),
+  name: "Лекс",
+  isNpc: asServed(false),
+  isDead: asServed(false),
+  isPlayerLeft: asServed(false),
+  isPlayerExiled: asServed(false),
+  picture: asServed({}),
+  totalPostsCount: asServed(0),
+});
+
+// The stores the strip reads are filled in before it mounts, so the page gets this pinia.
+let pinia: Pinia;
+let router: Router;
+const freshPinia = () => {
+  pinia = createPinia();
+  setActivePinia(pinia);
+};
+const mountStripAt = async (address = "/game/abcde") => {
+  const mounted = await mountPage(GameJoinActions, address, {
+    routes: ROUTES,
+    pinia,
+  });
+  router = mounted.router;
+  return mounted;
+};
 
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((one) => one.message);
@@ -29,20 +101,14 @@ const refused: GeneralError = {
   traceId: "t",
 };
 
-function mountStrip() {
-  const store = useGameDetailsStore();
-  store.game = {
-    id: "g-1",
-    publicId: "abcde",
-    title: "Хроники",
-    participation: [],
-  } as unknown as Game;
-  return mount(GameJoinActions);
+async function mountStrip() {
+  useGameDetailsStore().game = gameOf();
+  return (await mountStripAt()).wrapper;
 }
 
 describe("GameJoinActions in the sidebar", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    freshPinia();
   });
 
   afterEach(() => {
@@ -51,7 +117,7 @@ describe("GameJoinActions in the sidebar", () => {
   });
 
   it("answers a refused subscription with a plate and adds no row", async () => {
-    const wrapper = mountStrip();
+    const wrapper = await mountStrip();
     const rowsBefore = wrapper.findAll("li").length;
     vi.spyOn(useGameDetailsStore(), "subscribe").mockResolvedValue(refused);
 
@@ -65,7 +131,7 @@ describe("GameJoinActions in the sidebar", () => {
   });
 
   it("says nothing when the subscription goes through", async () => {
-    const wrapper = mountStrip();
+    const wrapper = await mountStrip();
     vi.spyOn(useGameDetailsStore(), "subscribe").mockResolvedValue(null);
 
     await wrapper.get("button").trigger("click");
@@ -78,49 +144,58 @@ describe("GameJoinActions in the sidebar", () => {
 
 describe("GameJoinActions on the blacklist", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    freshPinia();
   });
 
-  function mountMenu(blacklisted: boolean, status = "Retired") {
+  async function mountMenu(
+    blacklisted: boolean,
+    status: Character["status"] = "Retired",
+  ) {
     useAuthStore().user = { id: "me" } as never;
     const store = useGameDetailsStore();
-    store.game = {
-      id: "g-1",
-      publicId: "abcde",
-      title: "Хроники",
-      participation: [],
-      recruitment: { isOpen: true },
-      viewerBlacklisted: blacklisted,
-    } as unknown as Game;
-    store.characters = [
-      {
-        id: "c-1",
-        isNpc: false,
-        status,
-        author: { id: "me", username: "me" },
-      } as unknown as Character,
-    ];
-    return mount(GameJoinActions, {
-      global: { stubs: { RouterLink: { template: "<a><slot /></a>" } } },
-    });
+    store.game = gameOf({ recruiting: true, blacklisted });
+    store.characters = [characterOf(status)];
+    return (await mountStripAt()).wrapper;
   }
 
-  const rows = (wrapper: ReturnType<typeof mountMenu>) =>
+  const rows = (wrapper: VueWrapper) =>
     wrapper.findAll("li").map((li) => li.text().replace(/^-/, "").trim());
 
-  it("takes Подать заявку away and leaves the sheet of a character", () => {
-    expect(rows(mountMenu(true))).toEqual([
+  it("takes Подать заявку away and leaves the sheet of a character", async () => {
+    expect(rows(await mountMenu(true))).toEqual([
       "Подписаться",
       "Редактировать персонажа",
     ]);
   });
 
-  it("does not offer an application of the viewer for editing", () => {
-    expect(rows(mountMenu(true, "UnderReview"))).toEqual(["Подписаться"]);
+  it("does not offer an application of the viewer for editing", async () => {
+    expect(rows(await mountMenu(true, "UnderReview"))).toEqual(["Подписаться"]);
   });
 
-  it("offers both off the list", () => {
-    expect(rows(mountMenu(false))).toEqual([
+  it("leads the character's sheet to its editing by the public id of the game", async () => {
+    const wrapper = await mountMenu(false);
+
+    expect(wrapper.get("a").attributes("href")).toBe(
+      "/game/abcde/characters/c-1/edit",
+    );
+  });
+
+  it("takes Подать заявку to the form of a character in this game", async () => {
+    const wrapper = await mountMenu(false);
+
+    await wrapper
+      .findAll("button")
+      .find((one) => one.text() === "Подать заявку")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe(
+      "/game/abcde/characters/create",
+    );
+  });
+
+  it("offers both off the list", async () => {
+    expect(rows(await mountMenu(false))).toEqual([
       "Подписаться",
       "Подать заявку",
       "Редактировать персонажа",
@@ -130,7 +205,7 @@ describe("GameJoinActions on the blacklist", () => {
 
 describe("GameJoinActions with recruitment shut", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
+    freshPinia();
   });
 
   afterEach(() => {
@@ -152,7 +227,7 @@ describe("GameJoinActions with recruitment shut", () => {
 
   async function mountMenu(
     invitations: ReceivedInvitation[],
-    game: Record<string, unknown> = {},
+    game: Parameters<typeof gameOf>[0] = {},
   ) {
     const asked = vi.spyOn(personalApi, "getMyInvitations").mockResolvedValue({
       data: { resources: invitations },
@@ -160,17 +235,8 @@ describe("GameJoinActions with recruitment shut", () => {
     } as never);
     useAuthStore().user = { id: "me" } as never;
     const store = useGameDetailsStore();
-    store.game = {
-      id: "g-1",
-      publicId: "abcde",
-      title: "Хроники",
-      status: "Active",
-      participation: [],
-      recruitment: { isOpen: false },
-      viewerBlacklisted: false,
-      ...game,
-    } as unknown as Game;
-    const wrapper = mount(GameJoinActions);
+    store.game = gameOf(game);
+    const { wrapper } = await mountStripAt();
     await flushPromises();
     const rows = wrapper
       .findAll("li")
@@ -195,7 +261,7 @@ describe("GameJoinActions with recruitment shut", () => {
 
   it("keeps it away from the viewer on the blacklist, without asking", async () => {
     const { rows, asked } = await mountMenu([invitation()], {
-      viewerBlacklisted: true,
+      blacklisted: true,
     });
 
     expect(rows).toEqual(["Подписаться"]);
@@ -204,7 +270,7 @@ describe("GameJoinActions with recruitment shut", () => {
 
   it("does not ask for a game that is not active", async () => {
     const { rows, asked } = await mountMenu([invitation()], {
-      status: "Closed",
+      status: GameStatus.Closed,
     });
 
     expect(rows).toEqual(["Подписаться"]);
@@ -213,7 +279,7 @@ describe("GameJoinActions with recruitment shut", () => {
 
   it("does not ask while the game recruits: the row is there anyway", async () => {
     const { rows, asked } = await mountMenu([], {
-      recruitment: { isOpen: true },
+      recruiting: true,
     });
 
     expect(rows).toEqual(["Подписаться", "Подать заявку"]);

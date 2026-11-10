@@ -4,9 +4,6 @@ using DM.Domain.Core.Users;
 
 namespace DM.Domain.Account.Features.Registration;
 
-/// <summary>
-/// Validator for activation request (username selection during activation)
-/// </summary>
 internal class ActivationRequestValidator : AbstractValidator<ActivationRequest>
 {
     public ActivationRequestValidator(IRegistrationRepository registrationRepository)

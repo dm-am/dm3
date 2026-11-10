@@ -113,7 +113,6 @@ public partial class HiddenModuleShould
         return content;
     }
 
-    /// <summary>An open room, and a chat room with its chat.</summary>
     private static void AddRooms(DmDbContext db, GameContent content)
     {
         var chatId = Guid.NewGuid();
@@ -149,7 +148,6 @@ public partial class HiddenModuleShould
         });
     }
 
-    /// <summary>The player's post with the marker in the open room, rated by the master.</summary>
     private static void AddPost(
         DmDbContext db, GameContent content, Guid masterId, Guid playerId, string marker, DateTimeOffset now)
     {
@@ -255,9 +253,6 @@ public partial class HiddenModuleShould
             CreatedUtc = createdUtc
         };
 
-    /// <summary>
-    /// The hidden game and blog outwrite and outrate the open ones inside the period.
-    /// </summary>
     private async Task DateIntoPeriodAsync(GameWorld games, BlogWorld blogs, DateTimeOffset period)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -301,7 +296,6 @@ public partial class HiddenModuleShould
         await db.SaveChangesAsync();
     }
 
-    /// <summary>The post of the game rated up by as many fresh readers as asked.</summary>
     private async Task<IReadOnlyList<Guid>> RateAsync(GameContent game, Guid postAuthorId, int count)
     {
         await using var db = DatabaseFixture.CreateDbContext();

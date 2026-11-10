@@ -27,7 +27,7 @@ public class BbMarkupPropertiesShould
     private static readonly Guid AddresseeId = Guid.Parse("00000000-0000-0000-0001-000000000001");
     private static readonly Guid OtherOwnerId = Guid.Parse("00000000-0000-0000-0001-000000000002");
 
-    /// <summary>The characters of the room: "Вася", whose owner is the addressee reader, and "Петя".</summary>
+    // The characters of the room: "Вася", whose owner is the addressee reader, and "Петя".
     private static readonly PrivateAddressee[] Roster =
     [
         new(Guid.Parse("00000000-0000-0000-0002-000000000001"), HiddenTextOracle.AddresseeName, AddresseeId),
@@ -36,7 +36,6 @@ public class BbMarkupPropertiesShould
 
     private const string BlockElement = "<span class=\"private-message\" data-recipients=";
 
-    /// <summary>An element holding nothing but white space and line breaks.</summary>
     private static readonly Regex EmptyElement = new(@"<([a-z]+)\b[^>]*>(?:\s|<br />)*</\1>", RegexOptions.Compiled);
 
     private static readonly IBbParserProvider Provider = new BbParserProvider();
@@ -48,12 +47,8 @@ public class BbMarkupPropertiesShould
 
     private static readonly HiddenTextReader[] Readers = Enum.GetValues<HiddenTextReader>();
 
-    /// <summary>
-    /// Every reader of every surface is shown every word the blocks around it let
-    /// them read, and no other; the plain text and the embed carry no word of any
-    /// block and every word outside them.
-    /// </summary>
-    /// <remarks>The blocks are counted too, and the line of recipients never reaches a reader who reads no block.</remarks>
+    // The blocks are counted too, and the line of recipients never reaches a reader who reads no
+    // block.
     [Fact]
     public void ShowEveryReaderExactlyTheWordsTheBlocksLetThemRead() =>
         MarkupProperty.Check(nameof(ShowEveryReaderExactlyTheWordsTheBlocksLetThemRead), runs: 300,
@@ -88,15 +83,8 @@ public class BbMarkupPropertiesShould
                 return null;
             });
 
-    /// <summary>
-    /// A block a reader does not read leaves no trace of itself in what that
-    /// reader gets: not its words, not its length, not its addressees or its
-    /// spelling, and not the tags around it that held nothing else.
-    /// </summary>
-    /// <remarks>
-    /// An unread block is replaced by an empty bare block and the answer must not change; then by a
-    /// character, and the original must give no more empty elements.
-    /// </remarks>
+    // An unread block is replaced by an empty bare block and the answer must not change; then by a
+    // character, and the original must give no more empty elements.
     [Fact]
     public void LeaveNoTraceOfABlockTheReaderDoesNotRead() =>
         MarkupProperty.Check(nameof(LeaveNoTraceOfABlockTheReaderDoesNotRead), runs: 300,
@@ -159,14 +147,6 @@ public class BbMarkupPropertiesShould
                 return null;
             });
 
-    /// <summary>
-    /// A block a reader does not read, standing on a line of its own, takes the line
-    /// with it: the reader gets what the text reads like without that line.
-    /// </summary>
-    /// <remarks>
-    /// The blocks of a generated text are laid out on lines of their own between plain words and read
-    /// again, against the same text without those lines (see <see cref="WithoutTheirLines" />).
-    /// </remarks>
     [Fact]
     public void LeaveNoLineOfABlockTheReaderDoesNotRead() =>
         MarkupProperty.Check(nameof(LeaveNoLineOfABlockTheReaderDoesNotRead), runs: 300,
@@ -221,12 +201,6 @@ public class BbMarkupPropertiesShould
                 return null;
             });
 
-    /// <summary>
-    /// The blocks as spelled, each on a line of its own among plain words, laid out one
-    /// of four ways by the length of the text: words around every block, the blocks one
-    /// after another between two words, the first block at the start of the text, the
-    /// last one at its end.
-    /// </summary>
     private static string OnLinesOfTheirOwn(string text, IReadOnlyList<HiddenBlock> blocks)
     {
         var spelled = blocks.OrderBy(block => block.Start)
@@ -242,27 +216,14 @@ public class BbMarkupPropertiesShould
         };
     }
 
-    /// <summary>
-    /// What is wrong with what a reader got, against the same text with every line
-    /// that held nothing but blocks they do not read taken out, in either spelling
-    /// of <see cref="WithoutTheirLines" />.
-    /// </summary>
     private static string? LineTrace(string got, string? withEmptyBlocks, string? withoutBlocks, string who) =>
         withEmptyBlocks == null || withoutBlocks == null || got == withEmptyBlocks || got == withoutBlocks
             ? null
             : $"{who} gets the line a block they do not read stood alone on: {MarkupLiteral.Of(got)} " +
               $"against {MarkupLiteral.Of(withoutBlocks)} without that line";
 
-    /// <summary>
-    /// The text as if the author had not typed the lines that hold nothing but the
-    /// blocks: for each such line one line break taken out - the one before it while
-    /// it is there, else the one after - and every other block replaced by an empty
-    /// bare one.
-    /// </summary>
-    /// <remarks>
-    /// A break inside a block is none. The blocks of a removed line are spelled two ways, kept empty or
-    /// taken out, and a reader is right to get either.
-    /// </remarks>
+    // The blocks of a removed line are spelled two ways, kept empty or taken out, and a reader is
+    // right to get either.
     private static string WithoutTheirLines(string text, IReadOnlyList<HiddenBlock> blocks, bool keepEmptyBlocks)
     {
         bool InBlock(int at) => blocks.Any(block => block.Start <= at && at < block.End);
@@ -335,13 +296,11 @@ public class BbMarkupPropertiesShould
         return output.Append(text, from, text.Length - from).ToString();
     }
 
-    /// <summary>What an erased block is replaced by to check that its content left nothing.</summary>
     private const string EmptyBlock = "[private][/private]";
 
     /// <summary>What it is replaced by to check that the tags around it left nothing: a character, no letter.</summary>
     private const string Stand = "0";
 
-    /// <summary>What is wrong with what a reader got, against the same text with the blocks replaced.</summary>
     private static string? Trace(string got, string? withEmptyBlocks, string? withCharacters, string who)
     {
         if (got != withEmptyBlocks)
@@ -359,7 +318,6 @@ public class BbMarkupPropertiesShould
         return null;
     }
 
-    /// <summary>The outermost blocks the predicate does not read, in the order they stand.</summary>
     private static List<HiddenBlock> Unread(HiddenTextReading reading, Func<HiddenBlock, bool> reads)
     {
         var cut = new List<HiddenBlock>();
@@ -372,7 +330,6 @@ public class BbMarkupPropertiesShould
         return cut;
     }
 
-    /// <summary>The text with each of the blocks, which do not overlap, replaced.</summary>
     private static string Replace(string text, IReadOnlyList<HiddenBlock> blocks, string replacement)
     {
         var output = new System.Text.StringBuilder();
@@ -452,10 +409,7 @@ public class BbMarkupPropertiesShould
         }
     }
 
-    /// <summary>
-    /// What is wrong with what one reader got, or null. A null reader is a
-    /// channel that reads no block: the plain text and the embed.
-    /// </summary>
+    // A null reader is a channel that reads no block: the plain text and the embed.
     private static string? Misread(HiddenTextReading reading, string? output, HiddenTextReader? reader,
         BbSurface surface, string who)
     {
@@ -519,7 +473,6 @@ public class BbMarkupPropertiesShould
         return BbVisibilityRender.RenderOrNull(() => Provider.GetForSurface(surface).RenderHtml(input, context));
     }
 
-    /// <summary>The snapshot the save path builds from the text, for the room of "Вася" and "Петя".</summary>
     private static PrivateAddresseeSnapshotView Snapshot(string input) =>
         PrivateAddresseeSnapshot.Read(PrivateAddresseeSnapshot.Build(input, Roster));
 }

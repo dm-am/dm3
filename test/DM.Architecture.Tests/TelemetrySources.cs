@@ -5,16 +5,12 @@ using AwesomeAssertions;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The files the telemetry providers are composed in, found rather than named.
-/// </summary>
-/// <remarks>A file that builds a tracer or a meter provider is the composition wherever it lives.</remarks>
+// A file that builds a tracer or a meter provider is the composition wherever it lives.
 internal static class TelemetrySources
 {
     /// <summary>The calls that build a provider, as the OpenTelemetry builder spells them.</summary>
     private static readonly string[] Composes = [".WithTracing(", ".WithMetrics("];
 
-    /// <summary>The authored files that compose a tracer or a meter provider.</summary>
     internal static IReadOnlyList<string> CompositionFiles
     {
         get

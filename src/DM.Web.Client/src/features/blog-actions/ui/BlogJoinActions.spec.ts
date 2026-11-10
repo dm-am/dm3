@@ -5,8 +5,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { useBlogDetailsStore, type Blog } from "@/entities/blog";
+import { useBlogDetailsStore } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
 import BlogJoinActions from "./BlogJoinActions.vue";
@@ -23,7 +24,7 @@ const refused: GeneralError = {
 
 function mountStrip() {
   const store = useBlogDetailsStore();
-  store.blog = { id: "b-1", title: "Записки" } as unknown as Blog;
+  store.blog = createMockBlog("b-1", "Записки");
   // Readers present keep the mount off the network.
   store.readers = [{ id: "u-1", username: "Читатель" }] as never;
   return mount(BlogJoinActions);
@@ -45,7 +46,7 @@ describe("BlogJoinActions in the sidebar", () => {
   ])("offers %s the move the readers leave open: %s", (username, move) => {
     useAuthStore().user = { username } as never;
     const store = useBlogDetailsStore();
-    store.blog = { id: "b-1", title: "Записки" } as unknown as Blog;
+    store.blog = createMockBlog("b-1", "Записки");
     store.readers = [
       { user: { username: "Читатель" }, role: "reader" },
     ] as never;

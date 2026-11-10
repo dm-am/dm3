@@ -223,7 +223,7 @@ describe("the box of a guest card", () => {
     // The gap under the bold opening line belongs to every box of the surface
     // and not to this one modifier: three boxes with two different gaps read as
     // three different boxes.
-    expect(base).toContain("margin-bottom: 4px");
+    expect(base).toContain("margin-bottom: $minor");
     expect(notice).not.toContain("margin-bottom");
     // A modifier that re-declares the base's padding is a second geometry: the
     // difference between the three is the alignment alone.
@@ -237,7 +237,7 @@ describe("the box of a guest card", () => {
     for (const screen of DEAD_LINK_SCREENS) {
       expect(
         read("pages", "account", screen),
-        screen + ": the second line lost its own voice",
+        `${screen}: the second line lost its own voice`,
       ).toContain('class="auth-note"');
     }
   });
@@ -262,7 +262,7 @@ describe("the rhythm of a guest card", () => {
   /** The guest card stands on the site's 8px grid. */
   it("stands the label one step above its field and keeps three of gutter", () => {
     expect(ruleBody(SURFACE, ".auth-surface .auth-label")).toContain(
-      "margin: 0 0 8px",
+      "margin: 0 0 $small",
     );
     expect(ruleBody(SURFACE, ".auth-surface .auth-card")).toContain(
       "padding: 24px",
@@ -301,8 +301,8 @@ describe("the card that states an outcome", () => {
   });
 
   it("keeps its prose centred even when a field follows it", () => {
-    // Owner's call: the sentences stay on the card's own axis and only the
-    // controls keep the left one. Asserted as an absence, because what can come
+    // The sentences of a guest card stay on its own axis, as
+    // UI_STANDARDS/surfaces.md draws the card; only the controls keep the left one. Asserted as an absence, because what can come
     // back by accident is the rule that pulled the prose left.
     expect(SURFACE, "the prose is pulled left again").not.toContain(
       ".auth-surface .auth-card:has(.auth-field) .auth-text",

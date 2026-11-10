@@ -13,9 +13,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 [Mapper]
 internal static partial class FundraisingGoalMapper
 {
-    /// <summary>
-    /// EF projection to the domain DTO
-    /// </summary>
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public static partial IQueryable<FundraisingGoal> ProjectToFundraisingGoal(
         this IQueryable<DbFundraisingGoal> query);

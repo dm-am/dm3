@@ -68,10 +68,7 @@ public class AuthorizedActionsShould
                 "on its class writes for whoever asks, under the guest identity");
     }
 
-    /// <summary>
-    /// A list of exceptions rots the moment nobody checks it.
-    /// </summary>
-    /// <remarks>Both directions: an entry for a missing action, and one for an action that gained an attribute.</remarks>
+    // A list of exceptions rots the moment nobody checks it.
     [Fact]
     public void KeepTheListOfOpenDoorsHonest()
     {

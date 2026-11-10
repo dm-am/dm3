@@ -12,9 +12,6 @@ using DbUserTwoFactor = DM.Infrastructure.Persistence.Entities.Account.UserTwoFa
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
-/// <summary>
-/// Compile-time mapper for account entities
-/// </summary>
 [Mapper]
 internal static partial class AccountMapper
 {

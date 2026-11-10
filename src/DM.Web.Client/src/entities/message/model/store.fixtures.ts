@@ -1,5 +1,8 @@
 import { mockGetChat, mockGetMessages } from "./store.doubles";
 import { useMessagingStore } from "./store";
+import type { Chat } from "./types";
+import type { ChatType } from "@/shared/api/models/common";
+import { asServed } from "@/shared/api/models";
 
 export const message = (id: number) => ({
   id: `m${id}`,
@@ -19,6 +22,13 @@ export const page = (ids: number[], paging: Record<string, unknown> = {}) => ({
     },
   },
   error: null,
+});
+
+export const createMockChat = (id: string, type: ChatType): Chat => ({
+  id: asServed(id),
+  type: asServed(type),
+  participants: asServed([]),
+  unreadMessagesCount: asServed(0),
 });
 
 /** Opens a chat sitting on a page that has older history behind it. */

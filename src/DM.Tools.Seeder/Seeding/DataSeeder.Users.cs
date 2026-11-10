@@ -33,7 +33,6 @@ internal sealed partial class DataSeeder
             new() { Login = "TestMentor", Email = "mentor@test.local", Role = UserRole.Mentor },
             new() { Login = "TestUser", Email = "user@test.local", Role = UserRole.RegularUser },
 
-            // Length
             new() { Login = "Ян", Email = "yan@test.local", Role = UserRole.RegularUser }, // min length (2), cyrillic
             new() { Login = "LongestLoginPossible", Email = "longest@test.local", Role = UserRole.RegularUser }, // max length (20)
 
@@ -43,7 +42,6 @@ internal sealed partial class DataSeeder
             new() { Login = "Player.Three", Email = "player3@test.local", Role = UserRole.RegularUser }, // dot, and the second factor on (DataSeeder.TwoFactor.cs)
             new() { Login = "Player Four", Email = "player4@test.local", Role = UserRole.RegularUser }, // space
 
-            // Cyrillic
             new() { Login = "Игрок", Email = "igrok@test.local", Role = UserRole.RegularUser }, // cyrillic only
             new() { Login = "Игрок_Один", Email = "igrok1@test.local", Role = UserRole.RegularUser }, // cyrillic + underscore
             new() { Login = "Тест Елки", Email = "yolka@test.local", Role = UserRole.RegularUser }, // cyrillic + space + "Е"
@@ -52,10 +50,10 @@ internal sealed partial class DataSeeder
             new() { Login = "TestHonorary", Email = "honorary@test.local", Role = UserRole.RegularUser }, // holds the "Почетный гоблин" award
 
             // Ratings
-            new() { Login = "RatingDisabled", Email = "rating-off@test.local", Role = UserRole.RegularUser }, // rating disabled (n/a)
-            new() { Login = "RatingPositive", Email = "rating-pos@test.local", Role = UserRole.RegularUser }, // positive rating
-            new() { Login = "RatingNegative", Email = "rating-neg@test.local", Role = UserRole.RegularUser }, // negative rating
-            new() { Login = "RatingZero", Email = "rating-zero@test.local", Role = UserRole.RegularUser }, // zero rating
+            new() { Login = "RatingDisabled", Email = "rating-off@test.local", Role = UserRole.RegularUser },
+            new() { Login = "RatingPositive", Email = "rating-pos@test.local", Role = UserRole.RegularUser },
+            new() { Login = "RatingNegative", Email = "rating-neg@test.local", Role = UserRole.RegularUser },
+            new() { Login = "RatingZero", Email = "rating-zero@test.local", Role = UserRole.RegularUser },
             new() { Login = "Experienced", Email = "experienced@test.local", Role = UserRole.RegularUser }, // 150 posts, not newbie
 
             // Activity
@@ -74,7 +72,6 @@ internal sealed partial class DataSeeder
         return result;
     }
 
-    /// <summary>A development account: its login, its address and its role.</summary>
     private sealed record TestAccount
     {
         public required string Login { get; init; }
@@ -84,9 +81,6 @@ internal sealed partial class DataSeeder
         public required UserRole Role { get; init; }
     }
 
-    /// <summary>
-    /// Writes the test accounts whose login is not taken yet.
-    /// </summary>
     private async Task CreateTestAccounts(TestAccount[] testAccounts, string password, SeedResult result)
     {
         var existingLogins = await _dbContext.Users
@@ -110,10 +104,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// The row of one test account, with the ratings, the last activity and the
-    /// registration date its login stands for.
-    /// </summary>
     private DbUser NewTestUser(TestAccount account, string password)
     {
         var (hash, salt) = _securityManager.GeneratePassword(password);
@@ -169,9 +159,6 @@ internal sealed partial class DataSeeder
         };
     }
 
-    /// <summary>
-    /// The registration that waits for its letter, for the PendingActivation flow.
-    /// </summary>
     private async Task SeedPendingRegistration(string password, SeedResult result)
     {
 
@@ -301,9 +288,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Created {subscribersCreated} user subscriptions");
     }
 
-    /// <summary>
-    /// Subscribes the readers to an author, in order, and returns how many.
-    /// </summary>
     private int SubscribeToAuthor(DbUser author, IEnumerable<DbUser> subscribers)
     {
         var idx = 0;

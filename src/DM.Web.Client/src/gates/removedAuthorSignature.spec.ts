@@ -34,6 +34,8 @@ import {
 } from "@/entities/game";
 import { useBlogDetailsStore, useBlogsStore, type Blog } from "@/entities/blog";
 import { Api } from "@/shared/api";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
+import { createMockCharacter } from "@/entities/game/model/store.fixtures";
 import GameDetails from "@/pages/game/GameDetails.vue";
 import BlogDetails from "@/pages/blog/BlogDetails.vue";
 import ProfileGamesTable from "@/pages/profile/ProfileGamesTable.vue";
@@ -179,7 +181,7 @@ const message = {
   edits: [],
 } as unknown as MessageWithContinuation;
 
-/** A game of the catalogue whose master's account was removed. */
+// A game of the catalogue whose master's account was removed.
 const game = {
   id: "g-1",
   publicId: "abcde",
@@ -199,19 +201,15 @@ const game = {
   createdUtc: "2026-09-01T10:00:00Z",
 } as unknown as Game;
 
-/** A blog of the catalogue whose owner's account was removed. */
-const blog = {
-  id: "b-1",
+// A blog of the catalogue whose owner's account was removed.
+const blog: Blog = {
+  ...createMockBlog("b-1", "Покинутый блог"),
   publicId: "fghij",
-  title: "Покинутый блог",
-  status: "Active",
   author: null,
   assistants: [],
   createdUtc: "2026-09-01T10:00:00Z",
-  publicationCount: 0,
-  subscribersCount: 0,
   rubrics: [],
-} as unknown as Blog;
+};
 
 const envelope = <T>(resources: T[]) => ({
   resources,
@@ -265,8 +263,8 @@ describe("the signature of a removed account", () => {
   it("stands under the character and under the game role of a game post", async () => {
     const asCharacter = await mountWith(GamePost, {
       post: post({
-        character: { id: "ch-1", name: "Ведьмак" },
-      } as unknown as Partial<Post>),
+        character: createMockCharacter("ch-1", "Ведьмак"),
+      }),
       number: 1,
     });
     expect(asCharacter.text()).toContain("Ведьмак");

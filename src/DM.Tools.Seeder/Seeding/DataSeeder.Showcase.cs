@@ -13,11 +13,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// The rated posts the home page and the rated posts list are read against:
-    /// Diopside's post, the best post of the week, SolohinLex's master post and
-    /// the post of the longest login.
-    /// </summary>
     /// <returns>The posts written or rated here, which the random reviews leave alone.</returns>
     private async Task<HashSet<Guid>> SeedRatedShowcasePosts(
         FinishedGamePosts finished, List<DbUser> users, List<DbUser> experiencedUsers,
@@ -61,9 +56,6 @@ internal sealed partial class DataSeeder
         return processedPostIds;
     }
 
-    /// <summary>
-    /// "Latest rated": the Diopside post with several reviews, the newest an hour ago.
-    /// </summary>
     private void SeedLatestRatedReviews(
         Post diopsidePost, Dictionary<Guid, Guid> roomToGameId, List<DbUser> experiencedUsers,
         ComprehensiveSeedResult result)
@@ -103,9 +95,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// "Best of week": another post with 5 reviews from earlier today.
-    /// </summary>
     private void SeedBestOfWeekReviews(
         Post bestOfWeekPost, Dictionary<Guid, Guid> roomToGameId, List<DbUser> experiencedUsers,
         ComprehensiveSeedResult result)
@@ -137,9 +126,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// A master post of SolohinLex, without a character, in a finished game he masters: "Latest rated".
-    /// </summary>
     private Post? SeedMasterPost(
         List<Guid> finishedGameIds, List<Room> rooms, Dictionary<Guid, Guid> roomToGameId, List<DbUser> users,
         List<DbUser> experiencedUsers, ComprehensiveSeedResult result)
@@ -182,9 +168,7 @@ internal sealed partial class DataSeeder
         return masterPost;
     }
 
-    /// <summary>
-    /// A rated post of LongestLoginPossible, for a long username and a long character name.
-    /// </summary>
+    // A rated post of LongestLoginPossible, for a long username and a long character name.
     private Post? SeedLongestLoginPost(
         List<Guid> finishedGameIds, List<Room> rooms, Dictionary<Guid, Guid> roomToGameId, List<DbUser> users,
         List<DbUser> experiencedUsers, ComprehensiveSeedResult result)
@@ -243,10 +227,8 @@ internal sealed partial class DataSeeder
         return longestUserPost;
     }
 
-    /// <summary>
-    /// Chuck, a grapefruit-obsessed barbarian, in the first active recruiting game: his post outscores
-    /// everything else of the week, "Best of week".
-    /// </summary>
+    // Chuck, a grapefruit-obsessed barbarian, in the first active recruiting game: his post
+    // outscores everything else of the week, "Best of week".
     private async Task SeedChuckPost(
         List<DbUser> users, List<DbUser> experiencedUsers, ComprehensiveSeedResult result)
     {
@@ -292,7 +274,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>The character Chuck, with his avatar uploaded through the real pipeline.</summary>
     private async Task<Character> SeedChuckCharacter(
         Guid chuckGameId, DbUser chuckPlayer, ComprehensiveSeedResult result)
     {
@@ -330,7 +311,6 @@ internal sealed partial class DataSeeder
         return chuckChar;
     }
 
-    /// <summary>Chuck's magnum opus about grapefruit.</summary>
     private const string ChuckPostText = """
         Чак сел на поваленное бревно, достал из мешка грейпфрут и некоторое время просто держал его в руках. Тяжелый. Теплый от солнца. Идеальный.
 
@@ -355,10 +335,8 @@ internal sealed partial class DataSeeder
         "Но сначала надо убить этого дракона. Потому что, по слухам, он сжег три грейпфрутовые рощи к югу отсюда. И за это он ответит."
         """;
 
-    /// <summary>
-    /// The reviews of Chuck's post, all positive, one more than leaderboard
-    /// coverage puts on its top post.
-    /// </summary>
+    // The reviews of Chuck's post, all positive, one more than leaderboard coverage puts on its top
+    // post.
     private void SeedChuckReviews(
         Post chuckPost, DbUser chuckPlayer, Guid chuckGameId, List<DbUser> users, List<DbUser> experiencedUsers,
         ComprehensiveSeedResult result)

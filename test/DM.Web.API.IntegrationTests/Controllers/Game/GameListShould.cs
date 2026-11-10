@@ -11,7 +11,6 @@ public class GameListShould : IntegrationTestBase
     {
     }
 
-    /// <summary>Every sort, search and filter of the list answers a guest.</summary>
     [Theory]
     [InlineData("/v1/games")]
     [InlineData("/v1/games?search=test")]

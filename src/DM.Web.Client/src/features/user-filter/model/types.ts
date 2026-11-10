@@ -1,7 +1,9 @@
+import type { UserActivityChoice } from "@/entities/user";
 import { UserRole } from "@/entities/user";
 import { NEWBIE_POST_THRESHOLD } from "@/shared/lib/constants/user";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
-export type ActivityFilter = "active" | "inactive" | "all";
+export type { UserActivityChoice } from "@/entities/user";
 
 export type OnlineFilter = "all" | "online";
 
@@ -9,10 +11,21 @@ export type RoleFilter = "all" | UserRole;
 
 export type ExperienceFilter = "all" | "newbie" | "experienced";
 
+/** The filters the menu of the bar offers. */
+export type UsersFilterKey =
+  | "activity"
+  | "role"
+  | "experience"
+  | "rating"
+  | "gamesHosting"
+  | "gamesPlaying"
+  | "blogs"
+  | "registered";
+
 export interface UsersFilterState {
   search: string;
 
-  activity: ActivityFilter;
+  activity: UserActivityChoice;
 
   /** Only for active users. */
   onlineFilter: OnlineFilter;
@@ -43,7 +56,7 @@ export interface UsersFilterState {
 
   sortBy: string;
 
-  sortOrder: "asc" | "desc";
+  sortOrder: SortDirection;
 }
 
 export const DEFAULT_FILTER_STATE: UsersFilterState = {

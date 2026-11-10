@@ -7,9 +7,6 @@ namespace DM.Domain.Core.Dto;
 /// </summary>
 public class CursorData
 {
-    /// <summary>
-    /// Entity ID at the cursor position
-    /// </summary>
     public Guid EntityId { get; set; }
 
     /// <summary>

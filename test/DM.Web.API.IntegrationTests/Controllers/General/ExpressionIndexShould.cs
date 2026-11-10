@@ -7,17 +7,15 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Indexes EF cannot express are asserted by the application at startup, so the migration stays safe to
-/// regenerate.
-/// </summary>
+// Indexes EF cannot express are asserted by the application at startup, so the migration stays safe
+// to regenerate.
 public class ExpressionIndexShould : IntegrationTestBase
 {
     public ExpressionIndexShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>The index set the application declares, walked rather than repeated.</summary>
+    // The index set the application declares, walked rather than repeated.
     public static TheoryData<string> Declared()
     {
         var names = new TheoryData<string>();
@@ -29,13 +27,8 @@ public class ExpressionIndexShould : IntegrationTestBase
         return names;
     }
 
-    /// <summary>
-    /// The index exists, and it is the index the application thinks it is.
-    /// </summary>
-    /// <remarks>
-    /// Postgres matches CREATE INDEX IF NOT EXISTS on the name alone, so the hook reads the definition back, as a
-    /// literal the server normalises; compared here against the same text.
-    /// </remarks>
+    // Postgres matches CREATE INDEX IF NOT EXISTS on the name alone, so the hook reads the
+    // definition back, as a literal the server normalises; compared here against the same text.
     [Theory]
     [MemberData(nameof(Declared))]
     public async Task MatchTheDefinitionTheApplicationAsserts(string indexName)
@@ -57,13 +50,8 @@ public class ExpressionIndexShould : IntegrationTestBase
             "healthy database as broken on every start");
     }
 
-    /// <summary>
-    /// Whatever the declaration says, uniqueness is what every index in this set exists for.
-    /// </summary>
-    /// <remarks>
-    /// The check above passes when the statement and the definition change together, so the
-    /// invariants below are the part that agreement cannot satisfy.
-    /// </remarks>
+    // The check above passes when the statement and the definition change together, so the
+    // invariants below are the part that agreement cannot satisfy.
     [Theory]
     [MemberData(nameof(Declared))]
     public void CarryTheInvariantItExistsFor(string indexName)
@@ -75,13 +63,8 @@ public class ExpressionIndexShould : IntegrationTestBase
             "speeds a lookup up would let the duplicate through while looking the same");
     }
 
-    /// <summary>
-    /// The case-folding pair indexes the lowered value, not the raw column.
-    /// </summary>
-    /// <remarks>
-    /// The lookup compares lower(column) to lower(value), and an index over the raw column
-    /// serves neither that predicate nor the rule that two spellings are one account.
-    /// </remarks>
+    // The lookup compares lower(column) to lower(value), and an index over the raw column serves
+    // neither that predicate nor the rule that two spellings are one account.
     [Theory]
     [InlineData("IX_Users_Email_Lower")]
     [InlineData("IX_Users_Username_Lower")]

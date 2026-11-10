@@ -12,6 +12,8 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join, relative } from "path";
 import { fileURLToPath } from "url";
 
+import { HOW_TO_CUT } from "@/shared/lib/testing/sizes";
+
 const CLIENT_SRC = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const LIMIT = 400;
@@ -44,7 +46,7 @@ describe("stylesheet size limit", () => {
       .filter(({ length }) => length > LIMIT)
       .map(
         ({ path, length }) =>
-          `${path}: ${length} lines is past ${LIMIT}: split the sheet`,
+          `${path}: ${length} lines is past ${LIMIT}: split the sheet; ${HOW_TO_CUT}`,
       );
 
     expect(past).toEqual([]);

@@ -96,10 +96,7 @@ public class CreateCharacterValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// Two values for one specification cannot be stored: the character holds a
-    /// single row per pair.
-    /// </summary>
+    // Two values for one specification cannot be stored: the character holds a single row per pair.
     [Fact]
     public async Task FailWhenOneSpecificationIsSubmittedTwice()
     {
@@ -134,11 +131,9 @@ public class CreateCharacterValidatorShould : UnitTestBase
             .WithErrorMessage(AttributeValidationError.ManyDuplicated([specificationId]));
     }
 
-    /// <summary>
-    /// A game whose sheet holds no specification answers every schema-driven
-    /// rule with nothing, so this is the path on which the repeated identifier
-    /// reached storage as two rows and left the character uneditable.
-    /// </summary>
+    // A game whose sheet holds no specification answers every schema-driven rule with nothing, so
+    // this is the path on which the repeated identifier reached storage as two rows and left the
+    // character uneditable.
     [Fact]
     public async Task FailWhenOneSpecificationIsSubmittedTwiceToAGameWithAnEmptySheet()
     {

@@ -24,7 +24,6 @@ export function createBlogLists() {
     popularBlogs: popular.data,
     participatingBlogs: participating.data,
 
-    // Loading states
     activeBlogsLoading: active.loading,
     popularBlogsLoading: popular.loading,
     participatingBlogsLoading: participating.loading,

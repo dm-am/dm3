@@ -7,9 +7,13 @@
 // assistants gets "not found" once the session is settled.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { defineComponent, h } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import type { Router } from "vue-router";
 import { useBlogDetailsStore, blogApi, type Rubric } from "@/entities/blog";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
+import { mountPage } from "@/shared/lib/testing/mountPage";
+import { UserRole, type Username } from "@/shared/api/models/common";
 import { useAuthStore, type User } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { deferred } from "@/shared/lib/testing/tasks";
@@ -17,29 +21,13 @@ import FormSkeleton from "@/shared/ui/Skeleton/FormSkeleton.vue";
 import { PublicationForm } from "@/features/publication";
 import PublicationEdit from "./PublicationEdit.vue";
 
-// Hoisted with the navigation spy: the route mock below is hoisted above the body.
-const { push, replace, session, AUTHOR, BLOG, PUBLICATION } = vi.hoisted(
-  () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    session: { settled: Promise.resolve() as Promise<void> },
-    AUTHOR: "SolohinLex",
-    BLOG: "the-blog",
-    PUBLICATION: "p-1",
-  }),
-);
-
-// Only the navigation is taken over; the rest of vue-router stays real.
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({
-    params: { id: BLOG, pubId: PUBLICATION },
-    path: `/blogs/${BLOG}/feed/${PUBLICATION}/edit`,
-    query: {},
-    hash: "",
-  }),
-  useRouter: () => ({ push, replace }),
+const { session } = vi.hoisted(() => ({
+  session: { settled: Promise.resolve() as Promise<void> },
 }));
+
+const AUTHOR = "SolohinLex";
+const BLOG = "the-blog";
+const PUBLICATION = "p-1";
 
 // The session answer, settled at once unless a test keeps it out.
 vi.mock("@/entities/user", async (importOriginal) => ({
@@ -47,12 +35,17 @@ vi.mock("@/entities/user", async (importOriginal) => ({
   restoreSession: () => session.settled,
 }));
 
-const NOT_FOUND = {
-  name: "not-found",
-  params: { pathMatch: ["blogs", BLOG, "feed", PUBLICATION, "edit"] },
-  query: {},
-  hash: "",
-};
+const EDIT = `/blogs/${BLOG}/feed/${PUBLICATION}/edit`;
+
+let router: Router;
+/** Where the page stands now: the route name and the address. */
+const standing = () => ({
+  name: router.currentRoute.value.name,
+  fullPath: router.currentRoute.value.fullPath,
+});
+// The site's not found keeps the address it was opened at.
+const NOT_FOUND = { name: "not-found", fullPath: EDIT };
+const STAYED = { name: "blog-publication-edit", fullPath: EDIT };
 
 // The real form pulls TipTap; here it is one button and the refusal line the page hands it.
 vi.mock("@/features/publication", () => ({
@@ -86,7 +79,7 @@ const TYPED =
 const rubric = (id: string): Rubric =>
   ({ id, title: "Хроники", sortOrder: 1 }) as Rubric;
 
-function render(
+async function render(
   publicationRubric: Rubric | null,
   viewer: string | null = AUTHOR,
   /** The answer about the publication, when a test holds it back. */
@@ -97,13 +90,19 @@ function render(
   // canManage is derived: the signed-in name has to match the blog's author.
   useAuthStore().user = viewer ? ({ username: viewer } as User) : null;
   const store = useBlogDetailsStore();
+  const blog = createMockBlog(BLOG, "Записки");
   store.blog = {
-    id: BLOG,
-    title: "Записки",
-    author: { username: AUTHOR },
+    ...blog,
+    author: {
+      id: "u-author",
+      username: AUTHOR as Username,
+      lastActivityUtc: null,
+      role: UserRole.RegularUser,
+      isNewbie: false,
+    },
     assistants: [],
     rubrics: publicationRubric ? [publicationRubric] : [],
-  } as never;
+  };
   vi.spyOn(store, "loadBlog").mockResolvedValue({ ok: true });
 
   const getPublication = vi.spyOn(blogApi, "getPublicationForEdit");
@@ -121,11 +120,19 @@ function render(
       error: null,
     } as never);
 
-  return mount(PublicationEdit, { global: { plugins: [pinia], stubs } });
+  const mounted = await mountPage(PublicationEdit, EDIT, {
+    routes: [
+      ["blog-publication-edit", "/blogs/:id/feed/:pubId/edit"],
+      ["blog-publication", "/blogs/:id/feed/:pubId"],
+      ["blog-feed", "/blogs/:id/feed"],
+      ["not-found", "/:pathMatch(.*)*"],
+    ],
+    pinia,
+    stubs,
+  });
+  router = mounted.router;
+  return mounted.wrapper;
 }
-
-/** The named location the page left for; navigationTargets.spec.ts resolves the names. */
-const wentTo = () => push.mock.calls.at(-1)?.[0];
 
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
@@ -143,15 +150,15 @@ describe("PublicationEdit — after a save", () => {
       data: {},
       error: null,
     } as never);
-    const wrapper = render(null);
+    const wrapper = await render(null);
     await flushPromises();
 
     await wrapper.find(".save").trigger("click");
     await flushPromises();
 
-    expect(wentTo()).toEqual({
+    expect(standing()).toEqual({
       name: "blog-publication",
-      params: { id: BLOG, pubId: PUBLICATION },
+      fullPath: `/blogs/${BLOG}/feed/${PUBLICATION}`,
     });
   });
 
@@ -159,7 +166,7 @@ describe("PublicationEdit — after a save", () => {
     const update = vi
       .spyOn(blogApi, "updatePublication")
       .mockResolvedValue({ data: {}, error: null } as never);
-    const wrapper = render(null);
+    const wrapper = await render(null);
     await flushPromises();
 
     expect(blogApi.getPublicationForEdit).toHaveBeenCalledWith(PUBLICATION);
@@ -175,7 +182,7 @@ describe("PublicationEdit — after a save", () => {
       data: {},
       error: null,
     } as never);
-    const wrapper = render(null);
+    const wrapper = await render(null);
     await flushPromises();
 
     await wrapper.find(".save").trigger("click");
@@ -189,13 +196,13 @@ describe("PublicationEdit — after a save", () => {
       data: null,
       error: refused,
     } as never);
-    const wrapper = render(null);
+    const wrapper = await render(null);
     await flushPromises();
 
     await wrapper.find(".save").trigger("click");
     await flushPromises();
 
-    expect(push).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
     // Where the press was, and in no plate.
     expect(wrapper.get(".form-refusal").text()).toBe(
       "Не удалось сохранить публикацию",
@@ -212,7 +219,7 @@ describe("PublicationEdit — after a delete", () => {
   });
 
   async function deletePublication(publicationRubric: Rubric | null) {
-    const wrapper = render(publicationRubric);
+    const wrapper = await render(publicationRubric);
     await flushPromises();
 
     await wrapper.find(".delete-publication").trigger("click");
@@ -232,10 +239,9 @@ describe("PublicationEdit — after a delete", () => {
       ownsRefusal: true,
       ownsRateLimit: true,
     });
-    expect(wentTo()).toEqual({
+    expect(standing()).toEqual({
       name: "blog-feed",
-      params: { id: BLOG },
-      query: { rubric: "r-7" },
+      fullPath: `/blogs/${BLOG}/feed?rubric=r-7`,
     });
   });
 
@@ -247,10 +253,9 @@ describe("PublicationEdit — after a delete", () => {
     await deletePublication(null);
 
     // An empty query, so no stale "?rubric=" survives the navigation.
-    expect(wentTo()).toEqual({
+    expect(standing()).toEqual({
       name: "blog-feed",
-      params: { id: BLOG },
-      query: {},
+      fullPath: `/blogs/${BLOG}/feed`,
     });
   });
 
@@ -271,7 +276,7 @@ describe("PublicationEdit — after a delete", () => {
 
     const wrapper = await deletePublication(rubric("r-7"));
 
-    expect(push).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
     expect(wrapper.get(".dialog-refusal").text()).toBe(
       "Не удалось удалить публикацию",
     );
@@ -288,18 +293,18 @@ describe("PublicationEdit — who has the page", () => {
   });
 
   it("opens the site's not found for a reader of the blog, with no refusal drawn", async () => {
-    const wrapper = render(null, "a-reader");
+    const wrapper = await render(null, "a-reader");
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(standing()).toEqual(NOT_FOUND);
     expect(wrapper.text()).toBe("");
   });
 
   it("opens it for a guest too, with no invitation to sign in", async () => {
-    const wrapper = render(null, null);
+    const wrapper = await render(null, null);
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(standing()).toEqual(NOT_FOUND);
     expect(wrapper.text()).toBe("");
   });
 
@@ -307,23 +312,23 @@ describe("PublicationEdit — who has the page", () => {
     // A session the browser kept no copy of: the author stays once the server names him.
     let answer = () => {};
     session.settled = new Promise((resolve) => (answer = resolve));
-    const wrapper = render(null, null);
+    const wrapper = await render(null, null);
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
 
     useAuthStore().user = { username: AUTHOR } as User;
     answer();
     await flushPromises();
-    expect(replace).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
     expect(wrapper.find(".save").exists()).toBe(true);
   });
 
   it("keeps the author of the blog on the form", async () => {
-    const wrapper = render(null);
+    const wrapper = await render(null);
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
     expect(wrapper.find(".save").exists()).toBe(true);
   });
 });
@@ -334,7 +339,7 @@ describe("PublicationEdit — on its way", () => {
 
   it("stands the skeleton of the form, then the form", async () => {
     const pending = deferred<unknown>();
-    const wrapper = render(null, AUTHOR, pending.promise);
+    const wrapper = await render(null, AUTHOR, pending.promise);
     await flushPromises();
 
     expect(wrapper.findComponent(FormSkeleton).exists()).toBe(true);

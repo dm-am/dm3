@@ -8,11 +8,8 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Authorization;
 
-/// <summary>
-/// Who may write in the discussion of a game: under a ban, as an applicant and
-/// from the game's blacklist, which closes the application as well and leaves
-/// the reading open.
-/// </summary>
+// Who may write in the discussion of a game: under a ban, as an applicant and from the game's
+// blacklist, which closes the application as well and leaves the reading open.
 public class GameCommentIntentionShould
 {
     private readonly GameIntentionResolver resolver = new();
@@ -158,12 +155,8 @@ public class GameCommentIntentionShould
         resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
     }
 
-    /// <summary>
-    /// An application is writing into the game, whichever door it comes
-    /// through: open recruitment or a player invitation. The gate carries the
-    /// rule so that IsAllowed does not answer "yes" to somebody the service
-    /// then refuses.
-    /// </summary>
+    // The gate carries the rule so that IsAllowed does not answer "yes" to somebody the service
+    // then refuses.
     [Fact]
     public void ForbidApplyingToAGameForTheUserItBlacklisted()
     {

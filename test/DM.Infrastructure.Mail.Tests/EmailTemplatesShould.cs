@@ -17,32 +17,17 @@ using Xunit;
 
 namespace DM.Infrastructure.Mail.Tests;
 
-/// <summary>
-/// Every account letter has a template, and its body is a letter.
-/// </summary>
-/// <remarks>
-/// The renderer looks up a Razor component by the model type and used to fall
-/// back to JsonSerializer.Serialize when it found none. The project shipped with
-/// no components at all, so that fallback was the only path there was: a
-/// registering user received {"ConfirmationLinkUrl":"http://..."} as the body of
-/// their letter, and the same for password reset, email change, password change
-/// and the unfamiliar-device warning. Nothing threw and nothing was logged.
-///
-/// Coverage is asserted from the view-model side rather than by listing the five
-/// templates, because the way this comes back is a sixth letter whose model has no
-/// component — and a list of five would still be green.
-/// </remarks>
+// Coverage is asserted from the view-model side rather than by listing the five templates, because
+// the way this comes back is a sixth letter whose model has no component — and a list of five would
+// still be green.
 public class EmailTemplatesShould : IAsyncDisposable
 {
     private readonly ServiceProvider _services;
     private readonly HtmlRenderer _htmlRenderer;
     private readonly TemplateRenderer _renderer;
 
-    /// <summary>
-    /// What this deployment is. Deliberately a host of nobody: the footer must
-    /// name the addresses of the site, and taking them from here instead would
-    /// pass while naming whatever the stand happens to answer on.
-    /// </summary>
+    // Deliberately a host of nobody: the footer must name the addresses of the site, and taking
+    // them from here instead would pass while naming whatever the stand happens to answer on.
     private static readonly SiteAddressConfiguration Deployment = new()
     {
         PublicUrl = "https://example.test",
@@ -59,12 +44,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         _renderer = new TemplateRenderer(_htmlRenderer);
     }
 
-    /// <summary>
-    /// A letter talks about its errand and not about the doors of the site. The
-    /// line of addresses that used to stand under the card is gone; the reader
-    /// whose door will not open is served by the link under the button, which
-    /// carries the same step rather than the root of the site.
-    /// </summary>
+    // A letter talks about its errand and not about the doors of the site.
     [Fact]
     public async Task NameNoAddressOfItsOwn()
     {
@@ -80,12 +60,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// The addresses are printed by the shared layout, so a template that draws
-    /// its own frame silently loses them. This is what keeps the previous test
-    /// honest: it renders one letter, and this one says every letter is built
-    /// the same way.
-    /// </summary>
+    // The addresses are printed by the shared layout, so a template that draws its own frame
+    // silently loses them.
     [Fact]
     public void BuildEveryLetterOnTheSharedLayout()
     {
@@ -109,22 +85,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// A letter heading stands on one line, like the heading of the card it is
-    /// drawn after.
-    /// </summary>
-    /// <remarks>
-    /// A letter carries no font of its own — a mailbox does not fetch one — so
-    /// the reader gets the fallback, and Arial is wider than the PT Sans the
-    /// site draws with. Two headings fit the mirror at 345 and 353 of the 382
-    /// points a card leaves, and took 393 and 394 in the letter itself, where
-    /// both wrapped. Nothing looked, because the mirror loads the web font.
-    ///
-    /// Counted in characters and not in points: a width needs a text engine,
-    /// and this project has none on the server. The cap is taken from the two
-    /// that broke — twenty-nine characters overflowed — with room left under
-    /// it, so it catches the next long heading rather than measuring this one.
-    /// </remarks>
+    // A letter carries no font of its own — a mailbox does not fetch one — so the reader gets the
+    // fallback, and Arial is wider than the PT Sans the site draws with.
     [Fact]
     public void KeepEveryLetterHeadingOnOneLine()
     {
@@ -146,7 +108,6 @@ public class EmailTemplatesShould : IAsyncDisposable
         }
     }
 
-    /// <summary>The Title the template hands the shared layout, when it has one.</summary>
     private static string? TitleOf(string template)
     {
         var match = System.Text.RegularExpressions.Regex.Match(
@@ -154,11 +115,10 @@ public class EmailTemplatesShould : IAsyncDisposable
         return match.Success ? match.Groups[1].Value : null;
     }
 
-    /// <summary>Templates are content, not build output, so they are read from the source tree.</summary>
+    // Templates are content, not build output, so they are read from the source tree.
     private static string TemplatesDirectory() =>
         Path.Combine(DM.Testing.RepositoryLayout.Root, "src", "DM.Infrastructure.Mail", "Templates");
 
-    /// <summary>Every view model the domain declares, found by reflection.</summary>
     public static TheoryData<Type> ViewModelTypes()
     {
         var data = new TheoryData<Type>();
@@ -205,12 +165,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().Contain("cid:logo", "the logo travels with the letter, not over the network");
     }
 
-    /// <summary>
-    /// The button of a letter names one address, and a reader whose address
-    /// stopped answering cannot rebuild the link by hand: the token sits after
-    /// the hash, where a browser bar never takes it. So the same path stands
-    /// under the button on every other address of the site.
-    /// </summary>
+    // The button of a letter names one address, and a reader whose address stopped answering cannot
+    // rebuild the link by hand: the token sits after the hash, where a browser bar never takes it.
     [Fact]
     public async Task OfferTheSameStepThroughTheOtherAddressesOfTheSite()
     {
@@ -222,10 +178,8 @@ public class EmailTemplatesShould : IAsyncDisposable
             "the other door has to open the same step, token and all");
     }
 
-    /// <summary>
-    /// The link names the other address by its full name: the sentence has no
-    /// heading over it, and "Ссылка через Основной" says nothing of what that is.
-    /// </summary>
+    // The link names the other address by its full name: the sentence has no heading over it, and
+    // "Ссылка через Основной" says nothing of what that is.
     [Fact]
     public async Task NameTheOtherAddressByItsFullName()
     {
@@ -237,10 +191,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().NotContain("Ссылка через RU-прокси", "a letter does not offer the door it came through");
     }
 
-    /// <summary>
-    /// A stand answers on an address nobody else does, and a letter from it that
-    /// pointed at the proxy would promise a page that is not there.
-    /// </summary>
+    // A stand answers on an address nobody else does, and a letter from it that pointed at the
+    // proxy would promise a page that is not there.
     [Fact]
     public async Task OfferNothingWhenTheLetterComesFromAForeignAddress()
     {
@@ -250,10 +202,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().NotContain("Ссылка через");
     }
 
-    /// <summary>
-    /// The offer is drawn by the shared button, so a template that draws its own
-    /// anchor loses it silently. Same guard as the shared layout above.
-    /// </summary>
+    // The offer is drawn by the shared button, so a template that draws its own anchor loses it
+    // silently.
     [Fact]
     public void DrawEveryButtonWithTheSharedComponent()
     {
@@ -292,16 +242,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         { NotificationLetterShould.AboutAGame, NotificationLetterShould.AboutAGame.LinkUrl! },
     };
 
-    /// <summary>
-    /// The two letters about a move of the mailbox show the addresses first and
-    /// say what to do under them, so the line stands below the box.
-    /// </summary>
-    /// <remarks>
-    /// Rendered order is what the reader gets, and nothing else in this file
-    /// looks at it. The line is a warning about what the box holds, so it reads
-    /// as a warning only once the box has been read: standing first, it warned
-    /// about something the reader had not been shown yet.
-    /// </remarks>
+    // The line is a warning about what the box holds, so it reads as a warning only once the box
+    // has been read: standing first, it warned about something the reader had not been shown yet.
     [Theory]
     [MemberData(nameof(LettersWithABoxOfAddresses))]
     public async Task SayWhatToDoBelowTheBoxOfAddresses(object model, string line, string firstLabel)
@@ -362,11 +304,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         NotificationLetterShould.AboutAGame,
     };
 
-    /// <summary>
-    /// A username reaches the letter as text, and the templates put it there with
-    /// Razor's own output, which escapes. The senders this replaces interpolated it
-    /// into a hand-written HTML string, where it did not.
-    /// </summary>
+    // A username reaches the letter as text, and the templates put it there with Razor's own
+    // output, which escapes.
     [Fact]
     public async Task EscapeWhatComesFromTheUser()
     {
@@ -377,12 +316,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().Contain("&lt;script&gt;");
     }
 
-    /// <summary>
-    /// Escaped, but not escaped into unreadability. The default encoder turns
-    /// everything outside Basic Latin into numeric references, so a Russian name
-    /// left as &amp;#x410;&amp;#x43B;… — valid, three times longer, and unlike the
-    /// literal text of the template beside it.
-    /// </summary>
+    // The default encoder turns everything outside Basic Latin into numeric references.
     [Fact]
     public async Task WriteRussianNamesAsLettersRatherThanNumericReferences()
     {
@@ -392,15 +326,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().NotContain("&#x41");
     }
 
-    /// <summary>
-    /// The country stands under the address it explains, not over it.
-    /// </summary>
-    /// <remarks>
-    /// The address is what the row is about, and the country is what makes it
-    /// readable: few people know their own address, and on a phone it changes
-    /// with the connection. Read the other way round, the country would be a
-    /// fact of its own and the address underneath it an unexplained repeat.
-    /// </remarks>
+    // The address is what the row is about, and the country is what makes it readable: few people
+    // know their own address, and on a phone it changes with the connection.
     [Fact]
     public async Task PutTheCountryUnderTheAddressItExplains()
     {
@@ -419,16 +346,9 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().Contain("Россия");
     }
 
-    /// <summary>
-    /// A letter that names a country ends where one that names none does, on the
-    /// footnote: the country table is published into the public domain (PDDL),
-    /// and its publisher is owed no line under the card.
-    /// </summary>
-    /// <remarks>
-    /// The tail of the letter is compared, not only the words of the line that
-    /// used to stand there: a credit brought back with some other table would
-    /// carry some other publisher's name.
-    /// </remarks>
+    // A letter that names a country ends where one that names none does, on the footnote: the
+    // country table is published into the public domain (PDDL), and its publisher is owed no line
+    // under the card.
     [Fact]
     public async Task EndOnTheFootnoteWhenItNamesACountry()
     {
@@ -444,12 +364,7 @@ public class EmailTemplatesShould : IAsyncDisposable
             "nothing is printed under the footnote, the country named or not");
     }
 
-    /// <summary>
-    /// The unfamiliar-device letter takes country, address and device as
-    /// optional: the detector may have none of them, and no table may know the
-    /// country. A row printing "Устройство:" and nothing else reads as broken,
-    /// so the row is not printed.
-    /// </summary>
+    // A row printing "Устройство:" and nothing else reads as broken, so the row is not printed.
     [Fact]
     public async Task LeaveOutTheFactsTheDetectorDidNotHave()
     {
@@ -466,13 +381,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().Contain("30.07.2026 15:00");
     }
 
-    /// <summary>
-    /// The moderator's comment is the only free-form text these letters carry, and
-    /// it reaches the reader escaped exactly once. The sender this replaces built
-    /// the letter as a string and encoded the comment itself; keeping that call in
-    /// front of a template that encodes as well would show the reader
-    /// &amp;lt;b&amp;gt; where the moderator typed a tag.
-    /// </summary>
+    // The moderator's comment is the only free-form text these letters carry, and it reaches the
+    // reader escaped exactly once.
     [Fact]
     public async Task EscapeTheModeratorsCommentExactlyOnce()
     {
@@ -485,10 +395,8 @@ public class EmailTemplatesShould : IAsyncDisposable
             "encoding it twice puts the entity itself in front of the reader");
     }
 
-    /// <summary>
-    /// A request may be rejected without a comment, and an empty box under the
-    /// title looks broken, so the letter says in words that there was no comment.
-    /// </summary>
+    // A request may be rejected without a comment, and an empty box under the title looks broken,
+    // so the letter says in words that there was no comment.
     [Fact]
     public async Task NameTheMissingReasonRatherThanDrawAnEmptyBox()
     {
@@ -500,9 +408,7 @@ public class EmailTemplatesShould : IAsyncDisposable
             "the box holds the moderator word, and there is none");
     }
 
-    /// <summary>
-    /// Loud, not JSON. The silent fallback is what let five broken letters ship.
-    /// </summary>
+    // The silent fallback is what let five broken letters ship.
     [Fact]
     public async Task RefuseAModelWithNoTemplate()
     {

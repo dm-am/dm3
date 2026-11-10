@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import TooltipBubble from "./TooltipBubble.vue";
 import { isKeyboardFocus, trackInput } from "./inputSource";
+import type { OpenedBy } from "./types";
 
 // The server draws each [tip] word as a span.bb-tip with data-tip-text and data-tip-img; this component wires
 // the words and binds the small tooltip from the attributes, so no markup but the server's enters the page.
@@ -29,7 +30,7 @@ const bubbleRef = ref<InstanceType<typeof TooltipBubble> | null>(null);
 
 /** The word whose small tooltip is open, and how it was opened. */
 const active = ref<HTMLElement | null>(null);
-const openedBy = ref<"hover" | "focus" | null>(null);
+const openedBy = ref<OpenedBy | null>(null);
 
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -38,7 +39,7 @@ function cancelHide() {
   hideTimer = null;
 }
 
-function open(word: HTMLElement, by: "hover" | "focus") {
+function open(word: HTMLElement, by: OpenedBy) {
   cancelHide();
   active.value = word;
   openedBy.value = by;

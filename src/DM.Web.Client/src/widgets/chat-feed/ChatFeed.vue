@@ -5,7 +5,6 @@ import { storeToRefs } from "pinia";
 import { useAuthStore, useMessagePermissions } from "@/entities/user";
 import { ChatMessage } from "@/widgets/chat-message/@x/chat-feed";
 import { useUiStore } from "@/shared/stores/ui";
-import { SvgIcon } from "@/shared/ui/Icon";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -29,6 +28,7 @@ import { useAnchoredInfiniteScroll } from "@/shared/lib/composables/useAnchoredI
 import ChatComposer from "./ChatComposer.vue";
 import ChatStrip from "./ChatStrip.vue";
 import FeedEdge from "./FeedEdge.vue";
+import JumpToLatest from "./JumpToLatest.vue";
 import MessageToolbar from "./MessageToolbar.vue";
 import { useFeedPosition } from "./useFeedPosition";
 import { useMessageEdit } from "./useMessageEdit";
@@ -456,15 +456,10 @@ defineExpose({
       />
 
       <!-- While newer pages wait, or once the reader went a whole viewport up -->
-      <button
+      <JumpToLatest
         v-if="messages.length && (hasMoreAfter || isFarFromBottom)"
-        type="button"
-        class="chat-feed__latest"
-        aria-label="К последним сообщениям"
         @click="emit('jump-to-latest')"
-      >
-        <SvgIcon name="chevronDown" />
-      </button>
+      />
     </div>
 
     <div class="chat-feed__composer">
@@ -591,34 +586,6 @@ defineExpose({
 .chat-feed__message:hover :deep(.bbcode-editor),
 .chat-feed__message.hovered :deep(.bbcode-editor)
   background: linear-gradient($hover-overlay, $hover-overlay), $input-bg
-
-// The idiom of the scroll-nav buttons, with a shadow since it floats over the messages.
-.chat-feed__latest
-  position: absolute
-  bottom: $medium
-  left: 50%
-  transform: translateX(-50%)
-  display: flex
-  align-items: center
-  justify-content: center
-  width: $scroll-nav-width
-  height: $scroll-nav-width
-  padding: 0
-  border: 1px solid $border
-  border-radius: $border-radius
-  background-color: $bg-element
-  color: $text-muted
-  cursor: pointer
-  transition: transform $transition-normal
-  box-shadow: $shadow-small
-  z-index: $z-chat-fab
-  svg
-    width: 16px
-    height: 16px
-  &:hover
-    background-color: $bg-element-accent
-    color: $text
-    transform: translateX(-50%) scale(1.05)
 
 // Under the frame, a step away from it.
 .chat-feed__composer

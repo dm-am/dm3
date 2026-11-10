@@ -24,9 +24,6 @@ namespace DM.Infrastructure.Persistence.Shared.Subscriptions;
 /// </param>
 internal sealed record SubscriberSummary(int Count, bool ViewerSubscribed, List<string> Preview);
 
-/// <summary>
-/// One row of the summary statement, keyed by the target it describes.
-/// </summary>
 internal sealed class SubscriberSummaryRow
 {
     public Guid TargetId { get; set; }

@@ -4,10 +4,6 @@ using static DM.Infrastructure.Core.Tests.BbAudienceRender;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The [link] tag: its word and its own text, encoded whether the address is
-/// accepted or refused (BBCODE_RENDERING.md, "Набор тегов").
-/// </summary>
 public class BbLinkTagShould
 {
     [Fact]
@@ -28,9 +24,6 @@ public class BbLinkTagShould
         result.Should().Be("<a href=\"https://example.com\" target=\"_blank\" rel=\"noopener\">Click here</a>");
     }
 
-    /// <summary>
-    /// A [link] whose URL is rejected is printed as typed, and what was typed is encoded like any other text.
-    /// </summary>
     [Theory]
     [InlineData("javascript:alert(1)")]
     [InlineData("data:text/html;base64,PHN2Zz4=")]
@@ -43,9 +36,6 @@ public class BbLinkTagShould
         result.Should().Be($"[link text=\"&lt;img src=x onerror=alert(1)&gt;\"]{dangerousUrl}[/link]");
     }
 
-    /// <summary>
-    /// The same guarantee for the accepted-URL branch.
-    /// </summary>
     [Fact]
     public void EncodeLinkTextWhenUrlIsAccepted()
     {

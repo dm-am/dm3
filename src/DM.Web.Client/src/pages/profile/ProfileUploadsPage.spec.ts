@@ -8,29 +8,19 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { computed, ref } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia } from "pinia";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { UserRole, type User } from "@/shared/api/models/common";
 import { useAuthStore } from "@/shared/stores/auth";
 import ProfileUploadsPage from "./ProfileUploadsPage.vue";
 
-const { replace, getUploads, session } = vi.hoisted(() => ({
-  replace: vi.fn(),
+const { getUploads, session } = vi.hoisted(() => ({
   getUploads: vi.fn(),
   session: { settled: Promise.resolve() as Promise<void> },
 }));
 
 const OWNER = "the-owner";
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({
-    params: { username: OWNER },
-    path: `/users/${OWNER}/uploads`,
-    query: {},
-    hash: "",
-  }),
-  useRouter: () => ({ replace }),
-}));
 
 vi.mock("@/entities/user", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/entities/user")>()),
@@ -54,22 +44,29 @@ vi.mock("@/shared/api/uploadApi", () => ({
   default: { getUploads },
 }));
 
-const NOT_FOUND = {
-  name: "not-found",
-  params: { pathMatch: ["users", OWNER, "uploads"] },
-  query: {},
-  hash: "",
-};
+const UPLOADS = `/users/${OWNER}/uploads`;
 
-function render(viewer: { username: string; role: UserRole } | null) {
-  setActivePinia(createPinia());
-  useAuthStore().user = viewer as User | null;
-  return mount(ProfileUploadsPage, {
-    shallow: true,
-    global: { stubs: { RouterLink: true } },
+async function render(viewer: { username: string; role: UserRole } | null) {
+  const pinia = createPinia();
+  useAuthStore(pinia).user = viewer as User | null;
+  const { wrapper, router } = await mountPage(ProfileUploadsPage, UPLOADS, {
+    routes: [
+      ["profile", "/users/:username"],
+      ["profile-uploads", "/users/:username/uploads"],
+      ["not-found", "/:pathMatch(.*)*"],
+    ],
+    pinia,
+    stubs: {
+      ProfileSubpageHeader: true,
+      ErrorState: true,
+      UploadsTable: true,
+      Paging: true,
+      ConfirmDialog: true,
+      ErrorPage: true,
+    },
   });
+  return { wrapper, route: () => router.currentRoute.value };
 }
-
 describe("ProfileUploadsPage — who has the page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -81,36 +78,40 @@ describe("ProfileUploadsPage — who has the page", () => {
   });
 
   it("opens the site's not found for a guest, with nothing drawn", async () => {
-    const wrapper = render(null);
+    const { wrapper, route } = await render(null);
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(route().name).toBe("not-found");
+    expect(route().params.pathMatch).toEqual(["users", OWNER, "uploads"]);
     expect(wrapper.find(".profile-uploads-page").exists()).toBe(false);
     expect(getUploads).not.toHaveBeenCalled();
   });
 
   it("opens it for another player", async () => {
-    const wrapper = render({
+    const { wrapper, route } = await render({
       username: "somebody",
       role: UserRole.RegularUser,
     });
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(route().name).toBe("not-found");
     expect(wrapper.find(".profile-uploads-page").exists()).toBe(false);
   });
 
   it("keeps the owner of the files on his page", async () => {
-    const wrapper = render({ username: OWNER, role: UserRole.RegularUser });
+    const { wrapper, route } = await render({
+      username: OWNER,
+      role: UserRole.RegularUser,
+    });
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(route().name).toBe("profile-uploads");
     expect(wrapper.find(".profile-uploads-page").exists()).toBe(true);
     expect(getUploads).toHaveBeenCalled();
   });
 
   it("pages as many files as the owner asked for lists", async () => {
-    render({
+    await render({
       username: OWNER,
       role: UserRole.RegularUser,
       settings: { pageSize: 50 },
@@ -123,25 +124,28 @@ describe("ProfileUploadsPage — who has the page", () => {
   });
 
   it("keeps an administrator on it", async () => {
-    render({ username: "an-admin", role: UserRole.Admin });
+    const { route } = await render({
+      username: "an-admin",
+      role: UserRole.Admin,
+    });
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(route().name).toBe("profile-uploads");
   });
 
   it("waits for the answer about the session before sending anybody away", async () => {
     let answer = () => {};
     session.settled = new Promise((resolve) => (answer = resolve));
-    const wrapper = render(null);
+    const { wrapper, route } = await render(null);
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(route().name).toBe("profile-uploads");
 
     // The server names the owner, and the page opens for him.
     useAuthStore().user = { username: OWNER } as User;
     answer();
     await flushPromises();
-    expect(replace).not.toHaveBeenCalled();
+    expect(route().name).toBe("profile-uploads");
     expect(wrapper.find(".profile-uploads-page").exists()).toBe(true);
   });
 });

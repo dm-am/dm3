@@ -10,10 +10,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
-/// <summary>
-/// The one door a privileged account has when both its devices are gone.
-/// </summary>
-/// <remarks>The administrator gets no session or right of the account; its sessions end and both journals say so.</remarks>
+// The administrator gets no session or right of the account; its sessions end and both journals say
+// so.
 public class AdministratorClearingTwoFactorShould : IntegrationTestBase
 {
     public AdministratorClearingTwoFactorShould(DatabaseFixture databaseFixture) : base(databaseFixture)

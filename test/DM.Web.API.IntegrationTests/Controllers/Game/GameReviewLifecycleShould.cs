@@ -12,10 +12,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// Editing and removing a game review, through the same rules the post review
-/// and the endorsement answer by.
-/// </summary>
 /// <remarks>
 /// The author edits inside a day of publication, the author or a senior moderator removes at any time. The
 /// reviews are seeded directly, each under its own author: one live review per author and game is unique.
@@ -123,9 +119,7 @@ public class GameReviewLifecycleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A text of nothing but spaces is trimmed to nothing, so the edit refuses it as creation does.
-    /// </summary>
+    // A text of nothing but spaces is trimmed to nothing, so the edit refuses it as creation does.
     [Fact]
     public async Task RefuseATextOfNothingButSpaces()
     {
@@ -143,9 +137,6 @@ public class GameReviewLifecycleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The editor opens a review with the audience that hands its author the text as typed.
-    /// </summary>
     [Fact]
     public async Task HandTheAuthorTheTextAsTypedForEditing()
     {
@@ -164,9 +155,6 @@ public class GameReviewLifecycleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The same request from anybody but the author gets the ordinary rendering.
-    /// </summary>
     [Fact]
     public async Task RenderTheReviewForAnybodyElseWhoAsksForTheSource()
     {
@@ -258,10 +246,6 @@ public class GameReviewLifecycleShould : IntegrationTestBase
         (await Delete(missing, author)).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// One review of the fixture's game, written <paramref name="ageHours" /> ago
-    /// by an author made for it.
-    /// </summary>
     private async Task<(GeneralUser Author, Guid ReviewId)> SeedAsync(int ageHours, string text = OriginalText)
     {
         var userId = Guid.NewGuid();
@@ -290,10 +274,8 @@ public class GameReviewLifecycleShould : IntegrationTestBase
         return (AsUser(userId, user.Username, UserRole.RegularUser), reviewId);
     }
 
-    /// <summary>
-    /// IgnoreQueryFilters: a row this suite has just had removed is hidden by the
-    /// global soft-delete filter.
-    /// </summary>
+    // IgnoreQueryFilters: a row this suite has just had removed is hidden by the global soft-delete
+    // filter.
     private async Task<DbGameReview?> StoredAsync(Guid reviewId)
     {
         await using var db = DatabaseFixture.CreateDbContext();

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import type { GeneralError } from "@/shared/api/models/common";
 import { signIn, completeSecondFactor } from "@/entities/user";
-import { push, toast } from "./authForms.doubles";
+import { toast } from "./authForms.doubles";
 import {
   atSecondFactor,
   linkBeside,
@@ -15,22 +15,21 @@ import {
   submitCredentials,
   typeCode,
 } from "./LoginForm.fixtures";
-import { problem } from "./authForms.fixtures";
+import LoginForm from "./LoginForm.vue";
+import { address, problem } from "./authForms.fixtures";
 
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
-);
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
 );
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
 );
 
-// Mocked, not stubbed: AuthDialog imports Dialog.vue directly.
-vi.mock("vue-final-modal", async () =>
-  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
-);
+// Mocked, not stubbed: AuthDialog imports Dialog.vue directly; the page keeps the real container.
+vi.mock("vue-final-modal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("vue-final-modal")>()),
+  ...(await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -162,7 +161,7 @@ describe("LoginForm", () => {
     };
 
     it("is not offered to a reader who has not been refused", async () => {
-      const wrapper = mountForm();
+      const wrapper = await mountForm();
       await flushPromises();
 
       expect(linkBeside(wrapper, "Пароль").text()).toBe("Не могу войти");
@@ -201,8 +200,10 @@ describe("LoginForm", () => {
       await linkBeside(wrapper, "Пароль").trigger("click");
       await flushPromises();
 
-      expect(wrapper.emitted("cancel")).toHaveLength(1);
-      expect(push).toHaveBeenCalledWith("/support?subtype=AccountRestoration");
+      expect(wrapper.findComponent(LoginForm).emitted("cancel")).toHaveLength(
+        1,
+      );
+      expect(address()).toBe("/support?subtype=AccountRestoration");
     });
   });
 });

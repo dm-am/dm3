@@ -31,11 +31,10 @@ const GAME: StatusTransitionOption[] = [
 function render(
   transitions: StatusTransitionOption[],
   subject: string,
-  variant: "strip" | "button" = "strip",
   apply = vi.fn().mockResolvedValue(null),
 ) {
   const wrapper = mount(StatusButtons, {
-    props: { transitions, subject, variant, apply },
+    props: { transitions, subject, apply },
   });
   return { wrapper, apply };
 }
@@ -55,22 +54,6 @@ describe("StatusButtons", () => {
     expect(
       wrapper.findAll("button").map((button) => button.attributes("type")),
     ).toEqual(["button", "button"]);
-    expect(wrapper.find(".status-buttons").exists()).toBe(false);
-  });
-
-  it("draws the page button group as the settings page had it", () => {
-    const { wrapper } = render(GAME, "игры", "button");
-
-    const group = wrapper.get(".status-buttons");
-    expect(group.findAll("button.status-btn").map((b) => b.text())).toEqual([
-      "Завершить игру",
-      "Заморозить игру",
-      "Закрыть игру",
-    ]);
-    expect(
-      group.findAll("button").map((button) => button.attributes("type")),
-    ).toEqual(["button", "button", "button"]);
-    expect(wrapper.find("li").exists()).toBe(false);
   });
 
   it("draws nothing at all when the status offers no move", () => {
@@ -117,11 +100,6 @@ describe("StatusButtons", () => {
     expect(document.body.textContent).not.toContain("Закрыть игру?");
   });
 
-  /**
-   * The question used to close before the request went out, and a refusal
-   * came back as a plate over a page that no longer showed what was refused.
-   * It waits for the answer now and says a refusal in itself.
-   */
   it("keeps the question open with a refusal in it", async () => {
     const apply = vi.fn().mockResolvedValue({
       type: "",
@@ -129,7 +107,7 @@ describe("StatusButtons", () => {
       status: 404,
       traceId: "t",
     });
-    const { wrapper } = render(GAME, "игры", "strip", apply);
+    const { wrapper } = render(GAME, "игры", apply);
 
     await wrapper.findAll("button")[2].trigger("click");
     await flushPromises();
@@ -159,7 +137,7 @@ describe("StatusButtons", () => {
       status: 404,
       traceId: "t",
     });
-    const { wrapper } = render(BLOG, "блога", "strip", apply);
+    const { wrapper } = render(BLOG, "блога", apply);
 
     await wrapper.findAll("button")[0].trigger("click");
     await flushPromises();
@@ -179,7 +157,7 @@ describe("StatusButtons", () => {
           release = () => resolve(null);
         }),
     );
-    const { wrapper } = render(BLOG, "блога", "strip", apply);
+    const { wrapper } = render(BLOG, "блога", apply);
 
     await wrapper.findAll("button")[0].trigger("click");
     await flushPromises();

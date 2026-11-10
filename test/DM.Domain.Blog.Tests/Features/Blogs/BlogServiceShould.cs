@@ -25,10 +25,8 @@ public class BlogServiceShould : BlogServiceTestBase
         dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
     }
 
-    /// <summary>
-    /// "Скрывать блоги" cleans what the viewer browses and leaves the moderation
-    /// queue whole: a mentor who hides somebody's blogs still has to judge them.
-    /// </summary>
+    // "Скрывать блоги" cleans what the viewer browses and leaves the moderation queue whole: a
+    // mentor who hides somebody's blogs still has to judge them.
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -108,11 +106,8 @@ public class BlogServiceShould : BlogServiceTestBase
         intentionManager.Received(1).ThrowIfForbidden(BlogIntention.EditSettings, blog);
     }
 
-    /// <summary>
-    /// A blog sent back to premoderation is hidden from its readers, so the list of
-    /// the blogs they subscribed to leaves it out: named there, it would open as a
-    /// blog that is not there.
-    /// </summary>
+    // A blog sent back to premoderation is hidden from its readers, so the list of the blogs they
+    // subscribed to leaves it out: named there, it would open as a blog that is not there.
     [Fact]
     public async Task LeaveABlogTheReaderMayNotOpenOutOfHisSubscribedBlogs()
     {
@@ -187,11 +182,9 @@ public class BlogServiceShould : BlogServiceTestBase
         await repository.Received(1).ReorderRubrics(blogId, orderedIds, default);
     }
 
-    /// <summary>
-    /// A list that skips a rubric is refused rather than half-applied: the rubric
-    /// it left out would keep the sort order the same call has just given to
-    /// another one, and two rubrics would share a position.
-    /// </summary>
+    // A list that skips a rubric is refused rather than half-applied: the rubric it left out would
+    // keep the sort order the same call has just given to another one, and two rubrics would share
+    // a position.
     [Fact]
     public async Task RefuseARubricOrderThatSkipsARubric()
     {
@@ -300,16 +293,8 @@ public class BlogServiceShould : BlogServiceTestBase
         rubric.UnreadCommentsCount.Should().Be(6);     // 4 + 2 total comments
     }
 
-    /// <summary>
-    /// The two gates GetAsync throws on, asked instead of thrown: the form
-    /// everything living inside a blog needs, because their refusal has to be a
-    /// 404 and a thrown gate produces a 403.
-    /// </summary>
-    /// <remarks>
-    /// A blog that is not there answers the same as one the caller may not open:
-    /// the whole point of the question is that the two cannot be told apart from
-    /// outside.
-    /// </remarks>
+    // A blog that is not there answers the same as one the caller may not open: the whole point of
+    // the question is that the two cannot be told apart from outside.
     [Theory]
     [InlineData(DraftVisibility.Public, PremoderationStatus.Approved, true, true, true)]
     [InlineData(DraftVisibility.Private, PremoderationStatus.Approved, false, true, false)]
@@ -354,13 +339,7 @@ public class BlogServiceShould : BlogServiceTestBase
         visible.Should().BeFalse();
     }
 
-    /// <summary>
-    /// The three single-blog reads answer on a blog the caller may not open
-    /// exactly as on one that is not there.
-    /// </summary>
-    /// <remarks>
-    /// A 403 says the identifier resolves, and the alias is five letters on routes open to guests.
-    /// </remarks>
+    // A 403 says the identifier resolves, and the alias is five letters on routes open to guests.
     [Theory]
     [InlineData(DraftVisibility.Private, PremoderationStatus.Approved)]
     [InlineData(DraftVisibility.Public, PremoderationStatus.AwaitingApproval)]
@@ -387,10 +366,8 @@ public class BlogServiceShould : BlogServiceTestBase
         await ShouldBeNotFound(() => service.GetByOwnerUsernameAsync("owner"));
     }
 
-    /// <summary>
-    /// The other side of the line: a blog the caller can see is read, and the
-    /// refusal of an action on it stays the 403 the action's own gate produces.
-    /// </summary>
+    // The other side of the line: a blog the caller can see is read, and the refusal of an action
+    // on it stays the 403 the action's own gate produces.
     [Fact]
     public async Task StillRefuseAnActionOnAVisibleBlogWithForbidden()
     {

@@ -18,14 +18,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Logging;
 
-/// <summary>
-/// A log line names the trace it was written in, under the name the dashboard
-/// looks for.
-/// </summary>
-/// <remarks>
-/// The sink renames reserved properties, and the datasource matches a quote before the name. A real sink
-/// over a real socket: the three parts live in three files, two languages and one package.
-/// </remarks>
+// The sink renames reserved properties, and the datasource matches a quote before the name.
 [Collection(StaticLoggerCollection.Name)]
 public class TraceLinkShould
 {
@@ -87,7 +80,6 @@ public class TraceLinkShould
             .GetString()!;
     }
 
-    /// <summary>The expression the log datasource extracts a field with.</summary>
     private static string DerivedFieldPattern(string field)
     {
         var datasources = File.ReadAllText(Path.Combine(DM.Testing.RepositoryLayout.Root,

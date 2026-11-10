@@ -11,12 +11,6 @@ namespace DM.Domain.Account.Features.Registration;
 /// </summary>
 public interface IActivationRepository
 {
-    /// <summary>
-    /// Find pending registration by token ID
-    /// </summary>
-    /// <param name="tokenId">Token ID embedded in PendingRegistration</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Pending registration or null if not found</returns>
     Task<PendingRegistration?> FindPendingByToken(Guid tokenId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -36,8 +30,5 @@ public interface IActivationRepository
     /// <summary>
     /// Find user by email (for idempotent retry detection)
     /// </summary>
-    /// <param name="email">User email</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>User if found</returns>
     Task<AuthenticatedUser?> FindUserByEmail(string email, CancellationToken cancellationToken = default);
 }

@@ -9,15 +9,10 @@ using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The gates run against the environment that ships, and can run at all.
-/// </summary>
-/// <remarks>A workflow is read as text: nothing runs one under test. DEPLOYMENT.md describes them.</remarks>
+// A workflow is read as text: nothing runs one under test.
 public class ContinuousIntegrationShould
 {
-    /// <summary>
-    /// The vulnerability gate reads the assets file, so it needs a restore on a clean checkout.
-    /// </summary>
+    // The vulnerability gate reads the assets file, so it needs a restore on a clean checkout.
     [Fact]
     public void RestoreBeforeListingVulnerablePackages()
     {
@@ -37,9 +32,6 @@ public class ContinuousIntegrationShould
         restore.Should().BeLessThan(list, "restoring after the check helps nobody");
     }
 
-    /// <summary>
-    /// The suite is served from an origin the API under test answers to.
-    /// </summary>
     /// <remarks>
     /// The development ports are allowed only in Development, and the end-to-end job runs
     /// Production, so its overlay hands the API the port the suite serves from.
@@ -69,9 +61,6 @@ public class ContinuousIntegrationShould
             "to means CORS drops every response and the origin check refuses every write");
     }
 
-    /// <summary>
-    /// The gates exercise the environment that ships.
-    /// </summary>
     /// <remarks>
     /// The example environment ends with Development. Asked of every job that starts the stack, not
     /// of the file: one workflow starts it twice.
@@ -101,10 +90,7 @@ public class ContinuousIntegrationShould
         }
     }
 
-    /// <summary>
-    /// The coverage the build collects is also read.
-    /// </summary>
-    /// <remarks>A coverage file uploaded with no threshold guarantees nothing.</remarks>
+    // A coverage file uploaded with no threshold guarantees nothing.
     [Fact]
     public void CheckTheCoverageTheBuildCollects()
     {

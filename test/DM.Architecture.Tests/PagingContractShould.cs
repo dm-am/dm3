@@ -9,10 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// One set of page sizes, from the form that offers them to the query that serves
-/// them.
-/// </summary>
 /// <remarks>
 /// The server side is one constant; the account form and the paging composable of the client are
 /// the two copies that cannot share it, read from source.
@@ -69,7 +65,7 @@ public class PagingContractShould
 
     [Fact]
     public void AskACursorForNoMoreThanItServes() =>
-        ClientCopies.Number("entities/global-chat/model/store.ts", "LATEST_PAGE_SIZE")
+        ClientCopies.Number("entities/global-chat/model/chatWindow.ts", "LATEST_PAGE_SIZE")
             .Should().BeLessThanOrEqualTo(CursorQuery.MaxLimit,
                 "the store reads a short answer as the end of the chat, and a clamped one is short");
 }

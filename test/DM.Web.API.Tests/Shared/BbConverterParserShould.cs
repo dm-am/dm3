@@ -5,10 +5,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// The converter renders through BbParserWrapper and casts what the provider hands it, so every
-/// surface gets a wrapper for every audience it renders. The author's editor is given the source, unrendered.
-/// </summary>
+// The converter renders through BbParserWrapper and casts what the provider hands it, so every
+// surface gets a wrapper for every audience it renders.
 public class BbConverterParserShould
 {
     private readonly BbParserProvider _provider = new();

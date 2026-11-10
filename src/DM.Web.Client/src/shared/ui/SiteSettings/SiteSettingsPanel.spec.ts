@@ -12,8 +12,8 @@
  * the panel. It is on for a device that has never answered, and what the
  * reader turns is kept on the device.
  *
- * "Выравнивание по ширине" came from the same panel and is gone: the owner
- * took the switch away, and posts and comments are always justified.
+ * "Выравнивание по ширине" has no switch here: posts and comments are always
+ * justified.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { enableAutoUnmount, mount, flushPromises } from "@vue/test-utils";
@@ -80,8 +80,7 @@ describe("SiteSettingsPanel typesetting switches", () => {
   });
 
   /**
-   * The owner's word on the pair of buttons these rows first had: a row of the
-   * panel is a label and a small control, like its neighbours. So each row
+   * A row of the panel is a label and a small control, like its neighbours. So each row
    * holds exactly what the "Тема" row holds, one switch named after the row,
    * and no button at all.
    */

@@ -9,30 +9,19 @@
 // admitted to nothing gets "not found" once the session is settled.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
-import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { useBlogDetailsStore, type Blog } from "@/entities/blog";
+import type { Router } from "vue-router";
+import { useBlogDetailsStore } from "@/entities/blog";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { useAuthStore, UserRole, type User } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
-import type { GeneralError } from "@/shared/api/models/common";
+import type { GeneralError, Username } from "@/shared/api/models/common";
 import BlogSettings from "./BlogSettings.vue";
 
-const { push, replace, session } = vi.hoisted(() => ({
-  push: vi.fn(),
-  replace: vi.fn(),
+const { session } = vi.hoisted(() => ({
   session: { settled: Promise.resolve() as Promise<void> },
-}));
-
-// Only the navigations the page holds; the rest of the router stays real.
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({
-    params: { id: "the-blog" },
-    path: "/blogs/the-blog/settings",
-    query: {},
-    hash: "",
-  }),
-  useRouter: () => ({ push, replace }),
 }));
 
 // The session answer, settled at once unless a test keeps it out.
@@ -41,12 +30,17 @@ vi.mock("@/entities/user", async (importOriginal) => ({
   restoreSession: () => session.settled,
 }));
 
-const NOT_FOUND = {
-  name: "not-found",
-  params: { pathMatch: ["blogs", "the-blog", "settings"] },
-  query: {},
-  hash: "",
-};
+const SETTINGS = "/blogs/the-blog/settings";
+
+let router: Router;
+/** Where the page stands now: the route name and the address. */
+const standing = () => ({
+  name: router.currentRoute.value.name,
+  fullPath: router.currentRoute.value.fullPath,
+});
+// The site's not found keeps the address it was opened at.
+const NOT_FOUND = { name: "not-found", fullPath: SETTINGS };
+const STAYED = { name: "blog-settings", fullPath: SETTINGS };
 
 /** A section that is either drawn or not; nothing else is asked of it. */
 const marker = (className: string) => ({
@@ -84,7 +78,6 @@ const stubs = {
   ),
   // The confirmation is the real window, drawn in place.
   Teleport: true,
-  RouterLink: { template: "<a><slot /></a>" },
 };
 
 const THE_VIEWER = "the-viewer";
@@ -92,7 +85,7 @@ const THE_VIEWER = "the-viewer";
 /** How the viewer takes part in the blog the page is drawn for. */
 type Standing = "owner" | "assistant" | "stranger";
 
-function render(standing: Standing, viewer?: UserRole) {
+async function render(standing: Standing, viewer?: UserRole) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useAuthStore().user = viewer
@@ -100,16 +93,31 @@ function render(standing: Standing, viewer?: UserRole) {
     : null;
   const store = useBlogDetailsStore();
   // The store derives the roles from the blog's author and assistants.
+  const blog = createMockBlog("the-blog", "Дневник");
+  const viewerRef = {
+    id: `u-${THE_VIEWER}`,
+    username: THE_VIEWER as Username,
+    lastActivityUtc: null,
+    role: UserRole.RegularUser,
+    isNewbie: false,
+  };
   store.blog = {
-    id: "the-blog",
-    title: "Дневник",
-    author: {
-      username: standing === "owner" ? THE_VIEWER : "the-blog-owner",
-    },
-    assistants: standing === "assistant" ? [{ username: THE_VIEWER }] : [],
-  } as unknown as Blog;
+    ...blog,
+    author: standing === "owner" ? viewerRef : blog.author,
+    assistants: standing === "assistant" ? [viewerRef] : [],
+  };
 
-  return mount(BlogSettings, { global: { plugins: [pinia], stubs } });
+  const mounted = await mountPage(BlogSettings, SETTINGS, {
+    routes: [
+      ["blog-settings", "/blogs/:id/settings"],
+      ["profile", "/users/:username"],
+      ["not-found", "/:pathMatch(.*)*"],
+    ],
+    pinia,
+    stubs,
+  });
+  router = mounted.router;
+  return mounted.wrapper;
 }
 
 const flag = (wrapper: VueWrapper, selector: string, name: string) => {
@@ -130,8 +138,10 @@ const sectionsOf = (wrapper: VueWrapper) => ({
   danger: wrapper.find(".danger-zone").exists(),
 });
 
-const seenBy = (standing: Standing, viewer: UserRole = UserRole.RegularUser) =>
-  sectionsOf(render(standing, viewer));
+const seenBy = async (
+  standing: Standing,
+  viewer: UserRole = UserRole.RegularUser,
+) => sectionsOf(await render(standing, viewer));
 
 describe("BlogSettings admission", () => {
   beforeEach(() => {
@@ -139,57 +149,57 @@ describe("BlogSettings admission", () => {
     session.settled = Promise.resolve();
   });
 
-  it("keeps the page away from a stranger", () => {
-    expect(seenBy("stranger").info).toBe(false);
+  it("keeps the page away from a stranger", async () => {
+    expect((await seenBy("stranger")).info).toBe(false);
   });
 
-  it("keeps it away from a junior moderator, whom EditSettings does not admit", () => {
-    expect(seenBy("stranger", UserRole.Moderator).info).toBe(false);
+  it("keeps it away from a junior moderator, whom EditSettings does not admit", async () => {
+    expect((await seenBy("stranger", UserRole.Moderator)).info).toBe(false);
   });
 
   it("opens the site's not found for a viewer it refuses, with no refusal drawn", async () => {
-    const wrapper = render("stranger", UserRole.RegularUser);
+    const wrapper = await render("stranger", UserRole.RegularUser);
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(standing()).toEqual(NOT_FOUND);
     expect(wrapper.text()).toBe("");
   });
 
   it("opens it for a guest too, with no invitation to sign in", async () => {
-    const wrapper = render("stranger");
+    const wrapper = await render("stranger");
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(standing()).toEqual(NOT_FOUND);
     expect(wrapper.find(".login-prompt").exists()).toBe(false);
     expect(wrapper.text()).toBe("");
   });
 
   it("keeps the assistant on his page", async () => {
-    render("assistant", UserRole.RegularUser);
+    await render("assistant", UserRole.RegularUser);
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
   });
 
   it("waits for the answer about the session before sending anybody away", async () => {
     // A session the browser kept no copy of: the owner stays once the server names him.
     let answer = () => {};
     session.settled = new Promise((resolve) => (answer = resolve));
-    render("owner");
+    await render("owner");
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
 
     useAuthStore().user = { username: THE_VIEWER } as User;
     answer();
     await flushPromises();
-    expect(replace).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
   });
 });
 
 describe("BlogSettings sections", () => {
-  it("gives the owner every section", () => {
-    expect(seenBy("owner")).toEqual({
+  it("gives the owner every section", async () => {
+    expect(await seenBy("owner")).toEqual({
       info: true,
       rubrics: true,
       roles: true,
@@ -203,9 +213,9 @@ describe("BlogSettings sections", () => {
     });
   });
 
-  it("gives the assistant the settings and the reader invites, nothing else", () => {
+  it("gives the assistant the settings and the reader invites, nothing else", async () => {
     // Rubrics, the blacklist, assistants and cancelling are the owner's.
-    expect(seenBy("assistant")).toEqual({
+    expect(await seenBy("assistant")).toEqual({
       info: true,
       rubrics: false,
       roles: true,
@@ -219,9 +229,9 @@ describe("BlogSettings sections", () => {
     });
   });
 
-  it("gives a senior moderator the settings without the blacklist", () => {
+  it("gives a senior moderator the settings without the blacklist", async () => {
     // BlogIntention.Edit stops at the administration here.
-    expect(seenBy("stranger", UserRole.SeniorModerator)).toEqual({
+    expect(await seenBy("stranger", UserRole.SeniorModerator)).toEqual({
       info: true,
       rubrics: false,
       roles: true,
@@ -235,8 +245,8 @@ describe("BlogSettings sections", () => {
     });
   });
 
-  it("adds the blacklist and assistant removal for an administrator", () => {
-    expect(seenBy("stranger", UserRole.Admin)).toEqual({
+  it("adds the blacklist and assistant removal for an administrator", async () => {
+    expect(await seenBy("stranger", UserRole.Admin)).toEqual({
       info: true,
       rubrics: false,
       roles: true,
@@ -263,7 +273,7 @@ describe("BlogSettings — after the blog is deleted", () => {
 
   /** Runs the whole gesture: the danger button, then the confirmation. */
   async function deleteBlog(answer: GeneralError | null) {
-    const wrapper = render("owner", UserRole.RegularUser);
+    const wrapper = await render("owner", UserRole.RegularUser);
     const remove = vi
       .spyOn(useBlogDetailsStore(), "deleteBlog")
       .mockResolvedValue(answer);
@@ -283,10 +293,9 @@ describe("BlogSettings — after the blog is deleted", () => {
       ownsRateLimit: true,
     });
     expect(wrapper.find(".dialog-container").exists()).toBe(false);
-    expect(push).toHaveBeenCalledWith({
+    expect(standing()).toEqual({
       name: "profile",
-      params: { username: THE_VIEWER },
-      query: { tab: "blogs" },
+      fullPath: `/users/${THE_VIEWER}?tab=blogs`,
     });
   });
 
@@ -302,7 +311,7 @@ describe("BlogSettings — after the blog is deleted", () => {
       title: "",
     } as GeneralError);
 
-    expect(push).not.toHaveBeenCalled();
+    expect(standing()).toEqual(STAYED);
     expect(wrapper.get(".dialog-refusal").text()).toBe(
       "Не удалось удалить блог",
     );

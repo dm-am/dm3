@@ -10,17 +10,10 @@ using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The server pulls the images CI publishes, and every image the deployment runs
-/// names a version.
-/// </summary>
-/// <remarks>An image reference lives in the compose files, the Dockerfiles and the shell scripts.</remarks>
+// An image reference lives in the compose files, the Dockerfiles and the shell scripts.
 public class ImageDeliveryShould
 {
-    /// <summary>
-    /// The server runs what CI published, it does not build.
-    /// </summary>
-    /// <remarks>A local build takes the registry's name, so later pulls never happen.</remarks>
+    // A local build takes the registry's name, so later pulls never happen.
     [Fact]
     public void PullThePublishedImagesInsteadOfBuildingOnTheServer()
     {
@@ -50,11 +43,7 @@ public class ImageDeliveryShould
         }
     }
 
-    /// <summary>
-    /// Everything the delivery workflow publishes has to be something the
-    /// deployment pulls.
-    /// </summary>
-    /// <remarks>An image nobody pulls is not delivery.</remarks>
+    // An image nobody pulls is not delivery.
     [Fact]
     public void PullEveryImageTheDeliveryWorkflowPublishes()
     {
@@ -77,9 +66,6 @@ public class ImageDeliveryShould
         }
     }
 
-    /// <summary>
-    /// Every image the deployment runs names a version.
-    /// </summary>
     /// <remarks>
     /// A reference with no tag resolves to whatever the registry holds that day; the store client and
     /// server are pinned together by digest. "latest" is refused by name, and the images published here
@@ -143,7 +129,6 @@ public class ImageDeliveryShould
         }
     }
 
-    /// <summary>docker run options whose value is the argument after them.</summary>
     private static readonly HashSet<string> OptionsTakingAValue = new(StringComparer.Ordinal)
     {
         "--add-host", "--entrypoint", "--env", "--env-file", "--label", "--name",
@@ -151,10 +136,7 @@ public class ImageDeliveryShould
         "--workdir", "-e", "-l", "-p", "-u", "-v", "-w",
     };
 
-    /// <summary>
-    /// The images the deployment scripts start with <c>docker run</c>.
-    /// </summary>
-    /// <remarks>Shell is the third place an image reference lives, and dependabot does not read it.</remarks>
+    // Shell is the third place an image reference lives, and dependabot does not read it.
     private static List<string> ImagesRunByShellScripts()
     {
         var found = new List<string>();
@@ -180,10 +162,6 @@ public class ImageDeliveryShould
         return found;
     }
 
-    /// <summary>
-    /// The image of a <c>docker run</c>: the first argument that is neither an
-    /// option nor the value of one.
-    /// </summary>
     private static string? ImageOperandOf(string arguments)
     {
         var tokens = arguments

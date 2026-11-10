@@ -14,14 +14,9 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
-/// <summary>
-/// Who reads a dice roll.
-/// </summary>
-/// <remarks>
-/// A roll sent without "Показывать всем результаты бросков", and every roll of a
-/// game or a room that does not show the results to everybody, is read by the
-/// master, the assistants and the author of the post, who is the one that rolled.
-/// </remarks>
+// A roll sent without "Показывать всем результаты бросков", and every roll of a game or a room that
+// does not show the results to everybody, is read by the master, the assistants and the author of
+// the post, who is the one that rolled.
 public class PostDiceRollVisibilityShould : PostServiceTestBase
 {
     private static readonly Guid MasterId = Guid.Parse("3c1e0d22-0000-4000-8000-000000000001");
@@ -104,10 +99,8 @@ public class PostDiceRollVisibilityShould : PostServiceTestBase
         read.DiceRolls.Should().Equal(roll);
     }
 
-    /// <summary>
-    /// The post of a removed account is signed by nobody, and nobody is the id a
-    /// guest carries: the guest is not the one who rolled.
-    /// </summary>
+    // The post of a removed account is signed by nobody, and nobody is the id a guest carries: the
+    // guest is not the one who rolled.
     [Fact]
     public async Task LeaveAHiddenRollOutForAGuestOnAPostSignedByNobody()
     {

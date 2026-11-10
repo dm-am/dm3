@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every event type is one event type, on both sides of the wire.
-/// </summary>
 /// <remarks>
 /// The key binds the queue and the number travels in the body. Walked over the fields: Enum.GetValues
 /// folds a duplicated number into one entry.
@@ -69,10 +66,7 @@ public class EventRoutingKeysShould
                 "the consumer as the same event whatever they were published as");
     }
 
-    /// <summary>
-    /// A key is a name and not a pattern.
-    /// </summary>
-    /// <remarks>A wildcard widens the dispatcher's binding to events no generator handles.</remarks>
+    // A wildcard widens the dispatcher's binding to events no generator handles.
     [Fact]
     public void BindNothingButThemselves()
     {

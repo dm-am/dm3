@@ -15,9 +15,6 @@ using DomainUserAward = DM.Domain.Community.Features.Awards.UserAward;
 
 namespace DM.Web.API.Tests.Features.Moderation;
 
-/// <summary>
-/// The revoke route names the holder, and only that user's award goes.
-/// </summary>
 public class UserAwardRevocationShould : UnitTestBase
 {
     private readonly IAwardService _awardService = Mock<IAwardService>();

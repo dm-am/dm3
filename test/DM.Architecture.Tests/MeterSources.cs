@@ -7,10 +7,6 @@ using DM.Testing;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The instruments the sources declare, read as text, and the walk over the
-/// authored files that the rules about them share.
-/// </summary>
 /// <remarks>
 /// Two rule classes read the same declarations from opposite ends:
 /// ConsumerMetricsShould asks whether what a meter counts is registered and
@@ -21,12 +17,10 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 internal static class MeterSources
 {
-    /// <summary>Instrument declaration, as every metrics class spells it.</summary>
     internal static readonly Regex Instrument = new(
         @"Create(?:Counter|Histogram|UpDownCounter|ObservableGauge|ObservableCounter|Gauge)<[^>]+>\(\s*""(dm\.[a-z0-9._]+)""",
         RegexOptions.Compiled);
 
-    /// <summary>The instrument names of one meter, by the class that owns it.</summary>
     internal static IReadOnlyCollection<string> InstrumentsOf(string owner)
     {
         var source = MetricsSources()

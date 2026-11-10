@@ -9,8 +9,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { nextTick } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
-import { api, nav } from "./ChatView.doubles";
+import { api } from "./ChatView.doubles";
 import {
+  address,
   closeChat,
   feed,
   messagePage,
@@ -30,9 +31,6 @@ vi.mock("@/shared/ui/BBCodeEditor", async () =>
   (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeComposer(
     (await import("./ChatView.doubles")).clearSpy,
   ),
-);
-vi.mock("vue-router", async () =>
-  (await import("./ChatView.doubles")).vueRouter(),
 );
 
 beforeEach(resetChatView);
@@ -70,9 +68,9 @@ describe("ChatView, the menu of the correspondence", () => {
 
     expect(trigger(wrapper).attributes("aria-expanded")).toBe("true");
     expect(items(wrapper)).toEqual(["Перейти в профиль", "Очистить историю"]);
-    expect(
-      JSON.parse(wrapper.get('a[role="menuitem"]').attributes("data-to")!),
-    ).toEqual({ name: "profile", params: { username: "Bob" } });
+    expect(wrapper.get('a[role="menuitem"]').attributes("href")).toBe(
+      "/users/Bob",
+    );
   });
 
   it("offers only what the server allows", async () => {
@@ -323,6 +321,6 @@ describe("ChatView, the menu of the correspondence", () => {
       ownsRefusal: true,
       ownsRateLimit: true,
     });
-    expect(nav.push).toHaveBeenCalledWith({ name: "messenger" });
+    expect(address().fullPath).toBe("/messenger");
   });
 });

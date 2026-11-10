@@ -4,6 +4,7 @@
 
 import { computed } from "vue";
 import { useExpandable } from "@/shared/lib/composables/useExpandable";
+import type { ColumnAlign } from "@/shared/ui/DataTable";
 
 export interface ExpandableItem {
   id: string;
@@ -18,7 +19,7 @@ export interface ExpandableListColumn<
   key: keyof Row & string;
   label: string;
   width?: string;
-  align?: "left" | "center" | "right";
+  align?: ColumnAlign;
   bold?: boolean;
   /** As wide as its longest line and no wider: the columns without it share the room it leaves. */
   fit?: boolean;

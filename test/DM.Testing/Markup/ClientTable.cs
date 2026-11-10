@@ -11,9 +11,6 @@ namespace DM.Testing.Markup;
 public static class ClientTable
 {
     /// <summary>The JSON between "/* name:begin */" and "/* name:end */" of a file.</summary>
-    /// <param name="file">Full path of the client source</param>
-    /// <param name="name">Name of the marker pair</param>
-    /// <returns>The parsed table</returns>
     public static JsonNode Read(string file, string name)
     {
         var begin = $"/* {name}:begin */";

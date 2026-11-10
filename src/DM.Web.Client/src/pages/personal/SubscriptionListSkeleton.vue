@@ -6,17 +6,8 @@
  */
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 
-withDefaults(
-  defineProps<{
-    /** The rows of the section the real list is expected to have. */
-    rows?: number;
-  }>(),
-  { rows: 3 },
-);
-
-// Ragged widths, as real names are.
-const WIDTHS = ["45%", "35%", "55%", "40%", "50%"];
-const widthOf = (row: number) => WIDTHS[(row - 1) % WIDTHS.length];
+// Three rows of ragged widths, as real names are.
+const ROW_WIDTHS = ["45%", "35%", "55%"];
 </script>
 
 <template>
@@ -30,10 +21,8 @@ const widthOf = (row: number) => WIDTHS[(row - 1) % WIDTHS.length];
       ><span class="skeleton-bar skeleton-bar--title">&nbsp;</span></BlockTitle
     >
     <ul class="skeleton-list">
-      <li v-for="row in rows" :key="row">
-        <span class="skeleton-bar" :style="{ width: widthOf(row) }"
-          >&nbsp;</span
-        >
+      <li v-for="width in ROW_WIDTHS" :key="width">
+        <span class="skeleton-bar" :style="{ width }">&nbsp;</span>
       </li>
     </ul>
   </div>

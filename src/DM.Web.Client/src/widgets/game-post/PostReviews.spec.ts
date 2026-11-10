@@ -89,7 +89,7 @@ describe("GamePost review permalinks", () => {
 
 /** The sum opens the reviews; for a reader who may rate, the "+0" opens the first form. */
 describe("GamePost review sum", () => {
-  const unrated = { ...roomPost, reviewCount: 0, rating: 0 } as unknown as Post;
+  const unrated: Post = { ...roomPost, reviewCount: 0, rating: 0 };
 
   beforeEach(() => {
     localStorage.clear();
@@ -133,7 +133,7 @@ describe("GamePost review sum", () => {
       ...roomPost,
       reviewCount: 2,
       rating: -2,
-    } as unknown as Post);
+    });
 
     const sum = wrapper.get("button.rating-value");
     expect(sum.text()).toBe("-2");

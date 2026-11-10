@@ -13,14 +13,6 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 
-/// <summary>
-/// Publishing a domain event is an INSERT into the outbox, and the contract of
-/// SendAsync survives the change word for word.
-/// </summary>
-/// <remarks>
-/// A refusal is swallowed, logged and counted, every publication has an identity of its own, and the row
-/// holds every field the relay rebuilds the message from.
-/// </remarks>
 public class OutboxEventProducerShould
 {
     [Fact]
@@ -129,11 +121,8 @@ public class OutboxEventProducerShould
         FailSaves = failing,
     };
 
-    /// <summary>
-    /// The context under the producer, counting commits and refusing them on
-    /// demand: what the batch assertion and the degradation path need, and a
-    /// mocked DbSet could not answer for.
-    /// </summary>
+    // The context under the producer, counting commits and refusing them on demand: what the batch
+    // assertion and the degradation path need, and a mocked DbSet could not answer for.
     private sealed class CountingDbContext(DbContextOptions options) : DmDbContext(options)
     {
         public int SaveCalls { get; private set; }

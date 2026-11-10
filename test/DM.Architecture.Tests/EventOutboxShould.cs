@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The properties of the event outbox that no test of its behavior can hold.
-/// </summary>
 /// <remarks>
 /// Publishing an event is an INSERT into OutboxEvents and the relay alone talks to the exchange.
 /// Asserted on the sources for an order of calls or a SQL clause, on the assemblies for a count.
@@ -62,9 +59,6 @@ public class EventOutboxShould
             "has exactly one write with nothing to replay");
     }
 
-    /// <summary>
-    /// The claim locks what it takes and skips what is locked, and the mark follows the publish.
-    /// </summary>
     [Fact]
     public void ClaimWithSkipLockedAndMarkOnlyAfterPublishing()
     {

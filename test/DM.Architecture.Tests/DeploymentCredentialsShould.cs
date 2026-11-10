@@ -16,9 +16,6 @@ namespace DM.Architecture.Tests;
 /// <remarks>What a leaked configuration costs is decided by the account in it.</remarks>
 public class DeploymentCredentialsShould
 {
-    /// <summary>
-    /// Nothing but the initialisation connects to Postgres as the superuser.
-    /// </summary>
     /// <remarks>
     /// The superuser buys the server and COPY FROM PROGRAM, a database role one database. The
     /// connection strings and the script are read together; since Postgres 15 only the database
@@ -162,10 +159,7 @@ public class DeploymentCredentialsShould
             "generating apr1 long after the choice had been made once");
     }
 
-    /// <summary>
-    /// Nothing the ignore list names may also be tracked.
-    /// </summary>
-    /// <remarks>.gitignore has no effect on a path git already tracks; asserted over the whole list.</remarks>
+    // .gitignore has no effect on a path git already tracks; asserted over the whole list.
     [Fact]
     public void TrackNoFileTheIgnoreListClaimsToIgnore()
     {
@@ -176,7 +170,7 @@ public class DeploymentCredentialsShould
             "history, while the entry tells the next author that it is not");
     }
 
-    /// <remarks>A printed password stays in the terminal, the session history and the install log.</remarks>
+    // A printed password stays in the terminal, the session history and the install log.
     [Fact]
     public void PrintNoCredentialFromTheInstaller()
     {
@@ -190,7 +184,6 @@ public class DeploymentCredentialsShould
             "the terminal, the shell history and the install log keep whatever is printed here");
     }
 
-    /// <summary>Runs git at the repository root and returns its trimmed output.</summary>
     private static string Git(string arguments)
     {
         var (exitCode, output, error) = RepositoryFiles.Run("git", arguments);

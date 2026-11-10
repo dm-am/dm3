@@ -5,7 +5,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>A game of the seed as it is described before it is written.</summary>
     private sealed record GameTemplate
     {
         public required string Title { get; init; }
@@ -28,20 +27,11 @@ internal sealed partial class DataSeeder
 
         public required GameVariation Variation { get; init; }
 
-        /// <summary>The game the game-zone UI test fixtures are written into.</summary>
         public bool IsUiTestData { get; init; }
     }
 
-    /// <summary>
-    /// How much of a game the seed writes: its readers, its character limit, and
-    /// how many active characters, comments and posts it gets.
-    /// </summary>
     private sealed record GameVariation(int Readers, int? PcLimit, int ActiveChars, int Comments, int Posts);
 
-    /// <summary>
-    /// The games of the seed in the order they are written, and the size of each
-    /// in the same order.
-    /// </summary>
     private static class GameCatalog
     {
         // Tag identifiers from the InitialCreate migration
@@ -115,7 +105,6 @@ internal sealed partial class DataSeeder
             // Draft of a newbie master, private, awaiting premoderation
             new() { Title = "Моя первая игра", System = "Словеска", Setting = "Фэнтези", Status = Draft, Premod = Awaiting, Tags = new[] { tagSloveski, tagFantasy, tagForNewbies, tagNewbieMaster, tagPlotDriven, tagShortPost, tagNoSwearing }, Variation = new(Readers: 0, PcLimit: 4, ActiveChars: 0, Comments: 0, Posts: 0) },
             new() { Title = "Приключения начинаются", System = "D&D 5e", Setting = "Homebrew", Status = Draft, Premod = Awaiting, Tags = new[] { tagDnD5e, tagDnD, tagFantasy, tagForNewbies, tagNewbieMaster, tagDungeonCrawl, tagShortPost }, Variation = new(Readers: 0, PcLimit: 6, ActiveChars: 0, Comments: 0, Posts: 0) },
-            // Closed, finished
             new() { Title = "Легенда о Драконе", System = "D&D 3.5", Setting = "Homebrew", Status = Closed, ClosedReason = Finished, Tags = new[] { tagDnD, tagFantasy, tagPlotDriven, tagDungeonCrawl, tagAction, tagLiterary, tagSlowPace }, Variation = new(Readers: 30, PcLimit: 6, ActiveChars: 3, Comments: 85, Posts: 420) },
             new() { Title = "Падение Империи", System = "GURPS", Setting = "Roman Empire", Status = Closed, ClosedReason = Finished, Tags = new[] { tagGURPS, tagPlotDriven, tagLiterary, tagHistorical, tagAltHistory, tagStrategy, tagSlowPace, tagGrammarNazi }, Variation = new(Readers: 25, PcLimit: 5, ActiveChars: 3, Comments: 70, Posts: 350) },
             new() { Title = "Огни Неона", System = "Cyberpunk 2020", Setting = "Night City", Status = Closed, ClosedReason = Finished, Tags = new[] { tagInterlock, tagCyberpunk, tagSciFi, tagAction, tagPlotDriven, tagThriller, tagLiterary, tagSlowPace }, Variation = new(Readers: 20, PcLimit: 5, ActiveChars: 3, Comments: 55, Posts: 280) },
@@ -131,7 +120,6 @@ internal sealed partial class DataSeeder
             new() { Title = "Последняя Надежда", System = "Savage Worlds", Setting = "Zombie Apocalypse", Status = Closed, ClosedReason = Finished, Tags = new[] { tagSavageWorlds, tagPostApoc, tagZombie, tagSurvival, tagHorror, tagAction, tagShortPost, tagFastPace }, Variation = new(Readers: 2, PcLimit: 5, ActiveChars: 2, Comments: 15, Posts: 80) },
             new() { Title = "Хроники Нарнии", System = "Fate Core", Setting = "Narnia", Status = Closed, ClosedReason = Finished, Tags = new[] { tagFate, tagFantasy, tagForNewbies, tagPlotDriven, tagMystic, tagNoSwearing, tagNoViolence }, Variation = new(Readers: 1, PcLimit: 4, ActiveChars: 2, Comments: 12, Posts: 70) },
             new() { Title = "Город Ангелов", System = "World of Darkness", Setting = "Los Angeles", Status = Closed, ClosedReason = Finished, Tags = new[] { tagWoD, tagLiterary, tagPlotDriven, tagModern, tagHorror, tagMystic, tagThriller, tagSlowPace }, Variation = new(Readers: 0, PcLimit: 5, ActiveChars: 2, Comments: 10, Posts: 60) },
-            // Closed, frozen
             new() { Title = "Заброшенный Мир", System = "GURPS", Setting = "Post-Apocalypse", Status = Closed, ClosedReason = Frozen, Tags = new[] { tagGURPS, tagPostApoc, tagSurvival, tagPlotDriven, tagHorror, tagAction, tagDrySeasons }, Variation = new(Readers: 14, PcLimit: 6, ActiveChars: 0, Comments: 12, Posts: 65) },
             new() { Title = "Эхо Войны", System = "Savage Worlds", Setting = "WW2", Status = Closed, ClosedReason = Frozen, Tags = new[] { tagSavageWorlds, tagPlotDriven, tagHistorical, tagAction, tagTactics, tagShortPost, tagDrySeasons }, Variation = new(Readers: 8, PcLimit: 4, ActiveChars: 0, Comments: 8, Posts: 40) },
             new() { Title = "Забытые Руины", System = "D&D 5e", Setting = "Homebrew", Status = Closed, ClosedReason = Frozen, Tags = new[] { tagDnD5e, tagDnD, tagFantasy, tagDungeonCrawl, tagAction, tagPlotDriven, tagDrySeasons }, Variation = new(Readers: 4, PcLimit: 5, ActiveChars: 0, Comments: 5, Posts: 25) },

@@ -14,9 +14,6 @@ using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 
-/// <summary>
-/// Repository for forum topics (unified CRUD operations)
-/// </summary>
 internal partial class TopicRepository : ITopicRepository
 {
     private readonly DmDbContext _dbContext;
@@ -87,9 +84,6 @@ internal partial class TopicRepository : ITopicRepository
             .ThenByDescending(t => t.CreatedUtc)
             .ThenBy(t => t.TopicId), ct);
 
-    /// <summary>
-    /// The first topic of the query, counts filled.
-    /// </summary>
     private async Task<Topic?> ReadOne(IQueryable<DbTopic> topics, CancellationToken ct)
     {
         var topic = await topics
@@ -283,9 +277,6 @@ internal partial class TopicRepository : ITopicRepository
         return new TopicUpdateResult(updated, changed);
     }
 
-    /// <summary>
-    /// Takes the rows of the board a topic leaves and of the board it joins.
-    /// </summary>
     private async Task LockBoardsForMove(Guid topicId, Guid boardId)
     {
         // Ordering by identifier is arbitrary, which is all a lock order has
@@ -305,9 +296,6 @@ internal partial class TopicRepository : ITopicRepository
             topicId, boardId);
     }
 
-    /// <summary>
-    /// Writes the fields an edit names onto the tracked topic.
-    /// </summary>
     private static void ApplyEdit(DbTopic topic, UpdateTopicEntity updateTopic)
     {
         if (!string.IsNullOrEmpty(updateTopic.Title))
@@ -338,9 +326,6 @@ internal partial class TopicRepository : ITopicRepository
         }
     }
 
-    /// <summary>
-    /// Puts the topic into another board, under the next number of that board.
-    /// </summary>
     private async Task MoveToBoard(DbTopic topic, Guid boardId)
     {
         topic.BoardId = boardId;
@@ -360,10 +345,6 @@ internal partial class TopicRepository : ITopicRepository
         topic.TopicNumber = await NextTopicNumber(boardId);
     }
 
-    /// <summary>
-    /// Writes the edit into the history of the topic when the request changed it.
-    /// </summary>
-    /// <returns>Whether the request changed the topic.</returns>
     private bool RecordEdit(DbTopic topic, Guid editorUserId)
     {
         // The tracker is the one fact about whether this request changed anything:

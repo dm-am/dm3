@@ -22,14 +22,8 @@ public class BlacklistEntry
 /// </summary>
 public class CreateBlacklistEntryEntity
 {
-    /// <summary>
-    /// Entry identifier
-    /// </summary>
     public Guid EntryId { get; set; }
 
-    /// <summary>
-    /// Owner identifier (who is blocking)
-    /// </summary>
     public Guid OwnerId { get; set; }
 
     /// <summary>

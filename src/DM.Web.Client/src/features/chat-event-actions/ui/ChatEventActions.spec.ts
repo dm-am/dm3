@@ -8,6 +8,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import type { GlobalChatEvent } from "@/entities/global-chat";
 import type { User } from "@/shared/api/models/common";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 
 const { api } = vi.hoisted(() => ({
   api: {
@@ -29,8 +30,8 @@ import ChatEventActions from "./ChatEventActions.vue";
 
 const EVENT_ID = "e1";
 
-const person = (username: string) =>
-  ({ id: `u-${username}`, username, role: "RegularUser" }) as unknown as User;
+const person = (username: string): User =>
+  createMockUser(`u-${username}`, username);
 
 const event = (over: Partial<GlobalChatEvent> = {}): GlobalChatEvent => ({
   id: EVENT_ID,

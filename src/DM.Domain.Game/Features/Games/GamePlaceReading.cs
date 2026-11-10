@@ -6,10 +6,8 @@ using DM.Domain.Core.Authorization;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// Whether the viewer reads a game: by the read of the game itself, the one its
-/// discussion and its reviews are read through.
-/// </summary>
+// Whether the viewer reads a game: by the read of the game itself, the one its discussion and its
+// reviews are read through.
 internal class GamePlaceReading : IPlaceReading
 {
     private readonly IGameService _games;

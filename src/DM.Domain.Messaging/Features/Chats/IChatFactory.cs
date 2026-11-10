@@ -17,8 +17,5 @@ internal interface IChatFactory
     /// </summary>
     CreateChatEntity CreateGameRoom(Guid roomId, string title);
 
-    /// <summary>
-    /// Links of users to a chat, one per user
-    /// </summary>
     IEnumerable<CreateChatLinkEntity> CreateLinks(Guid chatId, IEnumerable<Guid> userIds);
 }

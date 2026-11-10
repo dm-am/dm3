@@ -4,7 +4,8 @@ import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import {
-  applySortAction,
+  reduceSortOrClear,
+  sortOrClearDispatchers,
   dateToApiEnd,
   dateToApiStart,
   parseDateFromUrl,
@@ -18,13 +19,14 @@ import type {
   PollStatus,
   PollsSearchParams,
 } from "@/entities/poll";
-import type { PollsFilterState } from "./types";
+import type { PollsFilterState, PollTypeFilter } from "./types";
 import {
   DEFAULT_FILTER_STATE,
   SORT_OPTIONS,
   STATUS_OPTIONS,
   POLL_TYPE_OPTIONS,
 } from "./types";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 export interface PollsFilterComposable {
   filterState: ComputedRef<PollsFilterState>;
@@ -32,26 +34,26 @@ export interface PollsFilterComposable {
   hasActiveFilters: ComputedRef<boolean>;
 
   setStatus: (status: PollStatus | "") => void;
-  setPollType: (pollType: "anonymous" | "public" | "") => void;
+  setPollType: (pollType: PollTypeFilter) => void;
   setSearch: (search: string) => void;
   setStartsFromUtc: (date: string) => void;
   setStartsToUtc: (date: string) => void;
   setEndsFromUtc: (date: string) => void;
   setEndsToUtc: (date: string) => void;
-  setSort: (sortBy: PollSortBy, sortOrder?: "asc" | "desc") => void;
+  setSort: (sortBy: PollSortBy, sortOrder?: SortDirection) => void;
   toggleSortOrder: () => void;
   clearFilters: () => void;
 }
 
 type PollsFilterAction =
   | { type: "SET_STATUS"; status: PollStatus | "" }
-  | { type: "SET_POLL_TYPE"; pollType: "anonymous" | "public" | "" }
+  | { type: "SET_POLL_TYPE"; pollType: PollTypeFilter }
   | { type: "SET_SEARCH"; search: string }
   | { type: "SET_STARTS_FROM"; date: string }
   | { type: "SET_STARTS_TO"; date: string }
   | { type: "SET_ENDS_FROM"; date: string }
   | { type: "SET_ENDS_TO"; date: string }
-  | { type: "SET_SORT"; sortBy: PollSortBy; sortOrder?: "asc" | "desc" }
+  | { type: "SET_SORT"; sortBy: PollSortBy; sortOrder?: SortDirection }
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
 
@@ -90,18 +92,13 @@ function reducer(
       newState.endsToUtc = action.date;
       return newState;
 
-    case "SET_SORT":
-    case "TOGGLE_SORT_ORDER":
-      applySortAction(newState, action, SORT_OPTIONS);
-      return newState;
-
-    case "CLEAR_FILTERS":
-      return createDefaultState();
-
-    default: {
-      const _exhaustive: never = action;
-      return _exhaustive;
-    }
+    default:
+      return reduceSortOrClear(
+        newState,
+        action,
+        SORT_OPTIONS,
+        createDefaultState,
+      );
   }
 }
 
@@ -128,7 +125,7 @@ function parseQueryToState(query: LocationQuery): PollsFilterState {
   if (query.pollType) {
     const pollTypeStr = String(query.pollType);
     if (validPollTypeValues.has(pollTypeStr)) {
-      state.pollType = pollTypeStr as "anonymous" | "public" | "";
+      state.pollType = pollTypeStr as PollTypeFilter;
     }
   }
 
@@ -175,6 +172,25 @@ function buildQueryFromState(state: PollsFilterState): Record<string, string> {
   return query;
 }
 
+// A day of the address is the whole day, as every other list asks for it.
+function filterToSearchParams(state: PollsFilterState): PollsSearchParams {
+  const params: PollsSearchParams = {};
+
+  if (state.status) params.status = state.status;
+  if (state.pollType === "anonymous") params.isAnonymous = true;
+  else if (state.pollType === "public") params.isAnonymous = false;
+  if (state.search) params.search = state.search;
+  if (state.startsFromUtc)
+    params.startsFromUtc = dateToApiStart(state.startsFromUtc);
+  if (state.startsToUtc) params.startsToUtc = dateToApiEnd(state.startsToUtc);
+  if (state.endsFromUtc) params.endsFromUtc = dateToApiStart(state.endsFromUtc);
+  if (state.endsToUtc) params.endsToUtc = dateToApiEnd(state.endsToUtc);
+  params.sortBy = state.sortBy;
+  params.sortOrder = state.sortOrder;
+
+  return params;
+}
+
 const dispatcher = createFilterDispatcher<PollsFilterState, PollsFilterAction>({
   buildQuery: buildQueryFromState,
   name: "usePollsFilter",
@@ -197,23 +213,8 @@ export function usePollsFilter(): PollsFilterComposable {
   const dispatch = (action: PollsFilterAction) =>
     dispatcher.dispatch(action, reducer, getCurrentState);
 
-  // A day of the address is the whole day, as every other list asks for it.
   const searchParams = computed<PollsSearchParams>(() => {
-    const state = filterState.value;
-    const params: PollsSearchParams = {};
-
-    if (state.status) params.status = state.status;
-    if (state.pollType === "anonymous") params.isAnonymous = true;
-    else if (state.pollType === "public") params.isAnonymous = false;
-    if (state.search) params.search = state.search;
-    if (state.startsFromUtc)
-      params.startsFromUtc = dateToApiStart(state.startsFromUtc);
-    if (state.startsToUtc) params.startsToUtc = dateToApiEnd(state.startsToUtc);
-    if (state.endsFromUtc)
-      params.endsFromUtc = dateToApiStart(state.endsFromUtc);
-    if (state.endsToUtc) params.endsToUtc = dateToApiEnd(state.endsToUtc);
-    params.sortBy = state.sortBy;
-    params.sortOrder = state.sortOrder;
+    const params = filterToSearchParams(filterState.value);
 
     const pageNumber = parsePageNumber(route.query.number);
     if (pageNumber) params.number = pageNumber;
@@ -238,7 +239,7 @@ export function usePollsFilter(): PollsFilterComposable {
 
   const setStatus = (status: PollStatus | "") =>
     dispatch({ type: "SET_STATUS", status });
-  const setPollType = (pollType: "anonymous" | "public" | "") =>
+  const setPollType = (pollType: PollTypeFilter) =>
     dispatch({ type: "SET_POLL_TYPE", pollType });
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search });
@@ -250,10 +251,8 @@ export function usePollsFilter(): PollsFilterComposable {
     dispatch({ type: "SET_ENDS_FROM", date });
   const setEndsToUtc = (date: string) =>
     dispatch({ type: "SET_ENDS_TO", date });
-  const setSort = (sortBy: PollSortBy, sortOrder?: "asc" | "desc") =>
-    dispatch({ type: "SET_SORT", sortBy, sortOrder });
-  const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-  const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
+  const { setSort, toggleSortOrder, clearFilters } =
+    sortOrClearDispatchers(dispatch);
 
   return {
     filterState,

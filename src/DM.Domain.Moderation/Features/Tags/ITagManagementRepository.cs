@@ -34,9 +34,6 @@ public interface ITagManagementRepository
 
     Task<Tag?> GetTag(Guid tagId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Check if a tag with the given title exists in the group
-    /// </summary>
     Task<bool> TagTitleExists(string title, Guid groupId, Guid? excludeId = null, CancellationToken ct = default);
 
     Task<Tag> CreateTag(CreateTag createTag, CancellationToken ct = default);

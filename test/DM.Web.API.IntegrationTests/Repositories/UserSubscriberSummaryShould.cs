@@ -10,9 +10,6 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The per-category subscriber counts on a user read.
-/// </summary>
 /// <remarks>
 /// The counts are FILTER aggregates over a bitwise predicate in the preview's GROUP BY, which no in-memory provider
 /// runs. The preview is capped at <see cref="SubscriptionPolicy.PreviewCap" />, so a category below the cap still
@@ -110,10 +107,8 @@ public class UserSubscriberSummaryShould : IntegrationTestBase
         user.Subscribers.Should().BeEmpty();
     }
 
-    /// <summary>
-    /// A fresh user. The fixture database is shared and seeded, so identifiers
-    /// and usernames have to be unique per test run.
-    /// </summary>
+    // The fixture database is shared and seeded, so identifiers and usernames have to be unique per
+    // test run.
     private static Task<Guid> AddUserAsync(
         DmDbContext dbContext, string prefix, DateTimeOffset? lastActivityUtc) =>
         UserRows.AddAsync(dbContext, prefix, lastActivityUtc);

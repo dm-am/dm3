@@ -1,8 +1,6 @@
 namespace DM.Domain.Game.Features.Rooms;
 
-/// <summary>
-/// One declaration, because creation and editing must agree.
-/// </summary>
+// One declaration, because creation and editing must agree.
 internal static class RoomFieldLimits
 {
     /// <summary>

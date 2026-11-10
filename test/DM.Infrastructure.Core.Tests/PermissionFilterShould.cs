@@ -8,10 +8,6 @@ using static DM.Infrastructure.Core.Tests.BbVisibilityRender;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The visibility filter over (tag, audience, role, context); a pure function, no container. [mod] and
-/// [private] have their own classes, this one holds the context of the reader.
-/// </summary>
 public class PermissionFilterShould
 {
     // An anonymous reader's id is Guid.Empty, as is a context field nobody filled in: no match on two empties.

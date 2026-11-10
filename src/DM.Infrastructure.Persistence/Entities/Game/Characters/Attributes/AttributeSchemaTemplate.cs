@@ -27,9 +27,6 @@ public class AttributeSchemaTemplate : IRemovable
     /// </summary>
     public string Title { get; set; } = null!;
 
-    /// <summary>
-    /// Attribute specifications
-    /// </summary>
     public List<AttributeSpecification> Specifications { get; set; } = [];
 
     /// <summary>

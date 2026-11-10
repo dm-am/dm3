@@ -7,7 +7,6 @@ import { mount } from "@vue/test-utils";
 import { IN_DIALOG } from "@/shared/ui/Layout/dialogContext";
 import DateInput from "./DateInput.vue";
 
-// "Today" for the bounds below: 28 September 2026.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 8, 28, 12, 0));
@@ -19,22 +18,17 @@ afterEach(() => {
 });
 
 describe("DateInput", () => {
-  const mountComponent = (props: Record<string, unknown> = {}) => {
-    return mount(DateInput, {
+  const mountComponent = (props: Record<string, unknown> = {}) =>
+    mount(DateInput, {
       props: {
         modelValue: null,
         ...props,
       },
       attachTo: document.body,
     });
-  };
 
   const inputOf = (wrapper: ReturnType<typeof mountComponent>) =>
     wrapper.find(".di-input").element as HTMLInputElement;
-
-  // ============================================================================
-  // DISPLAY
-  // ============================================================================
 
   describe("Display", () => {
     it("shows the model value as DD.MM.YYYY", () => {
@@ -50,10 +44,6 @@ describe("DateInput", () => {
       expect((input.element as HTMLInputElement).value).toBe("");
     });
   });
-
-  // ============================================================================
-  // MANUAL TYPING
-  // ============================================================================
 
   describe("Manual typing", () => {
     it("emits ISO value for DD.MM.YYYY input", async () => {
@@ -108,15 +98,7 @@ describe("DateInput", () => {
     });
   });
 
-  // ============================================================================
-  // WHAT IS NOT TAKEN
-  // ============================================================================
-
-  /**
-   * A text the field does not take stays in it, and the field says why. It
-   * used to be wiped on blur without a word: the reader saw the date they had
-   * typed vanish and the old one come back.
-   */
+  // A text the field does not take stays in it, and the field says why.
   describe("What is not taken", () => {
     const reasons = (wrapper: ReturnType<typeof mountComponent>) =>
       wrapper.emitted("reason")?.map(([value]) => value);
@@ -202,10 +184,6 @@ describe("DateInput", () => {
     });
   });
 
-  // ============================================================================
-  // DOTS AS YOU TYPE
-  // ============================================================================
-
   /**
    * The dots were three keystrokes nobody wanted to type: "14031991" did not
    * parse, and the field threw it away on blur.
@@ -246,10 +224,6 @@ describe("DateInput", () => {
     });
   });
 
-  // ============================================================================
-  // BOUNDS
-  // ============================================================================
-
   describe("Bounds", () => {
     it("does not take a typed date after max", async () => {
       const wrapper = mountComponent({ max: "2026-09-28" });
@@ -268,10 +242,6 @@ describe("DateInput", () => {
       expect(wrapper.emitted("update:modelValue")).toBeUndefined();
     });
   });
-
-  // ============================================================================
-  // CLEAR
-  // ============================================================================
 
   describe("Clear", () => {
     it("offers the cross only when the field holds something", () => {
@@ -300,10 +270,6 @@ describe("DateInput", () => {
       expect(document.activeElement).toBe(inputOf(wrapper));
     });
   });
-
-  // ============================================================================
-  // KEYBOARD
-  // ============================================================================
 
   describe("Keyboard", () => {
     const openByKey = async (wrapper: ReturnType<typeof mountComponent>) => {
@@ -356,10 +322,6 @@ describe("DateInput", () => {
     });
   });
 
-  // ============================================================================
-  // A FIELD OF A RANGE
-  // ============================================================================
-
   describe("A field of a range (bare)", () => {
     it("has no calendar, icon or cross of its own", async () => {
       const wrapper = mountComponent({ bare: true, modelValue: "2024-03-07" });
@@ -376,17 +338,12 @@ describe("DateInput", () => {
     });
   });
 
-  // ============================================================================
-  // CALENDAR POPOVER
-  // ============================================================================
-
   describe("Calendar popover", () => {
     it("opens on toggle button click and closes after picking a day", async () => {
       const wrapper = mountComponent({ modelValue: "2024-03-07" });
       await wrapper.find(".di-toggle").trigger("click");
       expect(wrapper.find(".calendar-grid").exists()).toBe(true);
 
-      // The 15th of the visible month (March 2024)
       const day = wrapper.findAll(".dp-day").find((d) => d.text() === "15");
       expect(day).toBeTruthy();
       await day!.trigger("click");
@@ -469,10 +426,6 @@ describe("DateInput", () => {
   });
 });
 
-// ============================================================================
-// CLICK
-// ============================================================================
-
 describe("DateInput by click", () => {
   it("opens the calendar on a click, and a second click keeps it open", async () => {
     const wrapper = mount(DateInput, {
@@ -487,10 +440,6 @@ describe("DateInput by click", () => {
     expect(wrapper.find(".calendar-grid").exists()).toBe(true);
   });
 });
-
-// ============================================================================
-// IN A WINDOW
-// ============================================================================
 
 describe("DateInput in a window", () => {
   it("is told by the window, and takes its measure", () => {

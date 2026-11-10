@@ -171,6 +171,9 @@ function initialiser(
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
+/** Reads a span of a module one level further down, as the expression around it is read. */
+type Reread = (from: number, to: number) => string[];
+
 /**
  * Keys that can reach the object an expression denotes.
  *
@@ -198,100 +201,135 @@ function keysOf(
   const lead = masked.length - masked.trimStart().length;
   const start = from + lead;
   const tail = masked.trimEnd().length;
+  const reread: Reread = (a, b) =>
+    keysOf(mod, a, b, at, floor, depth + 1, seen);
 
   // `condition ? a : b` — both branches are the request on some run.
-  const question = splitTopLevel(masked, "?");
-  if (question.length > 1) {
-    const branches = splitTopLevel(masked.slice(question[0][1] + 1), ":");
-    if (branches.length > 1) {
-      const base = from + question[0][1] + 1;
-      return [
-        ...keysOf(
-          mod,
-          base + branches[0][0],
-          base + branches[0][1],
-          at,
-          floor,
-          depth + 1,
-          seen,
-        ),
-        ...keysOf(
-          mod,
-          base + branches[1][0],
-          base + branches[1][1],
-          at,
-          floor,
-          depth + 1,
-          seen,
-        ),
-      ];
-    }
-  }
+  const branches = conditionalBranches(masked, from);
+  if (branches) return branches.flatMap(([a, b]) => reread(a, b));
 
   if (text.startsWith("(") && matchBracket(masked, lead) === tail - 1) {
-    return keysOf(mod, start + 1, from + tail - 1, at, floor, depth + 1, seen);
+    return reread(start + 1, from + tail - 1);
   }
 
   if (text.startsWith("{")) {
-    const keys = literalKeys(raw);
-    const inner = masked.slice(lead + 1, tail - 1);
-    for (const [a, b] of splitTopLevel(inner, ",")) {
-      const spread = inner.slice(a, b).indexOf("...");
-      if (spread < 0) continue;
-      const base = start + 1 + a + spread + 3;
-      keys.push(
-        ...keysOf(mod, base, start + 1 + b, at, floor, depth + 1, seen),
-      );
-    }
-    return keys;
+    return objectKeys(raw, masked.slice(lead + 1, tail - 1), start + 1, reread);
   }
 
   const call = /^(?:this\.)?([A-Za-z_$][\w$]*)\s*\(/.exec(text);
-  if (call) {
-    const keys: string[] = [];
-    for (const target of [mod, ...SOURCES]) {
-      const bodies = functionBodies(target, call[1]);
-      if (bodies.length === 0) continue;
-      for (const [bodyStart, bodyEnd] of bodies) {
-        const token = `${target.path}:body:${bodyStart}`;
-        if (seen.has(token)) continue;
-        const inner = new Set(seen).add(token);
+  if (call) return returnedKeys(mod, call[1], depth, seen);
 
-        const returns = /\breturn\b/g;
-        const body = target.masked.slice(bodyStart, bodyEnd);
-        let statement: RegExpExecArray | null;
-        while ((statement = returns.exec(body)) !== null) {
-          const exprStart = bodyStart + statement.index + statement[0].length;
-          let exprEnd = exprStart;
-          let nesting = 0;
-          while (exprEnd < bodyEnd) {
-            const ch = target.masked[exprEnd];
-            if ("([{".includes(ch)) nesting++;
-            else if (")]}".includes(ch)) nesting--;
-            else if (nesting === 0 && (ch === ";" || ch === "\n")) break;
-            exprEnd++;
-          }
-          keys.push(
-            ...keysOf(
-              target,
-              exprStart,
-              exprEnd,
-              exprEnd,
-              bodyStart,
-              depth + 1,
-              new Set(inner),
-            ),
-          );
-        }
-      }
-      break;
-    }
-    return keys;
+  return nameKeys(mod, text, at, floor, depth, seen);
+}
+
+/** The two branches of `condition ? a : b` in a span starting at `from`, or null. */
+function conditionalBranches(
+  masked: string,
+  from: number,
+): [[number, number], [number, number]] | null {
+  const question = splitTopLevel(masked, "?");
+  if (question.length < 2) return null;
+  const branches = splitTopLevel(masked.slice(question[0][1] + 1), ":");
+  if (branches.length < 2) return null;
+  const base = from + question[0][1] + 1;
+  return [
+    [base + branches[0][0], base + branches[0][1]],
+    [base + branches[1][0], base + branches[1][1]],
+  ];
+}
+
+/** An object literal: its own keys, and those of every spread, `inner` read from `innerStart`. */
+function objectKeys(
+  raw: string,
+  inner: string,
+  innerStart: number,
+  reread: Reread,
+): string[] {
+  const keys = literalKeys(raw);
+  for (const [a, b] of splitTopLevel(inner, ",")) {
+    const spread = inner.slice(a, b).indexOf("...");
+    if (spread < 0) continue;
+    keys.push(...reread(innerStart + a + spread + 3, innerStart + b));
   }
+  return keys;
+}
 
-  const name = text.replace(/\.value$/, "");
-  if (!IDENTIFIER.test(name)) return [];
+/** A call: what the body of the function it calls returns, in the first module that has one. */
+function returnedKeys(
+  mod: Module,
+  name: string,
+  depth: number,
+  seen: Set<string>,
+): string[] {
+  const keys: string[] = [];
+  for (const target of [mod, ...SOURCES]) {
+    const bodies = functionBodies(target, name);
+    if (bodies.length === 0) continue;
+    for (const [bodyStart, bodyEnd] of bodies) {
+      const token = `${target.path}:body:${bodyStart}`;
+      if (seen.has(token)) continue;
+      const inner = new Set(seen).add(token);
+      for (const [exprStart, exprEnd] of returnedSpans(
+        target,
+        bodyStart,
+        bodyEnd,
+      )) {
+        keys.push(
+          ...keysOf(
+            target,
+            exprStart,
+            exprEnd,
+            exprEnd,
+            bodyStart,
+            depth + 1,
+            new Set(inner),
+          ),
+        );
+      }
+    }
+    break;
+  }
+  return keys;
+}
 
+/** The expression of every `return` in a function body, as spans. */
+function returnedSpans(
+  target: Module,
+  bodyStart: number,
+  bodyEnd: number,
+): [number, number][] {
+  const spans: [number, number][] = [];
+  const returns = /\breturn\b/g;
+  const body = target.masked.slice(bodyStart, bodyEnd);
+  let statement: RegExpExecArray | null;
+  while ((statement = returns.exec(body)) !== null) {
+    const exprStart = bodyStart + statement.index + statement[0].length;
+    spans.push([exprStart, statementEnd(target.masked, exprStart, bodyEnd)]);
+  }
+  return spans;
+}
+
+/** Where a statement starting at `from` ends: a top-level `;` or line break, or `to`. */
+function statementEnd(masked: string, from: number, to: number): number {
+  let end = from;
+  let nesting = 0;
+  while (end < to) {
+    const ch = masked[end];
+    if ("([{".includes(ch)) nesting++;
+    else if (")]}".includes(ch)) nesting--;
+    else if (nesting === 0 && (ch === ";" || ch === "\n")) break;
+    end++;
+  }
+  return end;
+}
+
+/** The declaration of `name` nearest above `at`: inside `floor` if there is one there, else anywhere above. */
+function nearestDeclaration(
+  mod: Module,
+  name: string,
+  at: number,
+  floor: number,
+): number {
   const declaration = new RegExp(`\\b(?:const|let|var)\\s+${name}\\b`, "g");
   let nearest = -1;
   let found: RegExpExecArray | null;
@@ -306,6 +344,22 @@ function keysOf(
       nearest = found.index;
     }
   }
+  return nearest;
+}
+
+/** A name: the keys of its initialiser, and of every `x.key =` written before `at`. */
+function nameKeys(
+  mod: Module,
+  text: string,
+  at: number,
+  floor: number,
+  depth: number,
+  seen: Set<string>,
+): string[] {
+  const name = text.replace(/\.value$/, "");
+  if (!IDENTIFIER.test(name)) return [];
+
+  const nearest = nearestDeclaration(mod, name, at, floor);
   if (nearest < 0) return [];
 
   const token = `${mod.path}:name:${nearest}`;

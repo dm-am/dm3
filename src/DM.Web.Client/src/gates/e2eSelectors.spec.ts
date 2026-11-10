@@ -110,6 +110,14 @@ const namesIn = (selector: string): Named => {
   return { classes, ids };
 };
 
+/** Sass and CSS files are all selectors; a .vue file holds its own after <style>. */
+const styleRulesOf = (file: string, text: string): string => {
+  if (file.endsWith(".vue"))
+    return text.slice(Math.max(0, text.indexOf("<style")));
+  if (file.endsWith(".sass") || file.endsWith(".css")) return text;
+  return "";
+};
+
 /**
  * The client's own vocabulary. Class attributes give their whole value;
  * bound ones (`:class`) give only their quoted literals, because the rest of
@@ -154,13 +162,8 @@ const vocabulary = (): {
       }
     }
 
-    // Style rules: `.chat-preview`, `#app`. Sass and CSS files are all
-    // selectors; a .vue file holds its own after <style>.
-    const styles = file.endsWith(".vue")
-      ? text.slice(Math.max(0, text.indexOf("<style")))
-      : file.endsWith(".sass") || file.endsWith(".css")
-        ? text
-        : "";
+    // Style rules: `.chat-preview`, `#app`.
+    const styles = styleRulesOf(file, text);
     for (const [, name] of styles.matchAll(/\.([A-Za-z][\w-]*)/g)) {
       classes.add(name);
     }

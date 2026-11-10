@@ -3,11 +3,7 @@
 
 import { defineStore } from "pinia";
 import { computed, ref, type ComputedRef, type Ref } from "vue";
-import type {
-  GeneralError,
-  PagingInfo,
-  User,
-} from "@/shared/api/models/common";
+import type { GeneralError, PagingInfo } from "@/shared/api/models/common";
 import type {
   Blog,
   BlogPremoderationTransition,
@@ -22,6 +18,7 @@ import { unwrapResource } from "@/shared/api/envelope";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import { createCommentSection } from "@/shared/lib/composables/createCommentSection";
+import { createListSlice } from "@/shared/lib/composables/createListSlice";
 import { requestNotSent } from "@/shared/lib/errors";
 // Deleting a blog drops the list caches; the list store must not import this one back.
 import { useBlogsStore } from "./store";
@@ -72,30 +69,28 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     currentUsername: () => currentUsername.value,
   });
 
-  const blacklist = ref<User[]>([]);
-  const blacklistLoading = ref(false);
-  const blacklistError = ref<string | null>(null);
-
-  const users = ref<BlogUser[]>([]);
-  const usersLoading = ref(false);
-  const usersError = ref<string | null>(null);
-
+  const blacklist = createListSlice(
+    (blogId) => blogApi.getBlacklist(blogId),
+    "Не удалось загрузить черный список",
+  );
+  const users = createListSlice(
+    (blogId) => blogApi.getUsers(blogId),
+    "Не удалось загрузить участников",
+  );
   // isSubscribed is read off the readers: the blog carries no participation flags.
-  const readers = ref<BlogUser[]>([]);
-  const readersLoading = ref(false);
-  const readersError = ref<string | null>(null);
+  const readers = createListSlice(
+    (blogId) => blogApi.getReaders(blogId),
+    "Не удалось загрузить читателей",
+  );
 
   // One token per slice, so a slower reply for the blog already left cannot win by landing last.
-  const blacklistGuard = createRequestGuard();
-  const usersGuard = createRequestGuard();
-  const readersGuard = createRequestGuard();
   const detailGuards = [
     blogGuard,
     publicationsGuard,
     commentsGuard,
-    blacklistGuard,
-    usersGuard,
-    readersGuard,
+    blacklist.guard,
+    users.guard,
+    readers.guard,
   ];
 
   const {
@@ -105,71 +100,14 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     isMentor,
     canUseNotepad,
     isSubscribed,
-  } = createBlogRoles(blog, readers, currentUsername);
-
-  async function loadBlacklist(blogId: string): Promise<void> {
-    const requestId = blacklistGuard.next();
-    blacklistLoading.value = true;
-    blacklistError.value = null;
-
-    const { data, error } = await blogApi.getBlacklist(blogId);
-
-    if (!blacklistGuard.isCurrent(requestId)) return;
-
-    if (error) {
-      blacklistError.value = "Не удалось загрузить черный список";
-      blacklist.value = [];
-    } else if (data) {
-      blacklist.value = data.resources;
-    }
-
-    blacklistLoading.value = false;
-  }
-
-  async function loadUsers(blogId: string): Promise<void> {
-    const requestId = usersGuard.next();
-    usersLoading.value = true;
-    usersError.value = null;
-
-    const { data, error } = await blogApi.getUsers(blogId);
-
-    if (!usersGuard.isCurrent(requestId)) return;
-
-    if (error) {
-      usersError.value = "Не удалось загрузить участников";
-      users.value = [];
-    } else if (data) {
-      users.value = data.resources;
-    }
-
-    usersLoading.value = false;
-  }
-
-  async function loadReaders(blogId: string): Promise<void> {
-    const requestId = readersGuard.next();
-    readersLoading.value = true;
-    readersError.value = null;
-
-    const { data, error } = await blogApi.getReaders(blogId);
-
-    if (!readersGuard.isCurrent(requestId)) return;
-
-    if (error) {
-      readersError.value = "Не удалось загрузить читателей";
-      readers.value = [];
-    } else if (data) {
-      readers.value = data.resources;
-    }
-
-    readersLoading.value = false;
-  }
+  } = createBlogRoles(blog, readers.items, currentUsername);
 
   const { rubrics, createRubric, deleteRubric } = createRubrics(blog, loadBlog);
   const { transitionStatus, changePremoderation, deleteBlog } =
     createBlogChanges(blog, loadBlog);
   const { subscribe, unsubscribe } = createSubscriptionChanges(
     blog,
-    loadReaders,
+    readers.load,
   );
 
   function reset(): void {
@@ -184,17 +122,9 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     commentsLoading.value = false;
     commentsError.value = false;
 
-    blacklist.value = [];
-    blacklistLoading.value = false;
-    blacklistError.value = null;
-
-    users.value = [];
-    usersLoading.value = false;
-    usersError.value = null;
-
-    readers.value = [];
-    readersLoading.value = false;
-    readersError.value = null;
+    blacklist.reset();
+    users.reset();
+    readers.reset();
   }
 
   return {
@@ -211,15 +141,15 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     commentsPaging,
     commentsLoading,
     commentsError,
-    blacklist,
-    blacklistLoading,
-    blacklistError,
-    users,
-    usersLoading,
-    usersError,
-    readers,
-    readersLoading,
-    readersError,
+    blacklist: blacklist.items,
+    blacklistLoading: blacklist.loading,
+    blacklistError: blacklist.error,
+    users: users.items,
+    usersLoading: users.loading,
+    usersError: users.error,
+    readers: readers.items,
+    readersLoading: readers.loading,
+    readersError: readers.error,
 
     // Computed
     rubrics,
@@ -238,9 +168,9 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     deleteComment,
     likeComment,
     unlikeComment,
-    loadBlacklist,
-    loadUsers,
-    loadReaders,
+    loadBlacklist: blacklist.load,
+    loadUsers: users.load,
+    loadReaders: readers.load,
     transitionStatus,
     changePremoderation,
     deleteBlog,

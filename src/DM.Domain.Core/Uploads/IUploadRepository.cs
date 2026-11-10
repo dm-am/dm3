@@ -40,7 +40,6 @@ public interface IUploadRepository
     /// never leave the server. Asking for it is a separate, named act, so a
     /// projection that grows a field cannot carry it out by accident.
     /// </remarks>
-    /// <param name="uploadId">Upload identifier.</param>
     Task<string?> GetObjectKeyAsync(Guid uploadId);
 
     /// <summary>
@@ -51,7 +50,6 @@ public interface IUploadRepository
     /// projects rows for a screen, and this is a limit check on a write path that
     /// needs one number.
     /// </remarks>
-    /// <param name="postId">Post identifier.</param>
     Task<int> CountPostAttachmentsAsync(Guid postId);
 
     /// <summary>
@@ -77,7 +75,6 @@ public interface IUploadRepository
     /// it must be able to tell that case from a bug on its own side without
     /// catching the ORM's exception type.
     /// </remarks>
-    /// <param name="upload">Values of the row to create.</param>
     Task<StoredUpload> AddAsync(NewUpload upload);
 
     /// <summary>
@@ -180,7 +177,6 @@ public class NewUpload
     /// <summary>MIME content type.</summary>
     public string ContentType { get; init; } = null!;
 
-    /// <summary>File size in bytes.</summary>
     public long SizeBytes { get; init; }
 
     /// <summary>

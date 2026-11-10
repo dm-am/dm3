@@ -1,15 +1,14 @@
 import { vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import type { BadRequestError } from "@/shared/api/models/common";
 import LoginForm from "./LoginForm.vue";
 import {
   completeSecondFactor,
-  push,
   recover,
   signIn,
   toast,
 } from "./authForms.doubles";
-import { problem } from "./authForms.fixtures";
+import { mountAuthForm, problem } from "./authForms.fixtures";
 
 export const refused = (
   status: number,
@@ -33,13 +32,13 @@ const clock = { now: 0 };
 
 // Attached: focus and selection are only observable in a document.
 export const mountForm = (prefillEmail?: string) =>
-  mount(LoginForm, {
+  mountAuthForm(LoginForm, {
     props: prefillEmail === undefined ? {} : { prefillEmail },
     attachTo: document.body,
   });
 
 export async function submitCredentials(email = "reader@dm.am") {
-  const wrapper = mountForm();
+  const wrapper = await mountForm();
   await flushPromises();
 
   clock.now += 10_000;
@@ -85,7 +84,6 @@ export function resetLoginForm() {
   signIn.mockReset();
   completeSecondFactor.mockReset();
   recover.mockReset();
-  push.mockReset();
   toast.error.mockReset();
   toast.warning.mockReset();
   return () => {

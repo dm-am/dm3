@@ -4,28 +4,18 @@ using System.Text.RegularExpressions;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// An object initializer read out of a source file: where it ends, what it holds
-/// and the name every member of it is written under.
-/// </summary>
 /// <remarks>
 /// Shared by the two rules that read notification payloads. A member carries a name of its own or
 /// borrows the last segment of its expression; a payload built outside an initializer fails them.
 /// </remarks>
 internal static class ObjectInitializer
 {
-    /// <summary>"Name = expression": a member of the payload spelled out.</summary>
     private static readonly Regex NamedMember = new(
         @"^\s*([A-Za-z_]\w*)\s*=(?!=)", RegexOptions.Compiled);
 
-    /// <summary>"source.Name": a member that borrows its name from the source.</summary>
     private static readonly Regex BorrowedMember = new(
         @"\.\s*([A-Za-z_]\w*)\s*$", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Members of one object initializer, both spellings of a member.
-    /// </summary>
-    /// <param name="body">The text between the braces of the initializer.</param>
     internal static IEnumerable<string> Members(string body)
     {
         foreach (var member in TopLevelParts(body))
@@ -45,11 +35,6 @@ internal static class ObjectInitializer
         }
     }
 
-    /// <summary>
-    /// Splits an initializer at the commas that belong to it, leaving alone those
-    /// inside a nested call, collection or literal.
-    /// </summary>
-    /// <param name="body">The text between the braces of the initializer.</param>
     internal static IEnumerable<string> TopLevelParts(string body)
     {
         var depth = 0;
@@ -79,9 +64,6 @@ internal static class ObjectInitializer
         yield return body.Substring(start);
     }
 
-    /// <summary>Index of the brace that closes the one opened at the given position.</summary>
-    /// <param name="source">The text the initializer is written in.</param>
-    /// <param name="opening">Index of the brace that opens it.</param>
     internal static int ClosingBrace(string source, int opening)
     {
         var depth = 0;

@@ -1,33 +1,20 @@
 /**
- * @vitest-environment node
+ * @vitest-environment jsdom
  */
 
 /**
  * Which part of a chat's history the feed shows: a day picked in the
  * calendar, a message a link or a search lands on, the way back to the latest
- * messages and the catch-up that makes an archive window live again. The
- * address is a stand-in that moves when the window moves it, so a change of
- * ?date reaches the window the way a navigation does.
+ * messages and the catch-up that makes an archive window live again, on the
+ * real router: a change of ?date reaches the window as a navigation.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { effectScope, nextTick, reactive, ref, type EffectScope } from "vue";
+import { defineComponent, nextTick, reactive, ref } from "vue";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
+import type { RouteLocationNormalized, Router } from "vue-router";
 import type { Message } from "@/shared/api/models/common";
 import { LANDING_SCROLL_MS } from "@/shared/lib/composables/useAnchoredInfiniteScroll";
-
-type Location = { name: string; query?: Record<string, string> };
-
-const nav = vi.hoisted(() => ({
-  route: { query: {} as Record<string, string> },
-  router: {
-    push: vi.fn<(to: Location) => void>(),
-    replace: vi.fn<(to: Location) => void>(),
-  },
-}));
-
-vi.mock("vue-router", () => ({
-  useRoute: () => nav.route,
-  useRouter: () => nav.router,
-}));
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 
 import {
   MESSAGE_GONE_NOTICE,
@@ -35,12 +22,22 @@ import {
   useChatHistoryWindow,
 } from "./useChatHistoryWindow";
 
+enableAutoUnmount(afterEach);
+
+const routes: Address[] = [["global-chat", "/chat"]];
+
+/** The router of the window last opened, and every navigation after it opened. */
+let router: Router;
+let moves: RouteLocationNormalized[];
+const address = () => router.currentRoute.value.fullPath;
+
 const message = (id: string, createdUtc: string) =>
   ({ id, createdUtc }) as Message;
 
-/** A chat whose store answers as the test sets it, behind a feed that records. */
-function chatWindow(
+/** A chat at the address, whose store answers as the test sets it, behind a feed that records. */
+async function chatWindow(
   over: {
+    at?: string;
     held?: Message[];
     landed?: boolean;
     failed?: boolean;
@@ -73,36 +70,35 @@ function chatWindow(
       if (over.found) state.held = over.found(id);
     }),
   };
-  const history = scope.run(() =>
-    useChatHistoryWindow({
-      feed: ref(feed),
-      location: () => ({ name: "global-chat", query: { page: "2" } }),
-      messages: () => state.held,
-      loading: () => state.loading,
-      failed: () => state.failed,
-      hasMoreAfter: () => state.hasMoreAfter,
-      landedOnRequestedDate: () => over.landed ?? true,
-      load,
-    }),
-  )!;
+  let history!: ReturnType<typeof useChatHistoryWindow>;
+  const Shell = defineComponent({
+    setup() {
+      history = useChatHistoryWindow({
+        feed: ref(feed),
+        location: () => ({ name: "global-chat", query: { page: "2" } }),
+        messages: () => state.held,
+        loading: () => state.loading,
+        failed: () => state.failed,
+        hasMoreAfter: () => state.hasMoreAfter,
+        landedOnRequestedDate: () => over.landed ?? true,
+        load,
+      });
+      return () => null;
+    },
+  });
+  moves = [];
+  ({ router } = await mountPage(Shell, over.at ?? "/chat", {
+    routes,
+    beforeMount: (r) => r.afterEach((to) => void moves.push(to)),
+  }));
   return { history, feed, load, state };
 }
 
-let scope: EffectScope;
-
 beforeEach(() => {
   vi.clearAllMocks();
-  scope = effectScope();
-  nav.route = reactive({ query: {} });
-  const go = (to: Location) => {
-    nav.route.query = { ...(to.query ?? {}) };
-  };
-  nav.router.push.mockImplementation(go);
-  nav.router.replace.mockImplementation(go);
 });
 
 afterEach(() => {
-  scope.stop();
   vi.useRealTimers();
 });
 
@@ -120,53 +116,55 @@ describe("a day picked in the calendar", () => {
     message("m8", "2026-10-08T12:00:00Z"),
   ];
 
-  beforeEach(() => {
-    nav.route.query = { date: "2026-10-02" };
-  });
+  const ON_THE_SECOND = "/chat?date=2026-10-02";
 
   it("goes into the address with the rest of its query, and the window follows it", async () => {
-    nav.route.query = {};
-    const { history, load } = chatWindow({ held: NEAR_THE_SECOND });
+    const { history, load } = await chatWindow({ held: NEAR_THE_SECOND });
 
     history.pickDate("2026-10-02");
-    await nextTick();
+    await flushPromises();
 
-    expect(nav.router.push).toHaveBeenCalledWith({
-      name: "global-chat",
-      query: { page: "2", date: "2026-10-02" },
-    });
+    expect(address()).toBe("/chat?page=2&date=2026-10-02");
     expect(load.date).toHaveBeenCalledWith("2026-10-02");
     expect(history.selectedDate.value).toBe("2026-10-02");
+    // A new entry of the history: Back returns to the address before the pick.
+    router.back();
+    await flushPromises();
+    expect(address()).toBe("/chat");
   });
 
-  it("is no move at all when nothing is picked", () => {
-    const { history } = chatWindow();
+  it("is no move at all when nothing is picked", async () => {
+    const { history } = await chatWindow({ at: ON_THE_SECOND });
 
     history.pickDate("");
+    await flushPromises();
 
-    expect(nav.router.push).not.toHaveBeenCalled();
+    expect(moves).toHaveLength(0);
+    expect(address()).toBe(ON_THE_SECOND);
   });
 
   it("stays picked over the window near it, though no message is on it", async () => {
-    const { history, feed, load } = chatWindow({
+    const { history, feed, load } = await chatWindow({
+      at: ON_THE_SECOND,
       held: NEAR_THE_SECOND,
       hasMoreAfter: true,
     });
 
     await history.loadDate("2026-10-02");
-    await nextTick();
+    await flushPromises();
 
     expect(history.selectedDate.value).toBe("2026-10-02");
     expect(history.notice.value).toBeNull();
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(moves).toHaveLength(0);
+    expect(address()).toBe(ON_THE_SECOND);
     expect(load.latest).not.toHaveBeenCalled();
     // The top of the window, m1 before the day, and not m6 after it.
     expect(feed.scrollToMessage).toHaveBeenCalledWith("m1", "start");
   });
 
   it("opens at the first message of the day where the day has one", async () => {
-    nav.route.query = { date: "2026-10-07" };
-    const { history, feed } = chatWindow({
+    const { history, feed } = await chatWindow({
+      at: "/chat?date=2026-10-07",
       held: NEAR_THE_SECOND,
       hasMoreAfter: true,
     });
@@ -180,27 +178,36 @@ describe("a day picked in the calendar", () => {
 
   it("is dropped, with a line naming it, where the store found nothing near it", async () => {
     // The store's own fallback: the latest messages are in already.
-    const { history, load } = chatWindow({
+    const { history, load } = await chatWindow({
+      at: ON_THE_SECOND,
       held: NEAR_THE_SECOND,
       landed: false,
       hasMoreAfter: true,
     });
 
     await history.loadDate("2026-10-02");
+    await flushPromises();
 
     expect(history.selectedDate.value).toBe("");
-    expect(nav.router.replace).toHaveBeenCalledWith({
-      name: "global-chat",
-      query: { page: "2" },
-    });
+    expect(address()).toBe("/chat?page=2");
     expect(history.notice.value).toBe(
       "За 02.10.2026 сообщений нет, показаны последние сообщения",
     );
     expect(load.latest).not.toHaveBeenCalled();
+    // The dropped day takes its own place: Back does not bring it back to load again.
+    const loads = load.date.mock.calls.length;
+    router.back();
+    await flushPromises();
+    expect(address()).toBe("/chat?page=2");
+    expect(load.date).toHaveBeenCalledTimes(loads);
   });
 
   it("is dropped without a line where the request failed", async () => {
-    const { history } = chatWindow({ landed: false, failed: true });
+    const { history } = await chatWindow({
+      at: ON_THE_SECOND,
+      landed: false,
+      failed: true,
+    });
 
     await history.loadDate("2026-10-02");
 
@@ -209,7 +216,8 @@ describe("a day picked in the calendar", () => {
   });
 
   it("is dropped when the reader goes back to the latest messages", async () => {
-    const { history } = chatWindow({
+    const { history } = await chatWindow({
+      at: ON_THE_SECOND,
       held: NEAR_THE_SECOND,
       hasMoreAfter: true,
     });
@@ -227,21 +235,21 @@ describe("a day picked in the calendar", () => {
 
 describe("a message a link or a search lands on", () => {
   it("lands on it with the sentinels asleep until the landing has settled", async () => {
-    vi.useFakeTimers();
-    nav.route.query = { date: "2026-10-02" };
+    // setImmediate stays real: flushPromises waits on it for the navigation.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const found = [
       message("m1", "2026-10-01T00:00:00Z"),
       message("hit", "2026-10-01T01:00:00Z"),
     ];
-    const { history, feed, load } = chatWindow({ found: () => found });
+    const { history, feed, load } = await chatWindow({
+      at: "/chat?date=2026-10-02",
+      found: () => found,
+    });
 
     await history.landOnMessage("hit");
-    await nextTick();
+    await flushPromises();
 
-    expect(nav.router.replace).toHaveBeenCalledWith({
-      name: "global-chat",
-      query: { page: "2" },
-    });
+    expect(address()).toBe("/chat?page=2");
     expect(history.selectedDate.value).toBe("");
     expect(feed.suspendInfiniteScroll).toHaveBeenCalled();
     expect(load.message).toHaveBeenCalledWith("hit");
@@ -251,10 +259,14 @@ describe("a message a link or a search lands on", () => {
     expect(feed.resumeInfiniteScroll).toHaveBeenCalledOnce();
     expect(load.latest).not.toHaveBeenCalled();
     expect(history.notice.value).toBeNull();
+    // The day left takes its own place: Back does not bring it back.
+    router.back();
+    await flushPromises();
+    expect(address()).toBe("/chat?page=2");
   });
 
   it("shows the latest messages under a line when the message is gone", async () => {
-    const { history, feed, load } = chatWindow({ found: () => [] });
+    const { history, feed, load } = await chatWindow({ found: () => [] });
 
     await history.landOnMessage("gone");
     await nextTick();
@@ -265,7 +277,7 @@ describe("a message a link or a search lands on", () => {
   });
 
   it("leaves the window on screen and says nothing when the request failed", async () => {
-    const { history, feed, load } = chatWindow({ failed: true });
+    const { history, feed, load } = await chatWindow({ failed: true });
 
     await history.landOnMessage("lost");
     await nextTick();
@@ -276,7 +288,7 @@ describe("a message a link or a search lands on", () => {
   });
 
   it("fetches the latest messages, without a line, when it failed over an empty feed", async () => {
-    const { history, load } = chatWindow({ failed: true, held: [] });
+    const { history, load } = await chatWindow({ failed: true, held: [] });
 
     await history.landOnMessage("lost");
 
@@ -287,21 +299,24 @@ describe("a message a link or a search lands on", () => {
 
 describe("the way back to the latest messages", () => {
   it("takes the day off the address, and the window loads the tail", async () => {
-    nav.route.query = { date: "2026-10-02", page: "2" };
-    const { history, load } = chatWindow({ hasMoreAfter: true });
+    const { history, load } = await chatWindow({
+      at: "/chat?date=2026-10-02&page=2",
+      hasMoreAfter: true,
+    });
 
     await history.jumpToLatest();
-    await nextTick();
+    await flushPromises();
 
-    expect(nav.router.replace).toHaveBeenCalledWith({
-      name: "global-chat",
-      query: { page: "2" },
-    });
+    expect(address()).toBe("/chat?page=2");
     expect(load.latest).toHaveBeenCalledOnce();
+    // The day takes its own place: Back does not bring it back.
+    router.back();
+    await flushPromises();
+    expect(address()).toBe("/chat?page=2");
   });
 
   it("only scrolls down where the feed holds the tail already", async () => {
-    const { history, feed, load } = chatWindow({ hasMoreAfter: false });
+    const { history, feed, load } = await chatWindow({ hasMoreAfter: false });
 
     await history.jumpToLatest();
     await nextTick();
@@ -311,7 +326,7 @@ describe("the way back to the latest messages", () => {
   });
 
   it("loads the tail itself where the window ends short of it, and clears the line", async () => {
-    const { history, load } = chatWindow({
+    const { history, load } = await chatWindow({
       hasMoreAfter: true,
       found: () => [],
     });
@@ -328,8 +343,11 @@ describe("the way back to the latest messages", () => {
 
 describe("an archive window that has caught up with the present", () => {
   async function onLastPageOf(date: string, atBottom: boolean) {
-    nav.route.query = { date };
-    const opened = chatWindow({ hasMoreAfter: true, atBottom });
+    const opened = await chatWindow({
+      at: `/chat?date=${date}`,
+      hasMoreAfter: true,
+      atBottom,
+    });
     await opened.history.loadDate(date);
     return opened;
   }
@@ -340,11 +358,11 @@ describe("an archive window that has caught up with the present", () => {
     state.hasMoreAfter = false;
     await nextTick();
     await nextTick();
-    // The address it moved reaches its watcher a tick later.
-    await nextTick();
+    // The address it moved reaches its watcher once the navigation lands.
+    await flushPromises();
 
     expect(history.selectedDate.value).toBe("");
-    expect(nav.route.query).toEqual({ page: "2" });
+    expect(router.currentRoute.value.query).toEqual({ page: "2" });
     expect(load.latest).not.toHaveBeenCalled();
   });
 
@@ -354,9 +372,10 @@ describe("an archive window that has caught up with the present", () => {
     state.hasMoreAfter = false;
     await nextTick();
     await nextTick();
+    await flushPromises();
 
     expect(history.selectedDate.value).toBe("2026-10-02");
-    expect(nav.router.replace).not.toHaveBeenCalled();
+    expect(moves).toHaveLength(0);
   });
 
   it("goes live when asked from a scroll that reached the bottom", async () => {
@@ -383,14 +402,14 @@ describe("an archive window that has caught up with the present", () => {
 
 describe("the day of the address moving under the same chat", () => {
   it("loads the day the address names, and the tail once it names none", async () => {
-    const { history, load } = chatWindow({ hasMoreAfter: true });
+    const { history, load } = await chatWindow({ hasMoreAfter: true });
 
-    nav.route.query = { date: "2026-10-03" };
-    await nextTick();
+    await router.push("/chat?date=2026-10-03");
+    await flushPromises();
     expect(load.date).toHaveBeenCalledWith("2026-10-03");
 
-    nav.route.query = {};
-    await nextTick();
+    await router.push("/chat");
+    await flushPromises();
     expect(load.latest).toHaveBeenCalledOnce();
     expect(history.selectedDate.value).toBe("");
   });

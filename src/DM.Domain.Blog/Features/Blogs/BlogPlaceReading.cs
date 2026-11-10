@@ -7,10 +7,7 @@ using DM.Domain.Core.Authorization;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
-/// <summary>
-/// Whether the viewer reads a blog: by the visibility its own reads and its
-/// discussion ask.
-/// </summary>
+// Whether the viewer reads a blog: by the visibility its own reads and its discussion ask.
 internal class BlogPlaceReading : IPlaceReading
 {
     private readonly IBlogService _blogs;

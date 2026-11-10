@@ -13,15 +13,9 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Links;
 [Table("PostPendencies")]
 public class PostPendency
 {
-    /// <summary>
-    /// Pendency identifier
-    /// </summary>
     [Key]
     public Guid PendencyId { get; set; }
 
-    /// <summary>
-    /// Room identifier
-    /// </summary>
     public Guid RoomId { get; set; }
 
     /// <summary>

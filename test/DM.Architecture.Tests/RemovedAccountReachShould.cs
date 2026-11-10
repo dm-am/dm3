@@ -7,10 +7,6 @@ using ArchitectureModel = ArchUnitNET.Domain.Architecture;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Only the reads that make up the profile of removed accounts know its name, and only
-/// they read the removed rows.
-/// </summary>
 /// <remarks>
 /// The name opens one profile and narrows its tabs; elsewhere it is unknown. The callers are named
 /// here, so a new reader of the name or of the scope past the filter is a decision.
@@ -19,10 +15,6 @@ public class RemovedAccountReachShould
 {
     private static readonly ArchitectureModel Solution = ArchitectureSolution.Model;
 
-    /// <summary>
-    /// The profile, the host, author and player filters of its tabs, the reservation of
-    /// the name, and the refusal to restore a row that carries it.
-    /// </summary>
     private static readonly string[] MayKnowTheName =
     [
         "DM.Web.API.Features.Community.Users.CommunityUserApiService",
@@ -40,7 +32,6 @@ public class RemovedAccountReachShould
 
     private const string Scope = "DM.Infrastructure.Persistence.Shared.Users.RemovedAccountScope";
 
-    /// <summary>The reads that may go past the account filter for the removed rows.</summary>
     private static readonly string[] MayReadTheRemovedRows =
     [
         "DM.Infrastructure.Persistence.Repositories.Personal.UserRepository",

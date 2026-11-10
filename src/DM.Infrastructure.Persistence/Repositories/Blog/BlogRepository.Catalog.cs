@@ -14,9 +14,6 @@ using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
 
-/// <summary>
-/// The catalog of blogs: the filtered, sorted and paged list, and how it is asked
-/// </summary>
 internal partial class BlogRepository
 {
     /// <inheritdoc />
@@ -94,7 +91,6 @@ internal partial class BlogRepository
 
     private static IQueryable<DbBlog> WhereInStatus(IQueryable<DbBlog> query, BlogFilter filter)
     {
-        // Status filter
         var statuses = filter.Statuses;
         if (statuses?.Count > 0)
         {
@@ -139,9 +135,6 @@ internal partial class BlogRepository
         return query;
     }
 
-    /// <summary>
-    /// The three date ranges of the filter: created, activated and closed.
-    /// </summary>
     private static IQueryable<DbBlog> WhereDated(IQueryable<DbBlog> query, BlogFilter filter)
     {
         return query

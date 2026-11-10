@@ -20,10 +20,7 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class AgentPermissionsShould
 {
-    /// <summary>
-    /// A verb that either loses work, reaches the network, or runs whatever it is
-    /// handed. None of them may appear with a bare wildcard.
-    /// </summary>
+    // A verb that either loses work, reaches the network, or runs whatever it is handed.
     private static readonly string[] Dangerous =
     [
         "git", "rm", "del", "curl", "wget", "ping", "kill", "pkill", "taskkill",
@@ -50,10 +47,8 @@ public class AgentPermissionsShould
         return entries.EnumerateArray().Select(entry => entry.GetString() ?? string.Empty).ToList();
     }
 
-    /// <summary>
-    /// Matches "Bash(verb:*)" and "Bash(verb *)": the two spellings of "anything
-    /// this verb can be handed".
-    /// </summary>
+    // Matches "Bash(verb:*)" and "Bash(verb *)": the two spellings of "anything this verb can be
+    // handed".
     private static string? BareWildcardVerb(string entry)
     {
         var match = Regex.Match(entry, @"^Bash\(([^:()\s]+(?:\.exe)?)\s*(?::\*|\*)\)$");
@@ -83,27 +78,19 @@ public class AgentPermissionsShould
             "that is actually needed");
     }
 
-    /// <summary>The hook that refuses the commands which lose uncommitted work.</summary>
     private static string HookPath =>
         Path.Combine(RepositoryLayout.Root, ".claude", "hooks", "block-dangerous-git.js");
 
-    /// <summary>One rule of the hook: a refusal, and the pattern that spells it.</summary>
     private sealed record HookRule(string Source, Regex Pattern)
     {
-        /// <summary>
-        /// Whether a flag further along the command line calls the refusal off, the
-        /// way --staged does for restore.
-        /// </summary>
+        // Whether a flag further along the command line calls the refusal off, the way --staged
+        // does for restore.
         public bool CalledOffByALaterFlag => Source.Contains("(?!", StringComparison.Ordinal);
 
-        /// <summary>Whether the hook refuses this command line by this rule.</summary>
         public bool Refuses(string command) => Pattern.IsMatch(command);
     }
 
-    /// <summary>
-    /// Every rule the hook holds, in file order.
-    /// </summary>
-    /// <remarks>The case flag is read separately: one rule refuses "-D" and lets "-d" through.</remarks>
+    // The case flag is read separately: one rule refuses "-D" and lets "-d" through.
     private static IReadOnlyList<HookRule> HookRules()
     {
         var array = Regex.Match(
@@ -121,7 +108,7 @@ public class AgentPermissionsShould
             .ToList();
     }
 
-    /// <summary>What a command line spells itself with, as opposed to regex syntax.</summary>
+    // What a command line spells itself with, as opposed to regex syntax.
     private static bool IsPlain(char symbol) =>
         char.IsLetterOrDigit(symbol) || symbol is ' ' or '-' or '_' or '=' or ':' or '/';
 
@@ -130,15 +117,9 @@ public class AgentPermissionsShould
     private static string[] Words(string command) =>
         command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-    /// <summary>A symbol that makes what stands before it optional or repeated.</summary>
     private static bool IsQuantifier(char symbol) => symbol is '*' or '+' or '?' or '{';
 
-    /// <summary>
-    /// The literal text a pattern carries from <paramref name="start"/> on, up to
-    /// the first construct that matches more than one text. That position comes
-    /// back in <paramref name="stopped"/>.
-    /// </summary>
-    /// <remarks>"\s+" reads as one space, "\b" as nothing.</remarks>
+    // "\s+" reads as one space, "\b" as nothing.
     private static string LeadingLiteral(string pattern, int start, out int stopped)
     {
         var text = new StringBuilder();
@@ -194,14 +175,13 @@ public class AgentPermissionsShould
         return Collapse(text.ToString());
     }
 
-    /// <summary>The one text a fragment matches, or null when it matches more than one.</summary>
+    // The one text a fragment matches, or null when it matches more than one.
     private static string? LiteralOf(string fragment)
     {
         var literal = LeadingLiteral(fragment, 0, out var stopped);
         return stopped == fragment.Length ? literal : null;
     }
 
-    /// <summary>Index of the ")" that closes the group opening at <paramref name="start"/>.</summary>
     private static int GroupEnd(string pattern, int start)
     {
         var depth = 0;
@@ -236,12 +216,8 @@ public class AgentPermissionsShould
         return -1;
     }
 
-    /// <summary>
-    /// The commands a rule refuses, spelled the way a command line spells them: the
-    /// literal text the pattern opens with, one name per branch when that text runs
-    /// into an alternation of literals.
-    /// </summary>
-    /// <remarks>Stops at the first construct that is not literal: a permission entry matches a prefix of the command line only.</remarks>
+    // Stops at the first construct that is not literal: a permission entry matches a prefix of the
+    // command line only.
     private static IReadOnlyList<string> CommandNames(string pattern)
     {
         if (!pattern.StartsWith('^'))
@@ -274,14 +250,14 @@ public class AgentPermissionsShould
         return names.Where(name => name.Length > 0).Distinct(StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>The command a deny entry refuses, out of "Bash(git checkout:*)".</summary>
+    // The command a deny entry refuses, out of "Bash(git checkout:*)".
     private static string? DeniedCommand(string entry)
     {
         var match = Regex.Match(entry, @"^Bash\((.+?)\s*(?::\*|\*)?\)$");
         return match.Success ? Collapse(match.Groups[1].Value) : null;
     }
 
-    /// <summary>Word for word, because "-d" is not "-D" and the hook allows one of them.</summary>
+    // Word for word, because "-d" is not "-D" and the hook allows one of them.
     private static bool Opens(string command, string name)
     {
         var words = Words(command);
@@ -291,13 +267,8 @@ public class AgentPermissionsShould
                words.Take(opening.Length).SequenceEqual(opening, StringComparer.Ordinal);
     }
 
-    /// <summary>
-    /// Whether a deny entry is the settings side of one of a rule's refusals.
-    /// </summary>
-    /// <remarks>
-    /// An entry passes when it spells a command the rule refuses or is the bare subcommand;
-    /// one for a form the rule lets through stands for no refusal.
-    /// </remarks>
+    // An entry passes when it spells a command the rule refuses or is the bare subcommand; one for
+    // a form the rule lets through stands for no refusal.
     private static bool Names(HookRule rule, string name, string denied) =>
         string.Equals(denied, name, StringComparison.Ordinal) ||
         (rule.Refuses(denied) && Opens(denied, name));
@@ -383,10 +354,8 @@ public class AgentPermissionsShould
                 "the rule is left to the hook alone");
     }
 
-    /// <summary>
-    /// The forms the hook lets through on purpose, spelled the way its own test
-    /// spells them, plus the bare verb a blanket entry would name.
-    /// </summary>
+    // The forms the hook lets through on purpose, spelled the way its own test spells them, plus
+    // the bare verb a blanket entry would name.
     private static readonly string[] Allowed =
     [
         "git", "git status", "git stash", "git restore --staged src/file.cs",

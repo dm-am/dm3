@@ -38,7 +38,6 @@ public class DocumentSnapshotsShould
             RegexOptions.Compiled),
     ];
 
-    /// <summary>A quoted example: a run of text between straight quotes on one line.</summary>
     private static readonly Regex Quoted = new("\"[^\"\n]*\"", RegexOptions.Compiled);
 
     [Fact]
@@ -66,7 +65,6 @@ public class DocumentSnapshotsShould
             "to git log and the count to the code or docs/STATUS.md");
     }
 
-    /// <summary>What is a snapshot and what is a rule or an example.</summary>
     [Theory]
     [InlineData("правило владельца от 26.09.2026", Date, 1)]
     [InlineData("| аудит 2026-08-24 |", Date, 1)]

@@ -77,7 +77,6 @@ public static class LoggingConfiguration
             .CreateLogger();
     }
 
-    /// <summary>Configuration key the level is read from.</summary>
     private const string MinimumLevelKey = "Observability:MinimumLevel";
 
     /// <summary>

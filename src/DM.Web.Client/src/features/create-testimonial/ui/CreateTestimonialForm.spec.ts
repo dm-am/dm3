@@ -8,6 +8,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { useAuthStore } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/common";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import CreateTestimonialForm from "./CreateTestimonialForm.vue";
 
 const { mockCreateTestimonial } = vi.hoisted(() => ({
@@ -23,8 +24,10 @@ vi.mock("@/entities/testimonial/api", () => ({
   },
 }));
 
-const viewer = (role: UserRole) =>
-  ({ id: "u-1", username: "Reviewer", role }) as unknown as User;
+const viewer = (role: UserRole): User => ({
+  ...createMockUser("u-1", "Reviewer"),
+  role,
+});
 
 const render = () =>
   mount(CreateTestimonialForm, {

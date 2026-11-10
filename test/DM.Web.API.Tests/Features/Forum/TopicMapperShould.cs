@@ -12,10 +12,8 @@ using DomainTopic = DM.Domain.Forum.Features.Topics.Topic;
 
 namespace DM.Web.API.Tests.Features.Forum;
 
-/// <summary>
-/// PATCH carries "not sent" as null and the write model keeps saying it: the domain updates only the
-/// fields that arrived.
-/// </summary>
+// PATCH carries "not sent" as null and the write model keeps saying it: the domain updates only the
+// fields that arrived.
 public class TopicMapperShould : UnitTestBase
 {
     private static TopicMapper CreateMapper()
@@ -24,10 +22,8 @@ public class TopicMapperShould : UnitTestBase
         return new TopicMapper(userMapper, new BoardMapper(userMapper));
     }
 
-    /// <summary>
-    /// The topic description is a BbText the client edits with X-Dm-Audience: author_edit, which the converter
-    /// honors only when the envelope names the author.
-    /// </summary>
+    // The topic description is a BbText the client edits with X-Dm-Audience: author_edit, which the
+    // converter honors only when the envelope names the author.
     [Fact]
     public void WrapTheDescriptionInAnAuthorAwareEnvelope()
     {
@@ -64,10 +60,8 @@ public class TopicMapperShould : UnitTestBase
         update.IsClosed.Should().BeNull();
     }
 
-    /// <summary>
-    /// The domain resolves a board by alias, title or id and compares it with the current title, so the field
-    /// arrives as BoardTitle verbatim.
-    /// </summary>
+    // The domain resolves a board by alias, title or id and compares it with the current title, so
+    // the field arrives as BoardTitle verbatim.
     [Fact]
     public void CarryTheBoardAsATitle()
     {

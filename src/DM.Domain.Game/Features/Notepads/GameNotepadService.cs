@@ -163,9 +163,7 @@ internal class GameNotepadService : IGameNotepadService
         await _repository.DeleteEntryAsync(entryId, UserId, ct);
     }
 
-    /// <summary>
-    /// An entry of a game the reader may not open answers as a missing one.
-    /// </summary>
+    // An entry of a game the reader may not open answers as a missing one.
     private async Task<NotepadEntry> AllowedEntry(Guid entryId, NotepadIntention intention, CancellationToken ct)
     {
         var entry = await _repository.GetEntryAsync(entryId, ct) ??
@@ -206,9 +204,8 @@ internal class GameNotepadService : IGameNotepadService
         return context;
     }
 
-    /// <summary>
-    /// The entry table is shared with the blog and personal notepads, and the entry endpoints take an id alone.
-    /// </summary>
+    // The entry table is shared with the blog and personal notepads, and the entry endpoints take
+    // an id alone.
     private static void ThrowIfNotAGameNotepad(NotepadEntry entry)
     {
         if (entry.NotepadType is not (NotepadType.Master or NotepadType.Player or NotepadType.CharacterMaster))
@@ -217,18 +214,14 @@ internal class GameNotepadService : IGameNotepadService
         }
     }
 
-    /// <summary>
-    /// A context without the author refuses Edit and Delete.
-    /// </summary>
+    // A context without the author refuses Edit and Delete.
     private Task ThrowIfNotAuthorizedForEntryAsync(
         NotepadIntention intention,
         NotepadEntry entry) =>
         ThrowIfNotAuthorizedAsync(
             intention, entry.NotepadType, entry.ContainerId, entry.OwnerId, entry.AuthorId);
 
-    /// <summary>
-    /// Listing or adding has no entry yet, so no author.
-    /// </summary>
+    // Listing or adding has no entry yet, so no author.
     private async Task ThrowIfNotAuthorizedAsync(
         NotepadIntention intention,
         NotepadType notepadType,

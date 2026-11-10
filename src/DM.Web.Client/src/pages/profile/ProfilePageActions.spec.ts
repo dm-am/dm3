@@ -7,11 +7,7 @@
  * blacklist does not ask: the same button takes either step back.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  flushPromises,
-  RouterLinkStub,
-  type VueWrapper,
-} from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import {
   blacklistApi,
   useAuthStore,
@@ -20,7 +16,6 @@ import {
   userApi,
 } from "@/entities/user";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { route } from "./ProfilePage.doubles";
 import {
   button,
   confirmation,
@@ -32,25 +27,19 @@ import {
   saidOutLoud,
 } from "./ProfilePage.fixtures";
 
-vi.mock("vue-router", async (importOriginal) =>
-  (await import("./ProfilePage.doubles")).vueRouter(importOriginal),
-);
-
 beforeEach(dismissToasts);
 afterEach(() => vi.restoreAllMocks());
 
 /** The account settings: a link of the actions row of the reader's own page, and nowhere else. */
 describe("ProfilePage settings link", () => {
   const settings = (wrapper: VueWrapper) =>
-    wrapper
-      .findAllComponents(RouterLinkStub)
-      .filter((link) => link.text() === "Настройки");
+    wrapper.findAll("a").filter((link) => link.text() === "Настройки");
 
   it("leads the owner from the actions row to the account settings", async () => {
     const wrapper = await render({ own: true });
 
     const [link] = settings(wrapper);
-    expect(link.props("to")).toEqual({ name: "account" });
+    expect(link.attributes("href")).toBe("/account");
     expect(link.element.closest(".actions")).not.toBeNull();
   });
 
@@ -103,18 +92,13 @@ describe("ProfilePage message to the user", () => {
     );
 
   const messageLinks = (wrapper: VueWrapper) =>
-    wrapper
-      .findAllComponents(RouterLinkStub)
-      .filter((link) => link.text() === "Написать сообщение");
+    wrapper.findAll("a").filter((link) => link.text() === "Написать сообщение");
 
   it("leads to the correspondence with the user where the message is taken", async () => {
     const wrapper = await render({});
 
     const [link] = messageLinks(wrapper);
-    expect(link.props("to")).toEqual({
-      name: "direct-message",
-      params: { username: "Other" },
-    });
+    expect(link.attributes("href")).toBe("/messenger/user/Other");
   });
 
   it("is not offered where the profile says the message would be refused", async () => {
@@ -156,13 +140,8 @@ describe("ProfilePage message to the user", () => {
 
 /** "Модерация" is a moderator's tab, and an address does not open it for others. */
 describe("ProfilePage asked for the moderation tab", () => {
-  afterEach(() => {
-    delete (route.query as Record<string, string>).tab;
-  });
-
   it("opens on О себе for a reader who is not a moderator", async () => {
-    (route.query as Record<string, string>).tab = "moderation";
-    const wrapper = await render({});
+    const wrapper = await render({ query: "?tab=moderation" });
 
     const tabs = wrapper.findAll('[role="tab"]').map((tab) => tab.text());
     expect(tabs).not.toContain("Модерация");
@@ -183,10 +162,8 @@ describe("ProfilePage link to the subscriptions", () => {
     const wrapper = await render({ own: true });
 
     expect(extraLinks(wrapper)[0]).toBe("Подписки");
-    const link = wrapper
-      .findAllComponents(RouterLinkStub)
-      .find((l) => l.text() === "Подписки")!;
-    expect(link.props("to")).toEqual({ name: "subscriptions" });
+    const link = wrapper.findAll("a").find((l) => l.text() === "Подписки")!;
+    expect(link.attributes("href")).toBe("/subscriptions");
   });
 
   it("is not on somebody else's page", async () => {

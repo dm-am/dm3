@@ -10,16 +10,9 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// Everyone except the account the stand is looked at through.
-    /// </summary>
     private static IEnumerable<DbUser> OtherThanPrimary(IEnumerable<DbUser> users) =>
         users.Where(u => u.Username != PrimaryLogin);
 
-    /// <summary>
-    /// Casts the seeded votes of one poll, handing the ballot round the voters
-    /// in turn unless <paramref name="choice"/> says otherwise.
-    /// </summary>
     /// <remarks>
     /// Through the context: <c>IPollRepository.Vote</c> stamps the moment from the clock. One voter, one option
     /// holds by construction, every voter list being distinct accounts.
@@ -44,10 +37,6 @@ internal sealed partial class DataSeeder
         await _dbContext.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// A poll ready to be created: its identifier first, then one per option in
-    /// the order given, which is the order the seed draws them in.
-    /// </summary>
     private CreatePollEntity NewPoll(
         DateTimeOffset startsUtc, DateTimeOffset endsUtc, string title, params string[] options) => new()
         {
@@ -60,7 +49,6 @@ internal sealed partial class DataSeeder
             .ToArray(),
         };
 
-    /// <summary>Creates a poll and counts it.</summary>
     private async Task CreatePoll(CreatePollEntity poll, ComprehensiveSeedResult result)
     {
         await _pollRepository.Create(poll);
@@ -85,9 +73,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Created {result.PollsCreated} polls");
     }
 
-    /// <summary>
-    /// The poll that runs ten years from the epoch, with the one vote of TestSeniorMod.
-    /// </summary>
     /// <remarks>
     /// The server reads the status of a poll by its own clock, so on a stand seeded on a pinned past epoch
     /// (scripts/visual/rebuild.mjs) the polls of a few weeks are over, and the retraction of a vote has no
@@ -118,7 +103,6 @@ internal sealed partial class DataSeeder
         await Vote(poll, [seniorModerator]);
     }
 
-    /// <summary>The two polls that start in the future.</summary>
     private async Task SeedPendingPolls(ComprehensiveSeedResult result)
     {
         // Pending: New Year event setting
@@ -132,10 +116,6 @@ internal sealed partial class DataSeeder
         await CreatePoll(anniversaryPoll, result);
     }
 
-    /// <summary>
-    /// The two running polls, and ahead of them the one on rule systems that
-    /// ended yesterday.
-    /// </summary>
     private async Task SeedActivePolls(List<DbUser> users, ComprehensiveSeedResult result)
     {
         // Closed: RPG systems preference
@@ -163,10 +143,6 @@ internal sealed partial class DataSeeder
         await Vote(oneShotTimePoll, OtherThanPrimary(users).Take(5).ToList());
     }
 
-    /// <summary>
-    /// The five polls with votes that were ended ahead of the date they opened
-    /// with.
-    /// </summary>
     private async Task SeedEndedPolls(List<DbUser> users, ComprehensiveSeedResult result)
     {
         // Ended: favorite genre
@@ -211,10 +187,6 @@ internal sealed partial class DataSeeder
         await _pollRepository.Update(dicePoll.Id, null, null, null, _now.AddDays(-60), null);
     }
 
-    /// <summary>
-    /// The polls that opened and ended months ago, a long title and long details
-    /// among them, and after them the public one with its voters.
-    /// </summary>
     private async Task SeedPastPolls(List<DbUser> users, ComprehensiveSeedResult result)
     {
         // Ended: character creation preference

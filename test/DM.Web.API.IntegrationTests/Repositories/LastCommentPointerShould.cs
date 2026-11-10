@@ -18,10 +18,6 @@ using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Deleting a comment from the middle of a discussion leaves the last-comment
-/// pointer where it is, and takes the count down by one.
-/// </summary>
 /// <remarks>
 /// The successor is decided inside the transaction that marks the comment, and the write is guarded by the pointer
 /// still naming it. Set-based statements and row locks have no in-memory implementation, so all four discussions
@@ -69,9 +65,6 @@ public class LastCommentPointerShould : IntegrationTestBase
         blog.CommentCount.Should().Be(1);
     }
 
-    /// <summary>
-    /// The second half of the guard: the pointer is cleared when no comment is left to name.
-    /// </summary>
     [Fact]
     public async Task EmptyWhenTheBlogLosesItsOnlyComment()
     {
@@ -284,10 +277,8 @@ public class LastCommentPointerShould : IntegrationTestBase
             "the pointer named the deleted comment and no comment is left to take it over");
     }
 
-    /// <summary>
-    /// The second removal of one comment answers that it removed nothing.
-    /// </summary>
-    /// <remarks>The service gates the topic's unread counter and the DeletedTopicComment event on this answer.</remarks>
+    // The service gates the topic's unread counter and the DeletedTopicComment event on this
+    // answer.
     [Fact]
     public async Task AnswerOnlyOnceWhenOneTopicCommentIsRemovedTwice()
     {
@@ -302,10 +293,8 @@ public class LastCommentPointerShould : IntegrationTestBase
             "the mark is a conditional update and only one caller writes it");
     }
 
-    /// <summary>
-    /// The first comment of a topic takes a pointer that names nothing.
-    /// </summary>
-    /// <remarks>FK_Topics_Comments_LastCommentId stands behind the topic's column, so null is the only "names nothing".</remarks>
+    // FK_Topics_Comments_LastCommentId stands behind the topic's column, so null is the only "names
+    // nothing".
     [Fact]
     public async Task MoveTheTopicOntoItsFirstComment()
     {
@@ -327,10 +316,7 @@ public class LastCommentPointerShould : IntegrationTestBase
             "the topic named no comment, so there is nothing the first one has to give way to");
     }
 
-    /// <summary>
-    /// A comment written after a newer one does not take the topic's pointer.
-    /// </summary>
-    /// <remarks>The forum list orders topics by the pointer.</remarks>
+    // The forum list orders topics by the pointer.
     [Fact]
     public async Task LeaveTheTopicPointerOnTheNewerCommentWhenAnOlderOneArrivesAfterIt()
     {
@@ -359,11 +345,8 @@ public class LastCommentPointerShould : IntegrationTestBase
             "and the topic list orders by it");
     }
 
-    /// <summary>
-    /// A pointer left over from a comment that is no longer in the table gives way to
-    /// a comment that is.
-    /// </summary>
-    /// <remarks>No foreign key stands behind the column, and a comparison against a missing row answers neither yes nor no.</remarks>
+    // No foreign key stands behind the column, and a comparison against a missing row answers
+    // neither yes nor no.
     [Fact]
     public async Task MoveOffAPointerNamingACommentThatIsNotThere()
     {
@@ -393,9 +376,6 @@ public class LastCommentPointerShould : IntegrationTestBase
         DeletedUtc = Created.AddHours(1),
     };
 
-    /// <summary>
-    /// Two comments, the pointer on the newer one — the state every discussion is in.
-    /// </summary>
     private static async Task<(Guid First, Guid Last)> AddCommentPair(DmDbContext dbContext, Guid entityId)
     {
         var first = Guid.NewGuid();
@@ -426,9 +406,6 @@ public class LastCommentPointerShould : IntegrationTestBase
         return (blogId, first, last);
     }
 
-    /// <summary>
-    /// One comment, the pointer on it: a discussion with nothing to fall back on.
-    /// </summary>
     private static async Task<Guid> AddOnlyComment(DmDbContext dbContext, Guid entityId)
     {
         var commentId = Guid.NewGuid();
@@ -437,7 +414,6 @@ public class LastCommentPointerShould : IntegrationTestBase
         return commentId;
     }
 
-    /// <summary>One comment of the discussion, dated by the caller.</summary>
     private static async Task<Guid> AddCommentAt(
         DmDbContext dbContext, Guid entityId, DateTimeOffset createdUtc)
     {
@@ -494,10 +470,8 @@ public class LastCommentPointerShould : IntegrationTestBase
         return (topicId, first, last);
     }
 
-    /// <summary>
-    /// A topic on a board of its own: the fixture database is shared and seeded, so a
-    /// board every test wrote to would be a board every test's count depends on.
-    /// </summary>
+    // A topic on a board of its own: the fixture database is shared and seeded, so a board every
+    // test wrote to would be a board every test's count depends on.
     private static async Task<Guid> AddTopic(DmDbContext dbContext)
     {
         var boardId = Guid.NewGuid();
@@ -524,10 +498,7 @@ public class LastCommentPointerShould : IntegrationTestBase
         return topicId;
     }
 
-    /// <summary>
-    /// The topic's starting state: the pointer on the comment given. Written
-    /// set-based for the same reason <see cref="PointAt{TEntity}" /> is.
-    /// </summary>
+    // Written set-based for the same reason PointAt is.
     private static Task PointTopicAt(DmDbContext dbContext, Guid topicId, Guid lastCommentId) =>
         dbContext.Topics
             .Where(t => t.TopicId == topicId)
@@ -577,9 +548,7 @@ public class LastCommentPointerShould : IntegrationTestBase
         return blogId;
     }
 
-    /// <summary>
-    /// The owner row's starting state, written set-based so the change tracker holds nothing.
-    /// </summary>
+    // The owner row's starting state, written set-based so the change tracker holds nothing.
     private static Task PointAt<TEntity>(
         DbSet<TEntity> set,
         System.Linq.Expressions.Expression<Func<TEntity, bool>> owner,

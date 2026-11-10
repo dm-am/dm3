@@ -4,18 +4,18 @@ import type { Column } from "./types";
 
 withDefaults(
   defineProps<{
-    /** Number of skeleton rows to show */
-    rows?: number;
     /** Column definitions (same as DataTable) */
     columns: Column[];
     /** Whether the table shows row numbers */
     showRowNumbers?: boolean;
   }>(),
   {
-    rows: 10,
     showRowNumbers: false,
   },
 );
+
+/** Skeleton rows shown while the table loads. */
+const ROWS = 10;
 
 // Per-row factors for a ragged right edge; narrow columns get a fixed short bar.
 const widthFactors = [0.6, 0.45, 0.7, 0.5, 0.55, 0.65, 0.4, 0.75];
@@ -36,7 +36,7 @@ function getBarWidth(
 </script>
 
 <template>
-  <tr v-for="rowIndex in rows" :key="rowIndex" class="skeleton-row">
+  <tr v-for="rowIndex in ROWS" :key="rowIndex" class="skeleton-row">
     <td v-if="showRowNumbers" class="skeleton-td col-number">
       <div class="skeleton-bar skeleton-bar-number" />
     </td>

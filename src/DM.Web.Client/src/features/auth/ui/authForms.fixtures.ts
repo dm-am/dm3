@@ -1,7 +1,34 @@
 import { expect, vi } from "vitest";
 import type { VueWrapper } from "@vue/test-utils";
-import { defineComponent, h, nextTick } from "vue";
+import { defineComponent, h, nextTick, type Component } from "vue";
+import type { Router } from "vue-router";
 import type { GeneralError } from "@/shared/api/models/common";
+import {
+  mountPage,
+  type Address,
+  type MountOptions,
+} from "@/shared/lib/testing/mountPage";
+
+// The page a guest form opens over, and the support page its way out leads to.
+const routes: Address[] = [
+  ["home", "/"],
+  ["support", "/support"],
+];
+
+let router: Router | undefined;
+
+/** A guest form over the home page, on the real router. */
+export async function mountAuthForm(
+  form: Component,
+  options: Pick<MountOptions, "props" | "stubs" | "attachTo"> = {},
+) {
+  const mounted = await mountPage(form, "/", { routes, ...options });
+  router = mounted.router;
+  return mounted.wrapper;
+}
+
+/** Where the form mounted last has taken the reader. */
+export const address = () => router?.currentRoute.value.fullPath;
 
 export const problem = (
   status: number,

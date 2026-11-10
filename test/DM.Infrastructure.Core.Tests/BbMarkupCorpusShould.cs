@@ -12,23 +12,16 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The corpus the client is held to is what the server renders today.
-/// </summary>
-/// <remarks>
-/// The server writes its answers for generated texts into markupCorpus.golden.json, which the client's
-/// bbcodeProperties.spec.ts compares against; this fails until the file is written again
-/// (DM_MARKUP_CORPUS=write, docs/guides/TESTING.md, section "Генеративные проверки разметки").
-/// </remarks>
+// The server writes its answers for generated texts into markupCorpus.golden.json, which the
+// client's bbcodeProperties.spec.ts compares against; this fails until the file is written again
+// (DM_MARKUP_CORPUS=write, docs/guides/TESTING.md, section "Генеративные проверки разметки").
 public class BbMarkupCorpusShould
 {
-    /// <summary>How many texts the corpus holds.</summary>
     private const int Size = 240;
 
 
     private static readonly IBbParserProvider Provider = new BbParserProvider();
 
-    /// <summary>Where the corpus is written.</summary>
     internal static string File => Path.Combine(RepositoryLayout.Root,
         "src", "DM.Web.Client", "src", "shared", "lib", "testing", "markupCorpus.golden.json");
 
@@ -115,10 +108,6 @@ public class BbMarkupCorpusShould
         return output.Append("\n]}\n").ToString();
     }
 
-    /// <summary>
-    /// One text: its surface, whether it was generated as valid markup, and the
-    /// server's answers about it: the page, the refusal and where it points.
-    /// </summary>
     private static string Entry(string input, BbSurface surface, bool valid)
     {
         var author = BbVisibilityRender.Viewer(UserRole.RegularUser, BbVisibilityRender.AuthorId);

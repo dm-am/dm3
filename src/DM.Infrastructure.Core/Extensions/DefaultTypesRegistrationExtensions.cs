@@ -26,9 +26,6 @@ public static class DefaultTypesRegistrationExtensions
     /// class as itself and its interfaces, transient, without displacing
     /// anything registered explicitly.
     /// </summary>
-    /// <param name="services">Service collection</param>
-    /// <param name="assembly">Assembly to scan for types</param>
-    /// <returns>Service collection for chaining</returns>
     public static IServiceCollection AddDefaultTypes(this IServiceCollection services, Assembly assembly)
     {
         var scanIntroduced = ScanIntroducedServiceTypes(services);

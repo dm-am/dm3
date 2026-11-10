@@ -9,20 +9,15 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The hooks of the agent settings are found from every directory an agent works in.
-/// </summary>
 /// <remarks>Apart from <see cref="AgentPermissionsShould"/>: the two fail for unrelated reasons.</remarks>
 public class AgentHookPathsShould
 {
 
-    /// <summary>The variable the agent sets to the root of the checkout before it runs a hook.</summary>
+    // The variable the agent sets to the root of the checkout before it runs a hook.
     private const string ProjectDirectory = "$CLAUDE_PROJECT_DIR/";
 
-    /// <summary>
-    /// Every hook runs from wherever the agent stands.
-    /// </summary>
-    /// <remarks>A hook runs in the agent's current directory, so a path relative to the root is not found below it.</remarks>
+    // A hook runs in the agent's current directory, so a path relative to the root is not found
+    // below it.
     [Fact]
     public void ReachEveryHookFromWhereverTheAgentStands()
     {
@@ -35,10 +30,6 @@ public class AgentHookPathsShould
             "but the root, and the refusal it holds silently stops applying there");
     }
 
-    /// <summary>
-    /// The rule refuses both ways a hook stops being found: a script named from
-    /// the current directory, and one named from the root that is not there.
-    /// </summary>
     [Theory]
     [InlineData("node .claude/hooks/block-dangerous-git.js")]
     [InlineData("node \\\"$CLAUDE_PROJECT_DIR/.claude/hooks/no-such-hook.js\\\"")]
@@ -52,7 +43,6 @@ public class AgentHookPathsShould
         UnreachableHooks(settings).Should().ContainSingle();
     }
 
-    /// <summary>Every command a hook of the settings runs.</summary>
     private static IReadOnlyList<string> HookCommands(string settings)
     {
         using var document = JsonDocument.Parse(settings);
@@ -94,10 +84,6 @@ public class AgentHookPathsShould
         }
     }
 
-    /// <summary>
-    /// The hook commands that do not name their script from the root of the
-    /// checkout, or name one that does not exist.
-    /// </summary>
     private static IReadOnlyList<string> UnreachableHooks(string settings) => HookCommands(settings)
         .Where(command =>
         {

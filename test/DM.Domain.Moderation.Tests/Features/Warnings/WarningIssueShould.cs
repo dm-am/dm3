@@ -14,10 +14,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
-/// <summary>
-/// The issue of a warning: who may issue it and to whom, what is written, and
-/// the automatic ban its points lead to.
-/// </summary>
 public class WarningIssueShould : WarningServiceTestBase
 {
     [Fact]
@@ -33,9 +29,6 @@ public class WarningIssueShould : WarningServiceTestBase
             .WithMessage("Выносить предупреждения может только модератор");
     }
 
-    /// <summary>
-    /// A verbal warning carries no points, and the type of the object is read in any case.
-    /// </summary>
     [Theory]
     [InlineData("Topic", WarningEntityType.Topic, 2)]
     [InlineData("comment", WarningEntityType.Comment, 0)]
@@ -71,9 +64,7 @@ public class WarningIssueShould : WarningServiceTestBase
         capturedEntity.CreatedUtc.Should().Be(now);
     }
 
-    /// <summary>
-    /// Nothing in a game room is moderated, so a warning cannot name a game post.
-    /// </summary>
+    // Nothing in a game room is moderated, so a warning cannot name a game post.
     [Fact]
     public async Task RefuseAWarningOnGameContent()
     {
@@ -96,10 +87,6 @@ public class WarningIssueShould : WarningServiceTestBase
                 Arg.Any<WarningEntityType>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Only the global chat is moderated: a message the resolver takes no copy of, a direct one, one of a
-    /// group or of a game room, is refused, and nothing is written.
-    /// </summary>
     [Fact]
     public async Task RefuseAWarningOnAMessageOutsideTheGlobalChat()
     {
@@ -122,10 +109,6 @@ public class WarningIssueShould : WarningServiceTestBase
         await warningRepository.DidNotReceive().Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A warning to the user himself, for what was done where nothing is moderated: no kind, no object and no
-    /// copy of a text, whatever identifier the request carries.
-    /// </summary>
     [Fact]
     public async Task IssueAWarningToTheUserWithoutAPlace()
     {
@@ -181,10 +164,6 @@ public class WarningIssueShould : WarningServiceTestBase
         await warningRepository.DidNotReceive().Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// And reaches every rank below: the reader, the mentor, and for a senior
-    /// moderator and an administrator the moderators under them.
-    /// </summary>
     [Theory]
     [InlineData(UserRole.Moderator, UserRole.RegularUser)]
     [InlineData(UserRole.Moderator, UserRole.Mentor)]
@@ -222,16 +201,8 @@ public class WarningIssueShould : WarningServiceTestBase
         await eventProducer.Received(1).SendAsync(EventType.WarningIssued, warningId);
     }
 
-    /// <summary>
-    /// The warning that carries the total to the threshold hands the reader to
-    /// the site's own ban.
-    /// </summary>
-    /// <remarks>
-    /// The whole of the automatic ban from this side: the service reads the total
-    /// before the write and after it, and asks for the ban on the crossing. What
-    /// the ban is made of - two days, the ordinary scope, the system account - is
-    /// BanService's, and AutomaticBanShould holds it.
-    /// </remarks>
+    // What the ban is made of - two days, the ordinary scope, the system account - is BanService's,
+    // and AutomaticBanShould holds it.
     [Fact]
     public async Task BanTheReaderTheLastPointCarriesOverTheThreshold()
     {
@@ -253,15 +224,9 @@ public class WarningIssueShould : WarningServiceTestBase
         await banService.Received(1).IssueAutomaticBan(targetUserId, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A reader who already stood at the threshold is not banned again by the
-    /// next warning.
-    /// </summary>
-    /// <remarks>
-    /// Firing on the standing rather than on the crossing would put a fresh
-    /// two-day window on him at every touch of his record for as long as the
-    /// points live, including the moment the previous window ran out.
-    /// </remarks>
+    // Firing on the standing rather than on the crossing would put a fresh two-day window on him at
+    // every touch of his record for as long as the points live, including the moment the previous
+    // window ran out.
     [Fact]
     public async Task NotBanAgainAReaderWhoWasAlreadyOverTheThreshold()
     {
@@ -283,10 +248,6 @@ public class WarningIssueShould : WarningServiceTestBase
             Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Below the threshold nothing is issued: the points are a record until they
-    /// add up to it.
-    /// </summary>
     [Fact]
     public async Task NotBanBelowTheThreshold()
     {
@@ -308,13 +269,8 @@ public class WarningIssueShould : WarningServiceTestBase
             Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A correction upwards reaches the threshold by the same door.
-    /// </summary>
-    /// <remarks>
-    /// Raising the points of an old warning adds to the same total a fresh
-    /// warning adds to, and the reader is over the line either way.
-    /// </remarks>
+    // Raising the points of an old warning adds to the same total a fresh warning adds to, and the
+    // reader is over the line either way.
     [Fact]
     public async Task BanWhenARaisedCorrectionCarriesTheTotalOverTheThreshold()
     {

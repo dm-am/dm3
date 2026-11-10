@@ -249,9 +249,6 @@ internal class PostService : IPostService
         return updatedPost!;
     }
 
-    /// <summary>
-    /// Freeze who each [private=...] block of the post is for.
-    /// </summary>
     /// <remarks>
     /// Names resolve against the characters with access to the room, so a snapshot hands out no access.
     /// Blocks an earlier save resolved keep their ids: the rule is addressee-forever. The character travels

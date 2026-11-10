@@ -7,10 +7,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The shared infrastructure project is a set of technical concerns and the
-/// module that registers them, and nothing else sits at its root.
-/// </summary>
 /// <remarks>
 /// PATTERNS draws the shape: {Concern}/ folders, Shared/{Concern}/ and one registration file. This
 /// project only: for the others it is a decision, not a cleanup.

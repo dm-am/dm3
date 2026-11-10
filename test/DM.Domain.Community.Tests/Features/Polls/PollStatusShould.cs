@@ -6,12 +6,7 @@ using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Polls;
 
-/// <summary>
-/// The voting window, pinned at both of its edges.
-/// </summary>
-/// <remarks>
-/// The window is half-open: open at the tick its start arrives and closed at the tick its end does.
-/// </remarks>
+// The window is half-open: open at the tick its start arrives and closed at the tick its end does.
 public class PollStatusShould
 {
     private static readonly DateTimeOffset Start = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);

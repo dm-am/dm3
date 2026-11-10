@@ -6,29 +6,30 @@
 // leaves for it, and with no plate.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, watchEffect } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia } from "pinia";
+import type { Router } from "vue-router";
 import {
+  GameStatus,
   useGameDetailsStore,
   type Character,
-  type Game,
+  type GameParticipation,
 } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import CharacterCreate from "./CharacterCreate.vue";
 
-/** The route this page reads, and the navigations it makes. */
-const routed = vi.hoisted(() => ({
-  query: {} as Record<string, string>,
-  push: vi.fn(),
-  replace: vi.fn(),
-}));
+const FORM = "/game/the-game/characters/create";
+const ROSTER = "/game/the-game/characters";
+const routes: [string, string][] = [
+  ["game-character-create", "/game/:id/characters/create"],
+  ["game-characters", "/game/:id/characters"],
+];
 
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({ params: { id: "the-game" }, query: routed.query }),
-  useRouter: () => ({ push: routed.push, replace: routed.replace }),
-}));
+const address = (router: Router) => router.currentRoute.value.fullPath;
 
 // The form owns its submit (CharacterForm.saving.spec); the page sees "saved".
 const CharacterFormStub = defineComponent({
@@ -67,26 +68,24 @@ const character = (over: CharacterOverrides = {}): Character =>
 
 const CREATED = character({ id: "char-new", name: "Ронин" });
 
-function render({
+async function render({
   npc = false,
-  participation = [] as string[],
+  participation = [] as GameParticipation[],
   blacklisted = false,
   recruiting = true,
 } = {}) {
-  routed.query = npc ? { npc: "1" } : {};
-
   const pinia = createPinia();
-  setActivePinia(pinia);
-  const store = useGameDetailsStore();
+  const store = useGameDetailsStore(pinia);
+  const game = createMockGame("the-game-guid", "Игра");
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    status: "Active",
-    participation,
-    recruitment: { isOpen: recruiting },
-    schema: { specifications: [] },
-    viewerBlacklisted: blacklisted,
-  } as unknown as Game;
+    ...game,
+    publicId: asServed("the-game"),
+    status: GameStatus.Active,
+    participation: asServed(participation),
+    recruitment: asServed({ ...game.recruitment, isOpen: recruiting }),
+    schema: { specifications: [], version: 0 },
+    viewerBlacklisted: asServed(blacklisted),
+  };
   store.characters = [character()];
   const loadCharacters = vi
     .spyOn(store, "loadCharacters")
@@ -104,42 +103,37 @@ function render({
     },
   });
 
-  const wrapper = mount(host, {
-    global: {
-      plugins: [pinia],
-      stubs: { CharacterForm: CharacterFormStub },
-    },
-  });
+  const { wrapper, router } = await mountPage(
+    host,
+    npc ? `${FORM}?npc=1` : FORM,
+    { routes, pinia, stubs: { CharacterForm: CharacterFormStub } },
+  );
 
-  return { wrapper, store, loadCharacters, announced };
+  return { wrapper, store, loadCharacters, announced, router };
 }
 
 describe("CharacterCreate", () => {
   beforeEach(() => {
     for (const shown of [...toast.toasts.value]) toast.dismiss(shown.id);
-    routed.push.mockReset();
     vi.restoreAllMocks();
   });
 
   it.each([
     ["an application", {}],
-    ["a new NPC", { npc: true, participation: ["Owner"] }],
+    ["a new NPC", { npc: true, participation: ["Owner" as const] }],
   ])("leaves %s for a roster read again, silently", async (_, options) => {
-    const { wrapper, loadCharacters } = render(options);
+    const { wrapper, loadCharacters, router } = await render(options);
 
     await wrapper.get("button.save").trigger("click");
     await flushPromises();
 
     expect(loadCharacters).toHaveBeenCalledWith("the-game");
-    expect(routed.push).toHaveBeenCalledWith({
-      name: "game-characters",
-      params: { id: "the-game" },
-    });
+    expect(address(router)).toBe(ROSTER);
     expect(saidOutLoud()).toEqual([]);
   });
 
   it("does not leave until the roster has answered", async () => {
-    const { wrapper, store } = render();
+    const { wrapper, store, router } = await render();
     let answer!: () => void;
     vi.spyOn(store, "loadCharacters").mockImplementation(
       () =>
@@ -154,68 +148,65 @@ describe("CharacterCreate", () => {
     await wrapper.get("button.save").trigger("click");
     await flushPromises();
 
-    expect(routed.push).not.toHaveBeenCalled();
+    expect(address(router)).toBe(FORM);
 
     answer();
     await flushPromises();
 
-    expect(routed.push).toHaveBeenCalledTimes(1);
+    expect(address(router)).toBe(ROSTER);
   });
 
-  it("leads the viewer on the blacklist back to the roster", () => {
-    routed.replace.mockClear();
-    const { wrapper } = render({ blacklisted: true });
+  it("leads the viewer on the blacklist back to the roster", async () => {
+    const { wrapper, router } = await render({ blacklisted: true });
 
     expect(wrapper.find("button.save").exists()).toBe(false);
     expect(wrapper.text()).toBe("");
-    expect(routed.replace).toHaveBeenCalledWith({
-      name: "game-characters",
-      params: { id: "the-game" },
-    });
+    await flushPromises();
+    expect(address(router)).toBe(ROSTER);
   });
 
-  it("leads a viewer who does not lead the game away from the NPC form", () => {
-    routed.replace.mockClear();
-    const { wrapper } = render({ npc: true, participation: ["Player"] });
+  it("leads a viewer who does not lead the game away from the NPC form", async () => {
+    const { wrapper, router } = await render({
+      npc: true,
+      participation: ["Player"],
+    });
 
     expect(wrapper.find("button.save").exists()).toBe(false);
     expect(wrapper.text()).toBe("");
-    expect(routed.replace).toHaveBeenCalledWith({
-      name: "game-characters",
-      params: { id: "the-game" },
-    });
+    await flushPromises();
+    expect(address(router)).toBe(ROSTER);
   });
 
   // An invited player applies past a closed recruitment, so the form stays.
-  it("says over the form who applies while the recruitment is closed", () => {
-    routed.replace.mockClear();
-    const { wrapper } = render({ recruiting: false });
+  it("says over the form who applies while the recruitment is closed", async () => {
+    const { wrapper, router } = await render({ recruiting: false });
 
     expect(wrapper.find("button.save").exists()).toBe(true);
     expect(wrapper.get(".intro").text()).toBe(
       "Набор игроков закрыт: заявку подают по приглашению мастера",
     );
-    expect(routed.replace).not.toHaveBeenCalled();
+    await flushPromises();
+    expect(address(router)).toBe(FORM);
   });
 
   it.each([
     ["an application", {}, "Новый персонаж"],
     [
       "a non-player character",
-      { npc: true, participation: ["Owner"] },
+      { npc: true, participation: ["Owner" as const] },
       "Новый неигровой персонаж",
     ],
-  ])("names the form of %s in the heading", (_, options, section) => {
-    const { announced } = render(options);
+  ])("names the form of %s in the heading", async (_, options, section) => {
+    const { announced } = await render(options);
 
     expect(announced.value).toBe(section);
   });
 
-  it("offers the form to a reader who is not on the blacklist", () => {
-    routed.replace.mockClear();
-    const { wrapper } = render();
+  it("offers the form to a reader who is not on the blacklist", async () => {
+    const { wrapper, router } = await render();
 
     expect(wrapper.find("button.save").exists()).toBe(true);
-    expect(routed.replace).not.toHaveBeenCalled();
+    await flushPromises();
+    expect(address(router)).toBe(FORM);
   });
 });

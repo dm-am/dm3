@@ -7,22 +7,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every check switched off in product source is listed here, with the reason it
-/// is off.
-/// </summary>
 /// <remarks>
 /// A suppression is silent, so this test is the register. Left out: generated migrations, whose pragmas
 /// EF writes, and the test tree.
 /// </remarks>
 public class SuppressedRulesShould
 {
-    /// <summary>
-    /// One switched-off check: where it is, which rule, and why it stays off.
-    /// </summary>
-    /// <param name="File">Path from the repository root, forward slashes.</param>
-    /// <param name="Rule">The rule that is switched off.</param>
-    /// <param name="Why">Why fixing the code is not the answer here.</param>
     private sealed record Suppression(string File, string Rule, string Why);
 
     private static readonly Suppression[] Allowed =
@@ -39,6 +29,13 @@ public class SuppressedRulesShould
             "The rule forbids control characters in a pattern; this pattern exists to " +
             "reject them. They are forbidden in usernames, and matching them is the " +
             "whole point - see docs/conventions/USERNAME_POLICY.md."),
+
+        new("src/DM.Web.Client/src/shared/ui/CaptionLine/CaptionPart.vue",
+            "vue/no-unused-properties",
+            "CaptionLine reads bar, joint and flow off the vnode of each part, so the " +
+            "component that declares them never reads them itself. The props are there " +
+            "to be typed where a caption is written; the rule cannot see the reader in " +
+            "the parent."),
 
         new("src/DM.Web.Client/e2e/fixtures/auth.ts",
             "no-empty-pattern",

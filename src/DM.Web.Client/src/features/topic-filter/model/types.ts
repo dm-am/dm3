@@ -1,5 +1,8 @@
 import type { SortOption } from "@/shared/lib/filters";
 
+/** The filters the menu of the bar offers. */
+export type TopicsFilterKey = "author" | "dateRange";
+
 // Mirrors TopicRepository's sort switch: a value without a SQL case falls through to lastActivity.
 export const SORT_OPTIONS: readonly SortOption[] = [
   {

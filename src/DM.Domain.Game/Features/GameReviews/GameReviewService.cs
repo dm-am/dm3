@@ -102,9 +102,7 @@ internal class GameReviewService : IGameReviewService
         return await RefusalAsync(_identityProvider.Current.User.UserId, game) == null;
     }
 
-    /// <summary>
-    /// Why this author may not review this game, or null; in the order the reader is told them.
-    /// </summary>
+    // Why this author may not review this game, or null; in the order the reader is told them.
     private async Task<HttpException?> RefusalAsync(Guid authorId, Games.Game game)
     {
         // A review is the word on a story told to its end, whatever ended it.
@@ -151,9 +149,7 @@ internal class GameReviewService : IGameReviewService
         return review;
     }
 
-    /// <summary>
-    /// No scope of its own: editing and removal carry their own gates.
-    /// </summary>
+    // No scope of its own: editing and removal carry their own gates.
     private async Task<GameReview> FindAsync(Guid id) =>
         await _repository.GetAsync(id) ?? throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
 
@@ -234,9 +230,6 @@ internal class GameReviewService : IGameReviewService
         await _repository.UpdateAsync(entity);
     }
 
-    /// <summary>
-    /// The user has a post in the game
-    /// </summary>
     private Task<bool> CanReviewAsync(Guid userId, Guid gameId) =>
         _repository.CanReviewGameAsync(userId, gameId);
 
@@ -247,9 +240,7 @@ internal class GameReviewService : IGameReviewService
     /// <inheritdoc />
     public bool MayDelete(GameReview review) => _intentionManager.IsAllowed(GameReviewIntention.Delete, review);
 
-    /// <summary>
-    /// An admin edits past the window.
-    /// </summary>
+    // An admin edits past the window.
     private bool IsWithinEditWindow(GameReview review) =>
         _identityProvider.Current.User.Role == UserRole.Admin ||
         _dateTimeProvider.Now <= review.CreatedUtc + EditWindow;

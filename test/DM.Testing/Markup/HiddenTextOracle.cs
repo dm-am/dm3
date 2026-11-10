@@ -6,13 +6,11 @@ using DM.Infrastructure.Core.Parsing;
 
 namespace DM.Testing.Markup;
 
-/// <summary>Who reads a post, in the words of the visibility rule.</summary>
 public enum HiddenTextReader
 {
     /// <summary>A reader of the room with no claim to any block.</summary>
     Stranger,
 
-    /// <summary>The author of the post.</summary>
     Author,
 
     /// <summary>A master or an assistant of the game.</summary>
@@ -51,8 +49,6 @@ public sealed record HiddenBlock(int Start, int OpeningEnd, int End, bool WellSp
 }
 
 /// <summary>A word of a generated text, and the blocks it stands in, outermost first.</summary>
-/// <param name="Word">The word.</param>
-/// <param name="Blocks">The blocks around it.</param>
 /// <param name="InOpeningTag">It stands in the opening tag of the innermost block, not in its content.</param>
 public sealed record HiddenTextWord(string Word, IReadOnlyList<HiddenBlock> Blocks, bool InOpeningTag)
 {
@@ -70,7 +66,6 @@ public sealed record HiddenTextWord(string Word, IReadOnlyList<HiddenBlock> Bloc
 public sealed record HiddenTextReading(string Text, IReadOnlyList<HiddenBlock> Blocks,
     IReadOnlyList<HiddenTextWord> Words, string? GamePostRefusal, int HidingMarkupAt)
 {
-    /// <summary>Whether the save path of the surface refuses the text.</summary>
     public bool IsRefusedOn(BbSurface surface) =>
         surface == BbSurface.GamePost ? GamePostRefusal != null : HidingMarkupAt >= 0;
 }
@@ -91,7 +86,6 @@ public static class HiddenTextOracle
 
     private static readonly Regex WordPattern = new(@"Q\d{4}Q", RegexOptions.Compiled);
 
-    /// <summary>Read a text.</summary>
     public static HiddenTextReading Read(string input)
     {
         var text = MarkupText.AsBothSidesRead(input);
@@ -167,7 +161,7 @@ public static class HiddenTextOracle
         return new HiddenTextReading(text, blocks, WordsIn(text, blocks), refusal, hidingAt);
     }
 
-    /// <summary>A block nobody closed runs to the end of the text, and the save path refuses it.</summary>
+    // A block nobody closed runs to the end of the text, and the save path refuses it.
     private static void CloseLeftOpen(
         Stack<(int Start, int OpeningEnd, bool WellSpelled, IReadOnlyList<string> Names)> open,
         List<HiddenBlock> blocks, int end, Action<string, int> refuse)
@@ -180,7 +174,6 @@ public static class HiddenTextOracle
         }
     }
 
-    /// <summary>Every word of the text, with the blocks it stands in.</summary>
     private static HiddenTextWord[] WordsIn(string text, IReadOnlyList<HiddenBlock> blocks) =>
         WordPattern.Matches(text)
             .Select(match =>
@@ -191,10 +184,8 @@ public static class HiddenTextOracle
             })
             .ToArray();
 
-    /// <summary>
-    /// Whether "private" in any case of A-Z starts at the index and ends a token:
-    /// no letter after it, and then "]", "=", whitespace or the end.
-    /// </summary>
+    // Whether "private" in any case of A-Z starts at the index and ends a token: no letter after
+    // it, and then "]", "=", whitespace or the end.
     private static bool IsHidingToken(string text, int nameStart)
     {
         const string name = "private";
@@ -204,10 +195,6 @@ public static class HiddenTextOracle
         return after == text.Length || text[after] is ']' or '=' || IsWhiteSpace(text[after]);
     }
 
-    /// <summary>
-    /// Where the opening at the index ends, whether it is well spelled and whom
-    /// it names.
-    /// </summary>
     private static (bool WellSpelled, IReadOnlyList<string> Names, int End) ReadOpening(string text, int start)
     {
         var nameEnd = start + "[private".Length;
@@ -241,7 +228,7 @@ public static class HiddenTextOracle
         return (false, [], nameEnd);
     }
 
-    /// <summary>Whether the text at the index spells the lower-case spelling, A-Z folded and nothing else.</summary>
+    // Whether the text at the index spells the lower-case spelling, A-Z folded and nothing else.
     private static bool Spells(string text, int index, string spelling)
     {
         if (index + spelling.Length > text.Length) return false;

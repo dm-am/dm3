@@ -20,10 +20,6 @@ namespace DM.Domain.Game.Tests.Features.Characters;
 
 public class CharacterServiceShould : CharacterServiceTestBase
 {
-    /// <summary>
-    /// The save path stores every value as typed, the markup of a BBCode value
-    /// with the case of its tag names (BBCODE_RENDERING.md, "Регистр имен").
-    /// </summary>
     [Fact]
     public async Task StoreEveryValueAsTyped()
     {
@@ -104,9 +100,7 @@ public class CharacterServiceShould : CharacterServiceTestBase
         await repository.DidNotReceive().Create(Arg.Any<CreateCharacterEntity>());
     }
 
-    /// <summary>
-    /// Editing one's own application is applying again, which the list closes.
-    /// </summary>
+    // Editing one's own application is applying again, which the list closes.
     [Theory]
     [InlineData(CharacterStatus.UnderReview)]
     [InlineData(CharacterStatus.Declined)]
@@ -121,10 +115,8 @@ public class CharacterServiceShould : CharacterServiceTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
     }
 
-    /// <summary>
-    /// The sheet of a character in play or out of it is not an application, and
-    /// the list closes the application only.
-    /// </summary>
+    // The sheet of a character in play or out of it is not an application, and the list closes the
+    // application only.
     [Theory]
     [InlineData(CharacterStatus.Active)]
     [InlineData(CharacterStatus.Retired)]
@@ -137,10 +129,6 @@ public class CharacterServiceShould : CharacterServiceTestBase
         await repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
     }
 
-    /// <summary>
-    /// A character of the current user in the given status, in a game whose
-    /// blacklist holds that user.
-    /// </summary>
     private Guid OwnCharacterInAGameThatListsTheOwner(CharacterStatus status)
     {
         var gameId = Guid.NewGuid();
@@ -173,9 +161,6 @@ public class CharacterServiceShould : CharacterServiceTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// An identifier nobody answers to is a 404, on every verb.
-    /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -347,10 +332,8 @@ public class CharacterServiceShould : CharacterServiceTestBase
         await repository.Received(1).Delete(characterId, currentUserId);
     }
 
-    /// <summary>
-    /// A field the caller may not set is refused, not dropped: a 200 with the
-    /// character unchanged is exactly what a successful edit looks like.
-    /// </summary>
+    // A field the caller may not set is refused, not dropped: a 200 with the character unchanged is
+    // exactly what a successful edit looks like.
     [Fact]
     public async Task RefuseAnNpcFlagTheCallerMayNotSet()
     {
@@ -369,10 +352,8 @@ public class CharacterServiceShould : CharacterServiceTestBase
         intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.EditMasterSettings);
     }
 
-    /// <summary>
-    /// The client round-trips the whole character, so a value it already has is
-    /// nobody's attempt at anything and must not be refused.
-    /// </summary>
+    // The client round-trips the whole character, so a value it already has is nobody's attempt at
+    // anything and must not be refused.
     [Fact]
     public async Task NotAskForMasterSettingsWhenTheNpcFlagIsUnchanged()
     {
@@ -391,11 +372,9 @@ public class CharacterServiceShould : CharacterServiceTestBase
         intentionManager.DidNotReceive().ThrowIfForbidden(CharacterIntention.EditMasterSettings);
     }
 
-    /// <summary>
-    /// The second field on the same update, held separately: who may see the
-    /// character is a privacy decision, and answering a denied change with the
-    /// old policy and a 200 tells the owner it is set the way he asked.
-    /// </summary>
+    // The second field on the same update, held separately: who may see the character is a privacy
+    // decision, and answering a denied change with the old policy and a 200 tells the owner it is
+    // set the way he asked.
     [Fact]
     public async Task RefuseAnAccessPolicyTheCallerMayNotSet()
     {

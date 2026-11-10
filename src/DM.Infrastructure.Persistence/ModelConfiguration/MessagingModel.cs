@@ -5,10 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The messaging module of the model: messages, chats and the global chat, and the
-/// events held in it.
-/// </summary>
 internal static class MessagingModel
 {
     internal static void Configure(ModelBuilder modelBuilder)

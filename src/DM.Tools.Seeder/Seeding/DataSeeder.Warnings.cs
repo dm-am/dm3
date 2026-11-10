@@ -104,28 +104,20 @@ internal sealed partial class DataSeeder
             "lowered by its author), one of them with the complaint it was issued on");
     }
 
-    /// <summary>
-    /// A text of the seed a warning can name: the object, its author, its words,
-    /// and when it was written.
-    /// </summary>
     private sealed record Offending(
         Guid EntityId, Guid AuthorId, string Text, WarningEntityType EntityType, DateTimeOffset CreatedUtc);
 
-    /// <summary>The earlier of a moment and now: the seed writes no future.</summary>
+    // The earlier of a moment and now: the seed writes no future.
     private static DateTimeOffset NoLaterThan(DateTimeOffset moment, DateTimeOffset now) =>
         moment < now ? moment : now;
 
-    /// <summary>
-    /// The planned moment, or the floor when the plan falls before it, and never after now: a warning
-    /// dated before its text reads as a verdict on something not yet written.
-    /// </summary>
+    // The planned moment, or the floor when the plan falls before it, and never after now: a
+    // warning dated before its text reads as a verdict on something not yet written.
     private static DateTimeOffset NoEarlierThan(DateTimeOffset planned, DateTimeOffset floor, DateTimeOffset now) =>
         NoLaterThan(planned < floor ? floor : planned, now);
 
-    /// <summary>
-    /// The first message of the global chat, in a fixed order, written by an
-    /// ordinary reader: a moderator warns only below his own rank.
-    /// </summary>
+    // The first message of the global chat, in a fixed order, written by an ordinary reader: a
+    // moderator warns only below his own rank.
     private async Task<Offending?> FirstChatMessage() =>
         await _dbContext.Messages
             .Where(m => m.ChatId == WellKnownChats.GlobalChatId && !m.IsRemoved && m.Author.Role == UserRole.RegularUser)
@@ -133,13 +125,9 @@ internal sealed partial class DataSeeder
             .Select(m => new Offending(m.MessageId, m.UserId, m.Text, WarningEntityType.Message, m.CreatedUtc))
             .FirstOrDefaultAsync();
 
-    /// <summary>
-    /// The first comment, in a fixed order, whose owner the predicate accepts and
-    /// whose author is an ordinary reader: a moderator warns only below his own
-    /// rank (ModerationRank), and the seed issues nothing the site would refuse.
-    /// A comment with the preferred text, when one is given and found, comes
-    /// first.
-    /// </summary>
+    // The first comment, in a fixed order, whose owner the predicate accepts and whose author is an
+    // ordinary reader: a moderator warns only below his own rank (ModerationRank), and the seed
+    // issues nothing the site would refuse.
     private async Task<Offending?> FirstComment(
         Expression<Func<Comment, bool>> owner, string? preferredText = null) =>
         await _dbContext.Comments
@@ -150,12 +138,8 @@ internal sealed partial class DataSeeder
             .Select(c => new Offending(c.CommentId, c.AuthorId, c.Text, WarningEntityType.Comment, c.CreatedUtc))
             .FirstOrDefaultAsync();
 
-    /// <summary>
-    /// A warning on a text of the seed, issued to its author with the text
-    /// copied as the snapshot, as the button does it, an hour after the text at
-    /// the earliest. Without such a text, a warning on the fallback reader that
-    /// names nothing.
-    /// </summary>
+    // A warning on a text of the seed, issued to its author with the text copied as the snapshot,
+    // as the button does it, an hour after the text at the earliest.
     private Warning About(
         Offending? offending, DbUser fallback, DbUser author, int points, string text, DateTimeOffset createdUtc)
     {
@@ -217,10 +201,6 @@ internal sealed partial class DataSeeder
         return warning;
     }
 
-    /// <summary>
-    /// The fixed identifier of the avatar the warning on a profile pins
-    /// (<see cref="OnProfile"/>).
-    /// </summary>
     private static readonly Guid FormerAvatarUploadId = FixedGuid(0xb1, 1);
 
     private Warning Warned(DbUser target, DbUser author, int points, string text, DateTimeOffset createdUtc) =>
@@ -237,9 +217,6 @@ internal sealed partial class DataSeeder
             OriginalPoints = points
         };
 
-    /// <summary>
-    /// The change of the points of a warning, a day after it at the earliest.
-    /// </summary>
     private static Warning Corrected(
         Warning warning, DbUser changedBy, int points, string text, DateTimeOffset changedUtc, DateTimeOffset now)
     {

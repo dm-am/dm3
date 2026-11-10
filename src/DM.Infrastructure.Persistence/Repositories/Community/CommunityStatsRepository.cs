@@ -51,10 +51,6 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         };
     }
 
-    /// <summary>
-    /// Totals with today's delta: every row that is not removed, and how many of
-    /// them were created since the start of the day.
-    /// </summary>
     private async Task<TotalsWithDelta> Totals(DateTimeOffset todayStartUtc, CancellationToken ct)
     {
         var totalUsers = await _dbContext.Users.CountAsync(ct);
@@ -73,7 +69,6 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         var totalBlogs = await _dbContext.Blogs.CountAsync(ct);
         var blogsToday = await _dbContext.Blogs.CountAsync(b => b.CreatedUtc >= todayStartUtc, ct);
 
-        // Count all publications
         var totalPublications = await _dbContext.Publications.CountAsync(ct);
         var publicationsToday = await _dbContext.Publications.CountAsync(p => p.CreatedUtc >= todayStartUtc, ct);
 
@@ -157,10 +152,6 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         };
     }
 
-    /// <summary>
-    /// The boards of players over the [start, end) window: by rating received, by
-    /// posts written and by the volume of the text they wrote.
-    /// </summary>
     private async Task<(Leaderboard ByRating, Leaderboard ByPosts, Leaderboard ByVolume)> PlayerBoards(
         DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct)
     {
@@ -183,9 +174,6 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         return (topByRating, topByPosts, topByVolume);
     }
 
-    /// <summary>
-    /// The boards of games over the [start, end) window: by rating and by posts.
-    /// </summary>
     private async Task<(Leaderboard ByRating, Leaderboard ByPosts)> GameBoards(
         DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct)
     {
@@ -207,10 +195,6 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         return (topGamesByRating, topGamesByPosts);
     }
 
-    /// <summary>
-    /// The boards of blogs over the [start, end) window: by rating and by
-    /// publications.
-    /// </summary>
     private async Task<(Leaderboard ByRating, Leaderboard ByPosts)> BlogBoards(
         DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct)
     {
@@ -237,10 +221,6 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         return (topBlogsByRating, topBlogsByPosts);
     }
 
-    /// <summary>
-    /// The board of blog authors over the [start, end) window, by the volume of
-    /// the publications they wrote.
-    /// </summary>
     /// <remarks>
     /// Counted on the source, unlike the player board: a publication has no projected
     /// text beside it, so its markup scores.
@@ -252,14 +232,12 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .GroupBy(p => p.AuthorId)
             .Select(g => new Scored { Id = g.Key, Score = g.Sum(p => (int)p.Content.Length) }), ct);
 
-    /// <summary>One aggregate of a board before it is named.</summary>
     private sealed class Scored
     {
         public Guid Id { get; set; }
         public int Score { get; set; }
     }
 
-    /// <summary>The board's places: scored above zero, highest first, ties by identifier.</summary>
     private static IQueryable<Scored> Top(IQueryable<Scored> scores) =>
         scores
             .Where(x => x.Score > 0)
@@ -305,9 +283,6 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
     private IQueryable<DbGame> PublicGames() =>
         _dbContext.Games.Where(GameAccessibilityFilters.GameAvailable(Guid.Empty));
 
-    /// <summary>
-    /// The posts a guest can read: the open rooms of the games a guest can open.
-    /// </summary>
     private IQueryable<DbPost> PublicPosts() =>
         _dbContext.Rooms
             .Where(GameAccessibilityFilters.RoomAvailable(Guid.Empty))

@@ -97,9 +97,6 @@ public class UpdatePublicationValidatorShould
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// Hiding markup on a surface that does not declare it.
-    /// </summary>
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {

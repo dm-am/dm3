@@ -16,9 +16,8 @@ public class CharacterMapperShould : UnitTestBase
     private static CharacterMapper CreateMapper() =>
         new(new UserMapper());
 
-    /// <summary>
-    /// PATCH carries "not sent" as null and the write model keeps saying it: the destination flags are nullable.
-    /// </summary>
+    // PATCH carries "not sent" as null and the write model keeps saying it: the destination flags
+    // are nullable.
     [Fact]
     public void KeepAnUnsentPrivacyBlockNull()
     {
@@ -49,10 +48,8 @@ public class CharacterMapperShould : UnitTestBase
         update.AccessPolicy.Should().Be(CharacterAccessPolicy.EditAllowed);
     }
 
-    /// <summary>
-    /// The raw stored BBCode is never placed into the plain Value (an HTML
-    /// sink); it travels as a server-rendered InfoBbText instead.
-    /// </summary>
+    // The raw stored BBCode is never placed into the plain Value (an HTML sink); it travels as a
+    // server-rendered InfoBbText instead.
     [Fact]
     public void CarryABbCodeAttributeAsRenderedTextOnly()
     {
@@ -110,9 +107,6 @@ public class CharacterMapperShould : UnitTestBase
             .Should().Be(viewerMayEdit);
     }
 
-    /// <summary>
-    /// The privacy block of a details response folds back out of the flags.
-    /// </summary>
     [Fact]
     public void UnfoldTheAccessPolicyIntoThePrivacyBlock()
     {

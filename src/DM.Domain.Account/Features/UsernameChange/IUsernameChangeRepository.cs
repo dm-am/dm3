@@ -17,9 +17,7 @@ public interface IUsernameChangeRepository
     /// An approval whose link has run out holds nothing and is not in flight,
     /// whether or not the expiry pass has caught it yet.
     /// </summary>
-    /// <param name="userId">Whose request to look for.</param>
     /// <param name="now">Moment the approval deadline is compared against.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<UsernameChangeRequest?> GetActiveByUserId(
         Guid userId, DateTimeOffset now, CancellationToken ct = default);
 
@@ -28,16 +26,10 @@ public interface IUsernameChangeRepository
     /// </summary>
     Task<UsernameChangeRequest?> GetLatestByUserId(Guid userId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get request by ID
-    /// </summary>
     Task<UsernameChangeRequest?> GetById(Guid requestId, CancellationToken ct = default);
 
     Task<IReadOnlyCollection<UsernameChangeRequestEntry>> GetPendingRequests(CancellationToken ct = default);
 
-    /// <summary>
-    /// Get request by approval token
-    /// </summary>
     Task<UsernameChangeRequest?> GetByApprovalToken(Guid token, CancellationToken ct = default);
 
     /// <summary>
@@ -71,15 +63,8 @@ public interface IUsernameChangeRepository
     Task<bool> IsUsernameAvailable(string username, Guid? excludeUserId = null, CancellationToken ct = default);
 
 
-    /// <summary>
-    /// Expire requests still waiting for a moderator since before
-    /// <paramref name="createdBefore" />.
-    /// </summary>
     /// <param name="createdBefore">Cutoff the caller derived from the review window.</param>
-    /// <param name="resolvedUtc">Moment written as the resolution time.</param>
     /// <param name="comment">Resolution comment the requester is shown.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <returns>Number of requests expired.</returns>
     Task<int> ExpireUnreviewedRequests(
         DateTimeOffset createdBefore, DateTimeOffset resolvedUtc, string comment, CancellationToken ct = default);
 

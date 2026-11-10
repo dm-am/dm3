@@ -18,11 +18,7 @@ using DomainGameInvitation = DM.Domain.Game.Features.Invitations.GameInvitation;
 
 namespace DM.Web.API.Tests.Features.Game;
 
-/// <summary>
-/// The roster and the invitations of a game name a person by the same reference
-/// as every other list: with the role and the newbie mark of the account.
-/// </summary>
-/// <remarks>Built by hand, the reference carried neither, and every line read as a guest.</remarks>
+// Built by hand, the reference carried neither, and every line read as a guest.
 public class GameRosterReferenceShould : UnitTestBase
 {
     private readonly IGameInvitationService _invitationService = Mock<IGameInvitationService>();

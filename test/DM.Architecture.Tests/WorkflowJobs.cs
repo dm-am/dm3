@@ -8,15 +8,10 @@ using DM.Testing;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The jobs of a workflow under .github/workflows, read once for every rule about them.
-/// </summary>
 internal static class WorkflowJobs
 {
-    /// <summary>A job: below jobs: it is the only key written at two spaces.</summary>
     private static readonly Regex Key = new(@"^  ([A-Za-z_][\w.-]*):\s*$", RegexOptions.Compiled);
 
-    /// <summary>The full path of a workflow, by its file name.</summary>
     internal static string PathOf(string workflow) =>
         Path.Combine(RepositoryLayout.Root, ".github", "workflows", workflow);
 
@@ -69,6 +64,5 @@ internal static class WorkflowJobs
         return found!;
     }
 
-    /// <summary>A line of a workflow that is not a comment.</summary>
     internal static bool IsCode(string line) => !line.TrimStart().StartsWith('#');
 }

@@ -25,9 +25,6 @@ public enum TicketSubtype
     /// </summary>
     Bug = 4,
 
-    /// <summary>
-    /// Account access recovery request
-    /// </summary>
     /// <remarks>
     /// Administrators only, with <see cref="AccountRestoration"/> and <see cref="PersonalData"/>:
     /// ownership of an account is checked by its address, which only an administrator reads.
@@ -39,9 +36,6 @@ public enum TicketSubtype
     /// </summary>
     RegistrationIssue = 6,
 
-    /// <summary>
-    /// Request to remove the account
-    /// </summary>
     /// <remarks>
     /// The form performs no action on the account: removal happens only through
     /// moderation, by hand.

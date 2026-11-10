@@ -2,9 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace DM.Domain.Core.Users;
 
-/// <summary>
-/// What a username may be.
-/// </summary>
 /// <remarks>
 /// A deny-list, as USERNAME_POLICY.md states it.
 /// </remarks>

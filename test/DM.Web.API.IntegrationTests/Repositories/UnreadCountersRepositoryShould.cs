@@ -8,10 +8,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// One marker per (UserId, EntityId, EntryType): the primary key holds it and the writes are INSERT ... ON CONFLICT,
-/// both of which exist only in a live store.
-/// </summary>
+// One marker per (UserId, EntityId, EntryType): the primary key holds it and the writes are INSERT
+// ... ON CONFLICT, both of which exist only in a live store.
 public class UnreadCountersRepositoryShould : IntegrationTestBase
 {
     public UnreadCountersRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -61,9 +59,8 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
         unread[entityId].Should().Be(0, "the entity was marked as read, twice");
     }
 
-    /// <summary>
-    /// A conversation is parented by the reader, so marking it read does not copy a parent from another marker.
-    /// </summary>
+    // A conversation is parented by the reader, so marking it read does not copy a parent from
+    // another marker.
     [Fact]
     public async Task KeepTheReadersOwnParentWhenAnotherParticipantsMarkerComesFirst()
     {
@@ -100,9 +97,7 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
             "a conversation that lost its parent disappears from every total that asks by parent");
     }
 
-    /// <summary>
-    /// The retention sweep reads a moment, so removing a marker writes one.
-    /// </summary>
+    // The retention sweep reads a moment, so removing a marker writes one.
     [Fact]
     public async Task StampTheMomentAMarkerIsRemoved()
     {

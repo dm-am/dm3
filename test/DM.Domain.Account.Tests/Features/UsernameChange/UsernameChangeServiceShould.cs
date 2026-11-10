@@ -122,7 +122,6 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         );
     }
 
-    /// <summary>The approval lives the hours the settings give it, the hours its letter names.</summary>
     [Fact]
     public async Task LetTheApprovalLiveTheConfiguredHours()
     {
@@ -148,10 +147,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         request.ApprovalTokenExpiresUtc.Should().Be(now.AddHours(tokens.UsernameChangeApprovalTokenLifetimeHours));
     }
 
-    /// <summary>
-    /// Resolving is approving or rejecting; the two statuses the flow reaches on its
-    /// own are not a moderator's to assert.
-    /// </summary>
+    // Resolving is approving or rejecting; the two statuses the flow reaches on its own are not a
+    // moderator's to assert.
     [Theory]
     [InlineData(UsernameChangeRequestStatus.Pending)]
     [InlineData(UsernameChangeRequestStatus.Completed)]
@@ -228,12 +225,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Puts a request behind an approval token and hands the token back.
-    /// </summary>
-    /// <remarks>
-    /// The expiry stays on the row after the request leaves Approved, so the order of the reads decides the answer.
-    /// </remarks>
+    // The expiry stays on the row after the request leaves Approved, so the order of the reads
+    // decides the answer.
     private Guid IssuedApproval(UsernameChangeRequestStatus status, DateTimeOffset expiresUtc, Guid? userId = null)
     {
         var token = Guid.NewGuid();
@@ -249,9 +242,7 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         return token;
     }
 
-    /// <summary>
-    /// The state the form opens in, and the only one that names the account.
-    /// </summary>
+    // The state the form opens in, and the only one that names the account.
     [Fact]
     public async Task ReportTheApprovalAsReadyWhileItStands()
     {
@@ -265,11 +256,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         info.CurrentUsername.Should().Be("reader", "the form says which name is being changed");
     }
 
-    /// <summary>
-    /// Both ways of running out, and one answer for them: the hourly pass has moved
-    /// the request to Expired, or it has not run yet and only the stored moment
-    /// says so.
-    /// </summary>
+    // Both ways of running out, and one answer for them: the hourly pass has moved the request to
+    // Expired, or it has not run yet and only the stored moment says so.
     [Theory]
     [InlineData(UsernameChangeRequestStatus.Approved)]
     [InlineData(UsernameChangeRequestStatus.Expired)]
@@ -285,10 +273,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         info.CurrentUsername.Should().BeNull("a dead link says nothing about the account");
     }
 
-    /// <summary>
-    /// A spent link, opened after its 48 hours are up — which is the ordinary case,
-    /// since a letter is reread days later.
-    /// </summary>
+    // A spent link, opened after its 48 hours are up — which is the ordinary case, since a letter
+    // is reread days later.
     [Fact]
     public async Task ReportTheApprovalAsUsedWhenTheNameWasAlreadyChangedThroughIt()
     {
@@ -312,10 +298,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         (await service.GetApprovalInfoAsync(token)).Should().BeNull();
     }
 
-    /// <summary>
-    /// Approval and choice are days apart, so the name can be gone in between —
-    /// taken by another account, or reserved by someone's history.
-    /// </summary>
+    // Approval and choice are days apart, so the name can be gone in between — taken by another
+    // account, or reserved by someone's history.
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, true)]
@@ -338,13 +322,7 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
             Arg.Any<UsernameChangeRequest>(), Arg.Any<CreateUsernameHistory>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A name the storage refuses is refused the way a name found taken is, and
-    /// not as a failure of the storage engine.
-    /// </summary>
-    /// <remarks>
-    /// The checks are reads, so either unique structure over the rename may still refuse the write.
-    /// </remarks>
+    // The checks are reads, so either unique structure over the rename may still refuse the write.
     [Fact]
     public async Task RefuseARenameTheStorageWouldNotTake()
     {
@@ -368,10 +346,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         exception.Message.Should().Contain("занято");
     }
 
-    /// <summary>
-    /// The same letter followed twice. One approval buys one rename, and the second
-    /// attempt has to say which of the two refusals it is.
-    /// </summary>
+    // One approval buys one rename, and the second attempt has to say which of the two refusals it
+    // is.
     [Fact]
     public async Task RefuseALinkWhoseNameWasAlreadyChosen()
     {
@@ -424,10 +400,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         exception.Message.Should().Contain("истек");
     }
 
-    /// <summary>
-    /// An approval the requester has not spent is a change already granted, so
-    /// asking for a second one must be refused.
-    /// </summary>
+    // An approval the requester has not spent is a change already granted, so asking for a second
+    // one must be refused.
     [Fact]
     public async Task RefuseASecondRequestWhileAnApprovalIsStillUnspent()
     {
@@ -443,11 +417,7 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         exception.Message.Should().Be(RefusalMessage.UsernameChangeAlreadyApproved);
     }
 
-    /// <summary>
-    /// Both terminal states hold nothing: expiry granted no name and completion
-    /// spent its grant. Asking again is the only way forward from either, and it
-    /// is what the queue already accepts.
-    /// </summary>
+    // Both terminal states hold nothing: expiry granted no name and completion spent its grant.
     [Theory]
     [InlineData(UsernameChangeRequestStatus.Expired)]
     [InlineData(UsernameChangeRequestStatus.Completed)]
@@ -467,10 +437,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         result.Status.Should().Be(UsernameChangeRequestStatus.Pending);
     }
 
-    /// <summary>
-    /// Expiry has two roads with one status, and the requester is owed the
-    /// difference: nobody read the request, or the approval went unused.
-    /// </summary>
+    // Expiry has two roads with one status, and the requester is owed the difference: nobody read
+    // the request, or the approval went unused.
     [Fact]
     public async Task TellAnUnreviewedExpiryFromALapsedApproval()
     {
@@ -494,10 +462,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         lapsed!.ExpiryReason.Should().Be(UsernameChangeExpiryReason.ApprovalLapsed);
     }
 
-    /// <summary>
-    /// The reason is about expiry alone: a live approval carries the same token
-    /// expiry field and must not be labelled with it.
-    /// </summary>
+    // The reason is about expiry alone: a live approval carries the same token expiry field and
+    // must not be labelled with it.
     [Fact]
     public async Task LeaveTheExpiryReasonUnsetOnEveryOtherStatus()
     {
@@ -514,10 +480,8 @@ public class UsernameChangeServiceShould : UsernameChangeServiceTestBase
         result!.ExpiryReason.Should().BeNull();
     }
 
-    /// <summary>
-    /// The moment handed to the repository is the service's clock, so the gate and
-    /// the rest of the flow judge the same deadline by the same time.
-    /// </summary>
+    // The moment handed to the repository is the service's clock, so the gate and the rest of the
+    // flow judge the same deadline by the same time.
     [Fact]
     public async Task JudgeTheApprovalDeadlineByTheServiceClock()
     {

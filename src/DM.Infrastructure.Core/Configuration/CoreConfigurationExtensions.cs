@@ -18,8 +18,6 @@ public static class CoreConfigurationExtensions
     /// Binds the options every host shares, and refuses to start without the
     /// values that have no working default.
     /// </summary>
-    /// <param name="services">Service collection.</param>
-    /// <param name="configuration">Configuration to read the sections from.</param>
     public static IServiceCollection AddDmCoreConfiguration(
         this IServiceCollection services, IConfiguration configuration)
     {
@@ -48,7 +46,6 @@ public static class CoreConfigurationExtensions
     /// <remarks>
     /// Empty, PublicUrl silently builds links that point at nothing.
     /// </remarks>
-    /// <param name="services">Service collection.</param>
     public static IServiceCollection RequireGeneratedLinks(this IServiceCollection services)
     {
         services.AddOptions<SiteAddressConfiguration>()
@@ -59,10 +56,6 @@ public static class CoreConfigurationExtensions
         return services;
     }
 
-    /// <summary>
-    /// Declares that this host opens the relational store.
-    /// </summary>
-    /// <param name="services">Service collection.</param>
     public static IServiceCollection RequireRelationalStorage(this IServiceCollection services)
     {
         services.AddOptions<ConnectionStrings>()
@@ -75,7 +68,6 @@ public static class CoreConfigurationExtensions
     /// Declares that this host reads or writes object storage. None of these four
     /// values has a working default: without them every upload fails.
     /// </summary>
-    /// <param name="services">Service collection.</param>
     public static IServiceCollection RequireObjectStorage(this IServiceCollection services)
     {
         services.AddOptions<CdnConfiguration>()

@@ -6,8 +6,9 @@
 // is the events strip, which only pushes move and a down socket does not deliver.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { nextTick } from "vue";
-import { flushPromises, mount, enableAutoUnmount } from "@vue/test-utils";
+import { flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia, type Pinia } from "pinia";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 
 const { api, socket, scrollToIndex } = vi.hoisted(() => ({
   api: {
@@ -53,16 +54,6 @@ vi.mock("@/shared/lib/composables/useVirtualScroll", async () => {
   };
 });
 
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: {}, query: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}));
-
-// The page opens a warning dialog through it; nothing here opens one.
-vi.mock("vue-final-modal", () => ({
-  useModal: () => ({ open: vi.fn(), close: vi.fn() }),
-}));
-
 import GlobalChatPage from "./GlobalChatPage.vue";
 import { useGlobalChatStore } from "@/entities/global-chat";
 
@@ -103,11 +94,36 @@ function pretendTimePassed(ms: number) {
   vi.spyOn(Date, "now").mockReturnValue(now + ms);
 }
 
-async function openChat() {
-  const wrapper = mount(GlobalChatPage, {
-    shallow: true,
-    global: { plugins: [pinia], stubs: { ChatFeed: false } },
+/** Every child but the feed, as a shallow mount would leave them. */
+const stubs = {
+  PageTitle: true,
+  ChatSearchRow: true,
+  ChatEventsPanel: true,
+  LoginPrompt: true,
+  ChatComposer: true,
+  ChatStrip: true,
+  FeedEdge: true,
+  MessageToolbar: true,
+  ChatMessage: true,
+  ChatMessageSkeleton: true,
+  ErrorState: true,
+  DashSeparator: true,
+  ActionResult: true,
+  SvgIcon: true,
+};
+
+/** The page at its address, before its first window has come. */
+async function mountChat() {
+  const { wrapper } = await mountPage(GlobalChatPage, "/global-chat", {
+    routes: [["global-chat", "/global-chat"]],
+    pinia,
+    stubs,
   });
+  return wrapper;
+}
+
+async function openChat() {
+  const wrapper = await mountChat();
   await flushPromises();
   return wrapper;
 }
@@ -141,6 +157,8 @@ describe("GlobalChatPage, the socket coming back", () => {
 
   it("re-reads the feed and the events strip", async () => {
     await openChat();
+    // An address with no day opens on the latest messages, the window the socket catches up.
+    expect(api.getMessagesNearDate).not.toHaveBeenCalled();
     api.getMessages.mockClear();
     api.getEvents.mockClear();
     // The connection came back after a real outage, not a moment after mount.
@@ -173,10 +191,7 @@ describe("GlobalChatPage, the socket coming back", () => {
       }),
     );
 
-    mount(GlobalChatPage, {
-      shallow: true,
-      global: { plugins: [pinia], stubs: { ChatFeed: false } },
-    });
+    await mountChat();
     socket.isConnected.value = true;
     await flushPromises();
     answer({ data: { resources: [] }, error: null });
@@ -255,10 +270,7 @@ describe("GlobalChatPage, the socket coming back", () => {
         arrive = resolve;
       }),
     );
-    const wrapper = mount(GlobalChatPage, {
-      shallow: true,
-      global: { plugins: [pinia], stubs: { ChatFeed: false } },
-    });
+    const wrapper = await mountChat();
     const poll = vi.spyOn(globalThis, "setInterval");
 
     wrapper.unmount();

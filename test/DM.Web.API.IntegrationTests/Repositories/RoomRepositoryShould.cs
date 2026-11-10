@@ -11,10 +11,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Update writes a partial patch, and GetAvailable goes through the accessibility filter's NULL semantics, so this
-/// runs against the container Postgres.
-/// </summary>
+// Update writes a partial patch, and GetAvailable goes through the accessibility filter's NULL
+// semantics, so this runs against the container Postgres.
 public class RoomRepositoryShould : IntegrationTestBase
 {
     public RoomRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -80,10 +78,8 @@ public class RoomRepositoryShould : IntegrationTestBase
         room!.IsArchived.Should().BeTrue();
     }
 
-    /// <summary>
-    /// A fresh game and room per test: the fixture's database is shared and
-    /// seeded, so fixed identifiers would collide across tests and with the seed.
-    /// </summary>
+    // A fresh game and room per test: the fixture's database is shared and seeded, so fixed
+    // identifiers would collide across tests and with the seed.
     private static async Task<(Guid MasterId, Guid RoomId)> AddGameWithRoomAsync(
         DmDbContext dbContext, bool isArchived)
     {
@@ -125,8 +121,6 @@ public class RoomRepositoryShould : IntegrationTestBase
         return (masterId, roomId);
     }
 
-    /// <summary>
-    /// A public id no other row holds: the column is NOT NULL and uniquely indexed.
-    /// </summary>
+    // A public id no other row holds: the column is NOT NULL and uniquely indexed.
     private static string UniquePublicId() => Guid.NewGuid().ToString("N")[..10];
 }

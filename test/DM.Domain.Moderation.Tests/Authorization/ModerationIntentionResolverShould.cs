@@ -44,10 +44,8 @@ public class ModerationIntentionResolverShould
         resolver.IsAllowed(AuthenticatedUser.Guest, intention).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The manual moderation watch sits at the rank that keeps the violators list
-    /// and issues the warnings, not at the one that edits profile text.
-    /// </summary>
+    // The manual moderation watch sits at the rank that keeps the violators list and issues the
+    // warnings, not at the one that edits profile text.
     [Theory]
     [InlineData(UserRole.Guest, false)]
     [InlineData(UserRole.RegularUser, false)]
@@ -64,10 +62,7 @@ public class ModerationIntentionResolverShould
         resolver.IsAllowed(user, ModerationIntention.SetModerationWatch).Should().Be(expected);
     }
 
-    /// <summary>
-    /// Every intention the enum declares is granted to somebody, and refused to
-    /// somebody. A member added with no arm behind it lands here.
-    /// </summary>
+    // A member added with no arm behind it lands here.
     [Fact]
     public void AnswerEveryIntentionTheEnumDeclares()
     {

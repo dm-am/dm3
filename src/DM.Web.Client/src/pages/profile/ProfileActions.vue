@@ -59,11 +59,7 @@ const canMessage = computed(() => props.user.viewer?.canMessage === true);
         class="action-link"
         >Написать сообщение</router-link
       >
-      <UserSubscribeButton
-        :user-id="user.id"
-        :username="user.username"
-        :result="subscribeResult"
-      />
+      <UserSubscribeButton :user-id="user.id" :result="subscribeResult" />
       <!-- Offered where the server says the recommendation would be taken. -->
       <router-link
         v-if="canEndorse"

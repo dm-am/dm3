@@ -4,9 +4,6 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The X-Dm-Audience header parser keeps its vocabulary and falls back to Display.
-/// </summary>
 public class BbAudienceHeaderShould
 {
     [Theory]

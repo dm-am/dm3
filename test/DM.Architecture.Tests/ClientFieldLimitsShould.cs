@@ -50,7 +50,6 @@ public class ClientFieldLimitsShould
     private static readonly Assembly Community = typeof(DM.Domain.Community.Authorization.PollIntention).Assembly;
     private static readonly Assembly Game = typeof(DM.Domain.Game.Authorization.GameIntention).Assembly;
 
-    /// <summary>The client file, its constant, the server place and the number that place holds.</summary>
     public static TheoryData<string, string, string, long> Copies => new()
     {
         { Blog, "BLOG_TITLE_MAX_LENGTH", "CreateBlogRequest.Title", Maximum(typeof(CreateBlogRequest), nameof(CreateBlogRequest.Title)) },
@@ -164,7 +163,6 @@ public class ClientFieldLimitsShould
             $"{constant} in {file} copies {server}: past it the form lets through what the save " +
             "refuses, short of it the form refuses what would have saved");
 
-    /// <summary>The texts that promise the reader a bound in words, and the bound.</summary>
     public static TheoryData<string, string, int> Statements => new()
     {
         { UsernameInput, @"Минимум (?<n>\d+) символа", Minimum(typeof(ActivationRequest), nameof(ActivationRequest.Username)) },

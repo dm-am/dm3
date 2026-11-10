@@ -10,9 +10,6 @@ public class GameReaderControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Get readers of existing game should return OK
-    /// </summary>
     [Fact]
     public async Task GetReadersWithValidIdReturnsOk()
     {

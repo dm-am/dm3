@@ -16,18 +16,11 @@ namespace DM.Domain.Moderation.Features.Tickets;
 /// </remarks>
 public static class TicketVisibility
 {
-    /// <summary>
-    /// Categories a junior moderator reads.
-    /// </summary>
     private static readonly TicketSubtype[] ModeratorSubtypes =
     [
         TicketSubtype.UserComplaint
     ];
 
-    /// <summary>
-    /// Categories a senior moderator reads: a junior moderator's, and the
-    /// complaints about a junior moderator's decisions.
-    /// </summary>
     private static readonly TicketSubtype[] SeniorModeratorSubtypes =
     [
         ..ModeratorSubtypes,

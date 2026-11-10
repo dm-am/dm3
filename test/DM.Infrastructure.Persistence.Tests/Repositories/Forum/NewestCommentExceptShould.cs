@@ -20,10 +20,8 @@ public class NewestCommentExceptShould
     private static readonly Guid EntityId = Guid.Parse("9a41c8d0-0000-4000-8000-000000000001");
     private static readonly Guid AuthorId = Guid.Parse("9a41c8d0-0000-4000-8000-000000000002");
 
-    /// <summary>
-    /// Differ in the last byte only, so .NET and Postgres order them the same way, and
-    /// Greater is the greater of the two.
-    /// </summary>
+    // Differ in the last byte only, so .NET and Postgres order them the same way, and Greater is
+    // the greater of the two.
     private static readonly Guid SmallerId = Guid.Parse("9a41c8d0-0000-4000-8000-000000000011");
 
     private static readonly Guid GreaterId = Guid.Parse("9a41c8d0-0000-4000-8000-000000000012");
@@ -47,9 +45,6 @@ public class NewestCommentExceptShould
         return context;
     }
 
-    /// <summary>
-    /// The same question on behalf of each of the four discussions.
-    /// </summary>
     public static TheoryData<string> Discussions() =>
         new("topic", "blog", "publication", "game");
 
@@ -69,9 +64,6 @@ public class NewestCommentExceptShould
                 context, EntityId, deleted, "DM.GameComments.NewestCommentIdExcept"),
         };
 
-    /// <summary>
-    /// The pointer names the smaller identifier of two tied comments when the deleted row sorts second.
-    /// </summary>
     [Theory]
     [MemberData(nameof(Discussions))]
     public async Task NeverHandBackTheCommentThatIsLeaving(string discussion)

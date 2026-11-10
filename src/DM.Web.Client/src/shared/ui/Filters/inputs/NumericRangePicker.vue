@@ -99,7 +99,6 @@ function handleKeydown(event: KeyboardEvent) {
 /** Digits, and with allowNegative one "-" at the start. */
 const allowed = computed(() => (props.allowNegative ? /^-?\d*$/ : /^\d*$/));
 
-/** The field's value with its selection replaced by what is typed or pasted. */
 function edited(input: HTMLInputElement, text: string): string {
   const start = input.selectionStart ?? input.value.length;
   const end = input.selectionEnd ?? start;

@@ -13,7 +13,7 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 /// <inheritdoc />
 internal class GamePopularityRepository : IGamePopularityRepository
 {
-    /// <summary>Games per write batch, so one pass cannot hold the store for minutes.</summary>
+    // Games per write batch, so one pass cannot hold the store for minutes.
     private const int BatchSize = 100;
 
     private readonly DmDbContext _dbContext;

@@ -1,17 +1,21 @@
-export type TestimonialSortBy = "created" | "author";
+import type { SortDirection } from "@/shared/lib/filters/types";
+
+import type { TestimonialSortBy } from "@/shared/api/models/community";
+
+export type { TestimonialSortBy };
 
 export interface TestimonialsFilterState {
   search: string;
 
   sortBy: TestimonialSortBy;
 
-  sortOrder: "asc" | "desc";
+  sortOrder: SortDirection;
 }
 
 export interface TestimonialsSearchParams {
   search?: string;
   sortBy?: TestimonialSortBy;
-  sortOrder?: "asc" | "desc";
+  sortOrder?: SortDirection;
   number?: number;
   size?: number;
 }

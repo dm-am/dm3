@@ -8,10 +8,7 @@ using DM.Testing;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The files of the deployment, and the readers that two or more of its rules share.
-/// </summary>
-/// <remarks>What only one rule reads stays private to it.</remarks>
+// What only one rule reads stays private to it.
 internal static class DeploymentFiles
 {
     internal const string BaseCompose = "docker-compose.yml";
@@ -29,10 +26,7 @@ internal static class DeploymentFiles
         return File.ReadAllText(path);
     }
 
-    /// <summary>
-    /// The edge as nginx assembles it: the file with its include resolved.
-    /// </summary>
-    /// <remarks>Both servers of the edge include the same locations, so nginx.conf alone has no routes.</remarks>
+    // Both servers of the edge include the same locations, so nginx.conf alone has no routes.
     internal static string EdgeAsAssembled() => Read(NginxConfiguration)
         .Replace("include /etc/nginx/edge-locations.conf;", Read(EdgeLocations), StringComparison.Ordinal);
 
@@ -50,7 +44,6 @@ internal static class DeploymentFiles
         return end < 0 ? null : text[start..end];
     }
 
-    /// <summary>The body of one service, up to the next key at the same indent.</summary>
     internal static string ServiceBlock(string compose, string name)
     {
         var lines = compose.Split('\n');
@@ -60,8 +53,7 @@ internal static class DeploymentFiles
         return string.Join('\n', lines.Skip(start + 1).TakeWhile(line => !Regex.IsMatch(line, @"^  \S")));
     }
 
-    /// <summary>The body of the service a container name belongs to.</summary>
-    /// <remarks>By container name: a target is written as the hostname another container resolves.</remarks>
+    // By container name: a target is written as the hostname another container resolves.
     internal static string ServiceWithContainerName(string compose, string containerName)
     {
         var lines = compose.Split('\n');
@@ -88,7 +80,6 @@ internal static class DeploymentFiles
         })
         .FirstOrDefault(value => !string.IsNullOrEmpty(value));
 
-    /// <summary>Directives that are not commented out.</summary>
     internal static string ActiveDirectives(string configuration) => string.Join('\n', Uncommented(configuration));
 
     private static IEnumerable<string> Uncommented(string text) => text

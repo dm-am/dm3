@@ -10,19 +10,13 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The inactivity pass hands one instant of its clock to every query. Against the container Postgres: one statement
-/// compares a cutoff against two nullable columns.
-/// </summary>
+// Against the container Postgres: one statement compares a cutoff against two nullable columns.
 public class InactivityRepositoryShould : IntegrationTestBase
 {
     public InactivityRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// The cutoff is measured from the instant the caller hands in.
-    /// </summary>
     [Fact]
     public async Task MeasureTheSilenceFromTheMomentItIsGivenAndNotFromTheProcessClock()
     {
@@ -46,10 +40,8 @@ public class InactivityRepositoryShould : IntegrationTestBase
             "twenty-nine days is inside the threshold, and the same moment decides both ways");
     }
 
-    /// <summary>
-    /// A game that came back to life after the freeze pass had already picked it.
-    /// </summary>
-    /// <remarks>The selected state is carried into the WHERE of the write, which checks it at the moment of writing.</remarks>
+    // The selected state is carried into the WHERE of the write, which checks it at the moment of
+    // writing.
     [Fact]
     public async Task RefuseToFreezeAGameThatWasPostedInBeforeTheWriteReachedIt()
     {
@@ -81,10 +73,8 @@ public class InactivityRepositoryShould : IntegrationTestBase
         game.ClosedReason.Should().Be(ClosedReason.None);
     }
 
-    /// <summary>
-    /// A game that was posted in after the warning pass had already picked it.
-    /// </summary>
-    /// <remarks>A post clears the warning stamp as it lands, so the stamp checks the state it was selected in.</remarks>
+    // A post clears the warning stamp as it lands, so the stamp checks the state it was selected
+    // in.
     [Fact]
     public async Task RefuseToWarnAGameThatWasPostedInBeforeTheWriteReachedIt()
     {
@@ -117,10 +107,8 @@ public class InactivityRepositoryShould : IntegrationTestBase
             "a warning stamped over a fresh post starts the week that ends in a freeze");
     }
 
-    /// <summary>
-    /// The game that is still silent when the write reaches it is warned, so the
-    /// predicate above refuses the right thing rather than everything.
-    /// </summary>
+    // The game that is still silent when the write reaches it is warned, so the predicate above
+    // refuses the right thing rather than everything.
     [Fact]
     public async Task WarnTheGameThatIsStillSilentWhenTheWriteReachesIt()
     {
@@ -141,17 +129,14 @@ public class InactivityRepositoryShould : IntegrationTestBase
         game.InactivityWarningUtc.Should().Be(now, "the pass stamps the moment it ran at");
     }
 
-    /// <summary>Puts the game in the state the warning pass leaves it in.</summary>
     private static Task StampInactivityWarningAsync(
         DmDbContext dbContext, Guid gameId, DateTimeOffset warnedUtc) =>
         dbContext.Set<DbGame>()
             .Where(g => g.GameId == gameId)
             .ExecuteUpdateAsync(s => s.SetProperty(g => g.InactivityWarningUtc, warnedUtc));
 
-    /// <summary>
-    /// A game and a master of its own per run: the fixture's database is shared, and
-    /// warning a game somebody else seeded would make the assertion depend on them.
-    /// </summary>
+    // A game and a master of its own per run: the fixture's database is shared, and warning a game
+    // somebody else seeded would make the assertion depend on them.
     private static async Task<Guid> SeedActiveGameAsync(DmDbContext dbContext, DateTimeOffset lastPostUtc)
     {
         var masterId = Guid.NewGuid();

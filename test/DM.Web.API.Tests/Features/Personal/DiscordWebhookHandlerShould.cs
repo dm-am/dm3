@@ -11,12 +11,9 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
-/// <summary>
-/// The Discord handler speaks the official interactions contract: PING is
-/// answered with PONG, a slash command with a type 4 interaction response,
-/// and the /connect reply is ephemeral — a linking code is the invoker's
-/// business and nobody else's.
-/// </summary>
+// The Discord handler speaks the official interactions contract: PING is answered with PONG, a
+// slash command with a type 4 interaction response, and the /connect reply is ephemeral — a linking
+// code is the invoker's business and nobody else's.
 public class DiscordWebhookHandlerShould : UnitTestBase
 {
     private readonly IBotLinkService _botLinkService;
@@ -40,11 +37,8 @@ public class DiscordWebhookHandlerShould : UnitTestBase
         return document.RootElement.Clone();
     }
 
-    /// <summary>
-    /// The response as Discord will read it. Serialized through the property
-    /// name attributes the DTOs pin, so a rename that breaks the wire contract
-    /// breaks this too.
-    /// </summary>
+    // Serialized through the property name attributes the DTOs pin, so a rename that breaks the
+    // wire contract breaks this too.
     private static JsonElement AsWireJson(object response) =>
         JsonSerializer.SerializeToElement(response);
 

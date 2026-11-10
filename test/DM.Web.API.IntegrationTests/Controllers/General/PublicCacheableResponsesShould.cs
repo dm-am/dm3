@@ -25,12 +25,8 @@ public class PublicCacheableResponsesShould : IntegrationTestBase
     {
     }
 
-    /// <summary>An action that publishes a shared-cache policy, and the path it answers.</summary>
     private sealed record PublicEndpoint(string Path, string Origin, int Duration);
 
-    /// <summary>
-    /// Every action declaring a response any cache may store and reuse.
-    /// </summary>
     private static IReadOnlyCollection<PublicEndpoint> Declared()
     {
         var endpoints = new List<PublicEndpoint>();
@@ -77,29 +73,21 @@ public class PublicCacheableResponsesShould : IntegrationTestBase
         return endpoints;
     }
 
-    /// <summary>
-    /// Makes the request one ResponseCachingMiddleware answers from the endpoint
-    /// rather than from its store.
-    /// </summary>
-    /// <remarks>`no-cache` keeps the middleware from answering out of its store, which would make leaked bodies compare equal.</remarks>
+    // `no-cache` keeps the middleware from answering out of its store, which would make leaked
+    // bodies compare equal.
     private static HttpRequestMessage Uncached(HttpRequestMessage request)
     {
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
         return request;
     }
 
-    /// <summary>
-    /// The wire values of <c>X-Dm-Audience</c>, taken from the parser rather than
-    /// written out, so a rendering audience added later is asked about too.
-    /// </summary>
+    // The wire values of X-Dm-Audience, taken from the parser rather than written out, so a
+    // rendering audience added later is asked about too.
     private static IEnumerable<string> Audiences() =>
         Enum.GetValues<RenderAudience>().Select(BbAudienceHeader.Serialize);
 
-    /// <summary>
-    /// A publicly cacheable response says the same thing whatever rendering
-    /// audience is asked for.
-    /// </summary>
-    /// <remarks>X-Dm-Audience passes CORS and no endpoint sets <c>Vary</c>, as API_DESIGN.md requires the body to be the same.</remarks>
+    // X-Dm-Audience passes CORS and no endpoint sets Vary, as API_DESIGN.md requires the body to be
+    // the same.
     [Fact]
     public async Task BeTheSameBytesForEveryAudience()
     {
@@ -182,10 +170,7 @@ public class PublicCacheableResponsesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The policy the attribute declares is the one that reaches the wire.
-    /// </summary>
-    /// <remarks>Through <see cref="Uncached" />, so the header asserted is the one the endpoint produced.</remarks>
+    // Through Uncached, so the header asserted is the one the endpoint produced.
     [Fact]
     public async Task CarryThePolicyTheyDeclare()
     {

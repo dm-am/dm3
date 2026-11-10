@@ -9,13 +9,8 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests;
 
-/// <summary>
-/// Every constraint type survives the jsonb round trip whole.
-/// </summary>
-/// <remarks>
-/// The discriminator lives in the written JSON, so each of the four types is pinned end to end through the
-/// options the column uses, "no limit" included.
-/// </remarks>
+// The discriminator lives in the written JSON, so each of the four types is pinned end to end
+// through the options the column uses, "no limit" included.
 public class AttributeConstraintsSerializationShould
 {
     private static AttributeSpecification RoundTrip(AttributeConstraints constraints)

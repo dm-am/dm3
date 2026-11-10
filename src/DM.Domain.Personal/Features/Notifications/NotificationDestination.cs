@@ -15,13 +15,8 @@ namespace DM.Domain.Personal.Features.Notifications;
 /// </remarks>
 public static class NotificationDestination
 {
-    /// <summary>What a path carries in place of the identifier.</summary>
     private const string Placeholder = "{id}";
 
-    /// <summary>
-    /// A destination: the payload field the identifier is read from, and the path it
-    /// goes into.
-    /// </summary>
     private readonly record struct Destination(string Field, string Path);
 
     /// <summary>
@@ -56,7 +51,6 @@ public static class NotificationDestination
     /// carries one of these events and not its field is text nobody can follow, and
     /// NotificationLinkShould in DM.Architecture.Tests asks every generator for it.
     /// </remarks>
-    /// <param name="eventType">Event the notification is about</param>
     public static string? FieldOf(EventType eventType) => DestinationOf(eventType)?.Field;
 
     /// <summary>
@@ -67,7 +61,6 @@ public static class NotificationDestination
     /// A bag can name two places, a publication and its blog; jsonb does not keep the
     /// order of keys, so the title is named after the field the path is built from.
     /// </remarks>
-    /// <param name="eventType">Event the notification is about</param>
     public static string? PlaceFieldOf(EventType eventType) => FieldOf(eventType) switch
     {
         "PublicationId" => "PublicationTitle",
@@ -85,7 +78,10 @@ public static class NotificationDestination
     /// one table of that shape the notification readers hold is the wording, and
     /// NotificationWordingShould counts them to keep it the only one.
     /// </remarks>
-    private static Destination? DestinationOf(EventType eventType) => eventType switch
+    private static Destination? DestinationOf(EventType eventType) =>
+        ContentDestinationOf(eventType) ?? PersonalDestinationOf(eventType);
+
+    private static Destination? ContentDestinationOf(EventType eventType) => eventType switch
     {
         // A publication. It has a page of its own now, so what is written about one
         // publication leads there rather than to the whole feed. The address is the
@@ -118,6 +114,30 @@ public static class NotificationDestination
         // master told about one is being asked to answer it.
         EventType.NewCharacter => new Destination("GameId", "/game/{id}/characters"),
 
+        // The game. A room is addressed by its number and the payload carries an
+        // identifier, so a notification about an owed post leads to the game the post
+        // is owed in.
+        EventType.StatusGameActive or EventType.StatusGameClosed or
+        EventType.StatusGameFrozen or EventType.StatusGameFinished or
+        EventType.GameClosureWarning or EventType.GameInactivityWarning or
+        EventType.GameRecruitmentOpened or EventType.LikedGameComment or
+        EventType.AssignmentRequestCreated or
+        EventType.PlayerInvitationCreated or EventType.ReaderInvitationCreated or
+        EventType.RoomPendencyCreated or EventType.RoomPendencyFulfilled or
+        EventType.RoomPendencyReminder or
+        EventType.StatusCharacterAccepted or EventType.StatusCharacterDeclined or
+        EventType.StatusCharacterDied or EventType.StatusCharacterResurrected or
+        EventType.StatusCharacterReadmitted or
+        EventType.StatusCharacterLeft or
+        EventType.StatusCharacterExiled or
+        EventType.NewGameFromSubscribedAuthor
+            => new Destination("GameId", "/game/{id}"),
+
+        _ => null
+    };
+
+    private static Destination? PersonalDestinationOf(EventType eventType) => eventType switch
+    {
         // The warning log, narrowed to the reader it was issued to. The profile
         // shows a warning as points and a date; the reason it was issued for is on
         // the log and nowhere else, and the log is open to everyone. A corrected
@@ -146,25 +166,6 @@ public static class NotificationDestination
         // with its series and the one who granted it. The profile opens on that
         // tab when the address names it.
         EventType.AwardGranted => new Destination("Username", "/users/{id}?tab=achievements"),
-
-        // The game. A room is addressed by its number and the payload carries an
-        // identifier, so a notification about an owed post leads to the game the post
-        // is owed in.
-        EventType.StatusGameActive or EventType.StatusGameClosed or
-        EventType.StatusGameFrozen or EventType.StatusGameFinished or
-        EventType.GameClosureWarning or EventType.GameInactivityWarning or
-        EventType.GameRecruitmentOpened or EventType.LikedGameComment or
-        EventType.AssignmentRequestCreated or
-        EventType.PlayerInvitationCreated or EventType.ReaderInvitationCreated or
-        EventType.RoomPendencyCreated or EventType.RoomPendencyFulfilled or
-        EventType.RoomPendencyReminder or
-        EventType.StatusCharacterAccepted or EventType.StatusCharacterDeclined or
-        EventType.StatusCharacterDied or EventType.StatusCharacterResurrected or
-        EventType.StatusCharacterReadmitted or
-        EventType.StatusCharacterLeft or
-        EventType.StatusCharacterExiled or
-        EventType.NewGameFromSubscribedAuthor
-            => new Destination("GameId", "/game/{id}"),
 
         _ => null
     };

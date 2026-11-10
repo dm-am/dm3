@@ -33,12 +33,14 @@ const LINTED = ["**/*.{js,jsx,cjs,mjs,ts,tsx,cts,mts,vue}"];
  */
 const LAYERS = ["app", "pages", "widgets", "features", "entities", "shared"];
 
-/** Every layer strictly below the given one, doors included. */
-const below = (layer) =>
-  LAYERS.slice(LAYERS.indexOf(layer) + 1).flatMap((lower) => [
-    lower,
-    `${lower}-x`,
-  ]);
+/** Every layer strictly below the given one. */
+const below = (layer) => LAYERS.slice(LAYERS.indexOf(layer) + 1);
+
+/**
+ * A slice's `@x` door is a file of the slice, told apart by its category: the
+ * capture is the name of the slice the door is addressed to.
+ */
+const DOOR = "door";
 
 /** Layers made of slices. `app` is one composition root, `shared` is a kit. */
 const SLICED = LAYERS.slice(1, -1);
@@ -55,6 +57,14 @@ const SLICED = LAYERS.slice(1, -1);
 const BARRELED = ["widgets", "features", "entities"];
 const SLICE_ENTRY = ["index.ts"];
 const isBarreled = (type) => BARRELED.includes(type);
+
+/**
+ * A spec and its harness may also reach the data builders of a slice below it:
+ * the fixtures file is the slice's door for tests, and the barrel must not carry
+ * it, or the app would ship vitest.
+ */
+const TEST_FILES = ["**/*.spec.ts", "**/*.fixtures.ts", "**/*.doubles.ts"];
+const FIXTURES = ["**/*.fixtures.ts"];
 
 /** The native modals the design system replaces, with what to use instead. */
 const NATIVE_MODALS = {
@@ -129,18 +139,6 @@ export default defineConfigWithVueTs(
       // upward import this rule was written for hid behind exactly that form.
       "boundaries/dependency-nodes": ["import", "dynamic-import", "export"],
       "boundaries/elements": [
-        // A slice's `@x` folder is its own element type, so importing that door
-        // is allowed while importing the slice root from the same layer is not.
-        // The trailing `.ts` is literal, so the second capture is the consumer's
-        // slice name rather than a file name with its extension.
-        ...SLICED.map((layer) => ({
-          type: `${layer}-x`,
-          pattern: `src/${layer}/*/@x/*.ts`,
-          // `mode` is deprecated in v7; its replacement stops matching a door
-          // FILE, which this element is. Revisit with v8.
-          mode: "full",
-          capture: ["slice", "consumer"],
-        })),
         ...SLICED.map((layer) => ({
           type: layer,
           pattern: `src/${layer}/*`,
@@ -148,6 +146,17 @@ export default defineConfigWithVueTs(
         })),
         { type: "app", pattern: "src/app", partialMatch: false },
         { type: "shared", pattern: "src/shared", partialMatch: false },
+      ],
+      // v7 classifies files apart from elements: the door stays inside its
+      // slice, so the slice's own files reach it as internals, and a policy
+      // names it by category. The trailing `.ts` is literal, so the last capture is
+      // the consumer's slice name rather than a file name with its extension.
+      "boundaries/files": [
+        {
+          category: DOOR,
+          pattern: "src/*/*/@x/*.ts",
+          capture: ["layer", "slice", "consumer"],
+        },
       ],
       // `@/…` is read out of the tsconfig that declares it. One project only:
       // with a single project the resolver takes the path mapping and never
@@ -278,50 +287,57 @@ export default defineConfigWithVueTs(
           message:
             "{{from.element.type}} may not import {{to.element.type}} this way: FSD allows downward imports only, into another slice through its index.ts barrel, and same-layer only through the target slice's @x door (docs/conventions/PATTERNS.md).",
           policies: [
-            // Downward: any layer below, doors included - and into a sliced layer
-            // only through that slice's own barrel (`fileInternalPath`).
+            // Downward: any layer below - into a sliced layer only through that
+            // slice's own barrel (`fileInternalPath`) or one of its doors.
             ...LAYERS.flatMap((layer) =>
-              [layer, `${layer}-x`].flatMap((from) =>
-                [
-                  {
-                    types: below(layer).filter(isBarreled),
-                    entry: SLICE_ENTRY,
-                  },
-                  { types: below(layer).filter((t) => !isBarreled(t)) },
-                ]
-                  .filter(({ types }) => types.length > 0)
-                  .map(({ types, entry }) => ({
-                    from: { element: { type: from } },
-                    allow: {
-                      to: {
-                        element: entry
-                          ? { types: { anyOf: types }, fileInternalPath: entry }
-                          : { types: { anyOf: types } },
-                      },
+              [
+                {
+                  types: below(layer).filter(isBarreled),
+                  entry: SLICE_ENTRY,
+                },
+                { types: below(layer).filter(isBarreled), door: true },
+                { types: below(layer).filter((t) => !isBarreled(t)) },
+              ]
+                .filter(({ types }) => types.length > 0)
+                .map(({ types, entry, door }) => ({
+                  from: { element: { type: layer } },
+                  allow: {
+                    to: {
+                      element: entry
+                        ? { types: { anyOf: types }, fileInternalPath: entry }
+                        : { types: { anyOf: types } },
+                      ...(door ? { file: { categories: DOOR } } : {}),
                     },
-                  })),
-              ),
+                  },
+                })),
+            ),
+            // Downward from a spec or its harness: the fixtures of a slice below.
+            ...LAYERS.filter((layer) => below(layer).some(isBarreled)).map(
+              (layer) => ({
+                from: {
+                  element: { type: layer, fileInternalPath: TEST_FILES },
+                },
+                allow: {
+                  to: {
+                    element: {
+                      types: { anyOf: below(layer).filter(isBarreled) },
+                      fileInternalPath: FIXTURES,
+                    },
+                  },
+                },
+              }),
             ),
             // Same layer: only the door addressed to the importing slice.
+            // A door re-exports from the slice that owns it, which is an import
+            // inside one element and needs no policy.
             ...SLICED.map((layer) => ({
               from: { element: { type: layer } },
               allow: {
                 to: {
-                  element: {
-                    type: `${layer}-x`,
+                  element: { type: layer },
+                  file: {
+                    categories: DOOR,
                     captured: { consumer: "{{from.element.captured.slice}}" },
-                  },
-                },
-              },
-            })),
-            // A door re-exports from the slice that owns it.
-            ...SLICED.map((layer) => ({
-              from: { element: { type: `${layer}-x` } },
-              allow: {
-                to: {
-                  element: {
-                    type: layer,
-                    captured: { slice: "{{from.element.captured.slice}}" },
                   },
                 },
               },
@@ -392,6 +408,35 @@ export default defineConfigWithVueTs(
       // A label on a break or continue that already targets the loop it stands
       // in names nothing.
       "no-extra-label": "error",
+
+      // :attr="'text'" binds a constant the attribute holds as it is.
+      "vue/no-useless-v-bind": "error",
+    },
+  },
+
+  // The parts of a component nothing uses. Site code only: a stub in a spec
+  // declares the props and events of the component it stands in for, and the
+  // spec, not the stub, sends them.
+  {
+    name: "dm/dead-component-parts",
+    files: ["src/**/*.vue"],
+    rules: {
+      // A prop no script or template of the component reads.
+      "vue/no-unused-properties": "error",
+      // An event the component declares and never sends.
+      "vue/no-unused-emit-declarations": "error",
+    },
+  },
+
+  // The long form where a short one says the same.
+  {
+    name: "dm/verbose",
+    files: LINTED,
+    rules: {
+      "arrow-body-style": "error",
+      "prefer-template": "error",
+      "object-shorthand": "error",
+      "no-else-return": "error",
     },
   },
 
@@ -431,6 +476,7 @@ export default defineConfigWithVueTs(
     rules: {
       "max-lines": ["error", { max: LIMITS.lines }],
       complexity: ["error", LIMITS.complexity],
+      "max-depth": ["error", LIMITS.depth],
     },
   },
   {

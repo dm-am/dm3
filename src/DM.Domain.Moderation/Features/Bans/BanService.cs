@@ -178,10 +178,6 @@ internal class BanService : IBanService
         return ban;
     }
 
-    /// <summary>
-    /// Refuses a ban the caller has no right to: a voluntary one aimed at
-    /// somebody else, or one on a person his rank does not reach.
-    /// </summary>
     private static void ThrowIfOutOfReach(
         CreateBan createBan, AuthenticatedUser currentUser, GeneralUser targetUser)
     {
@@ -318,10 +314,6 @@ internal class BanService : IBanService
         return null;
     }
 
-    /// <summary>
-    /// Marks each ban with whether the current reader may lift it, by
-    /// <see cref="MayLift" />.
-    /// </summary>
     private void MarkWhetherTheReaderMayLift(IEnumerable<Ban> bans)
     {
         foreach (var ban in bans)

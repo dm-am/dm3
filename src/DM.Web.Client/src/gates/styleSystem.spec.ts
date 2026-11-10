@@ -32,7 +32,7 @@ import {
   isStyle,
   styleFiles,
 } from "@/shared/lib/testing/sourceTree";
-import { GLOBAL_SHEETS } from "@/shared/lib/testing/styles";
+import { GLOBAL_SHEETS, styleTextOf } from "@/shared/lib/testing/styles";
 
 /** Values that order children INSIDE one stacking context, not on the scale. */
 const LOCAL_STACKING = new Set([-1, 0, 1, 2]);
@@ -99,24 +99,6 @@ describe("a global rule", () => {
     expect(offenders).toEqual([]);
   });
 });
-
-/**
- * The style text of a file, comments out: a sheet whole, and of a .vue file the
- * <style> blocks alone, since its script may carry a hex (App.vue's theme-color).
- */
-const styleTextOf = (file: string): string => {
-  const source = readFileSync(file, "utf8");
-  const styles = file.endsWith(".vue")
-    ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
-        .map((found) => found[1])
-        .join("\n")
-    : source;
-  return styles
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .split("\n")
-    .map((one) => one.replace(/\/\/.*$/, ""))
-    .join("\n");
-};
 
 describe("a colour outside the palettes", () => {
   it("is a token and not a literal", () => {

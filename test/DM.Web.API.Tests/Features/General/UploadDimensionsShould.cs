@@ -15,14 +15,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// An upload records how large its picture is, and the record travels to the
-/// client.
-/// </summary>
-/// <remarks>
-/// The original keeps the aspect ratio of whatever was uploaded, and the page reserves its box from the
-/// pair. Held at the write and at the read.
-/// </remarks>
+// The original keeps the aspect ratio of whatever was uploaded, and the page reserves its box from
+// the pair.
 public class UploadDimensionsShould : UnitTestBase
 {
     private readonly Guid _userId = Guid.NewGuid();
@@ -64,9 +58,6 @@ public class UploadDimensionsShould : UnitTestBase
         picture.OriginalHeight.Should().Be(150);
     }
 
-    /// <summary>
-    /// An upload stored before the pipeline measured anything has no pair, and the DTO says so.
-    /// </summary>
     [Fact]
     public void SayNothingAboutAPictureNobodyMeasured()
     {

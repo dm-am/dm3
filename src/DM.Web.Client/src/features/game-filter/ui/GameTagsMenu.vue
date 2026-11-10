@@ -7,9 +7,10 @@ import type { FilterNavPath } from "@/shared/lib/composables/useFilterDropdown";
 import { FilterDropdownItem } from "@/shared/ui/Filters";
 import { NOTHING_FOUND } from "@/shared/lib/constants/copy";
 import { useGamesFilter } from "../model";
+import type { GamesFilterKey } from "../model";
 import { byTagOrder, descriptionText } from "../model/gameTags";
 
-const navPath = defineModel<FilterNavPath | null>("navPath", {
+const navPath = defineModel<FilterNavPath<GamesFilterKey> | null>("navPath", {
   required: true,
 });
 
@@ -37,9 +38,9 @@ const tagGroups = computed(() => {
       groupSortMap.set(tag.groupTitle, tag.groupSortOrder);
     }
   }
-  return [...groupSortMap.keys()].sort((a, b) => {
-    return (groupSortMap.get(a) ?? 0) - (groupSortMap.get(b) ?? 0);
-  });
+  return [...groupSortMap.keys()].sort(
+    (a, b) => (groupSortMap.get(a) ?? 0) - (groupSortMap.get(b) ?? 0),
+  );
 });
 
 const allSelectedTags = computed(
@@ -50,8 +51,8 @@ const allSelectedTags = computed(
     ]),
 );
 
-const tagGroupOptions = computed(() => {
-  return tagGroups.value
+const tagGroupOptions = computed(() =>
+  tagGroups.value
     .map((groupName) => {
       const groupTags = tags.value.filter(
         (t) => t.groupTitle === groupName && !allSelectedTags.value.has(t.id),
@@ -63,8 +64,8 @@ const tagGroupOptions = computed(() => {
     .filter(
       (o): o is { value: string; label: string; hint: string | undefined } =>
         o !== null,
-    );
-});
+    ),
+);
 
 const tagsInGroup = computed(() => {
   const query = tagSearchQuery.value.toLowerCase().trim();

@@ -13,21 +13,13 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// An instance either has the push queue subscribed or says that it has not.
-/// </summary>
-/// <remarks>
-/// A broker restart outlasts any finite ladder. Driven through the real background service with the wait
-/// injected as zero.
-/// </remarks>
+// A broker restart outlasts any finite ladder.
 public class RealtimeSubscriptionShould : UnitTestBase
 {
-    /// <summary>
-    /// Failures before the subscription opens, above any finite ladder this consumer could carry.
-    /// </summary>
+    // Failures before the subscription opens, above any finite ladder this consumer could carry.
     private const int FailuresBeforeSuccess = 7;
 
-    /// <summary>Every wait in this test is a timeout, so a stuck loop fails.</summary>
+    // Every wait in this test is a timeout, so a stuck loop fails.
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IDmConsumer _consumer = Mock<IDmConsumer>();
@@ -73,10 +65,7 @@ public class RealtimeSubscriptionShould : UnitTestBase
         (await Report()).Status.Should().Be(HealthStatus.Healthy);
     }
 
-    /// <summary>
-    /// A stopping host is not waited on by the retries.
-    /// </summary>
-    /// <remarks>The loop is unbounded, so the token is the only thing that ends it.</remarks>
+    // The loop is unbounded, so the token is the only thing that ends it.
     [Fact]
     public async Task StopAttemptingWhenTheHostStops()
     {
@@ -101,7 +90,6 @@ public class RealtimeSubscriptionShould : UnitTestBase
             "a host that stopped before subscribing never had the queue");
     }
 
-    /// <summary>Fails the subscription a fixed number of times, then opens it.</summary>
     private void FailThenSucceed() =>
         _consumer.Subscribe(Arg.Any<CancellationToken>()).Returns(_ =>
         {
@@ -111,7 +99,6 @@ public class RealtimeSubscriptionShould : UnitTestBase
                 : Task.CompletedTask;
         });
 
-    /// <summary>Runs the consumer to the end of its execution.</summary>
     private async Task Run(CancellationToken stoppingToken = default)
     {
         using var service = new RealtimeNotificationConsumer(

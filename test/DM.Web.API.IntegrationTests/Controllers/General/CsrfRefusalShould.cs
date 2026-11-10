@@ -6,10 +6,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// The origin check refuses in the same shape as everything else refuses.
-/// </summary>
-/// <remarks>The body of every refusal is built through ProblemDetailsFactory, which puts the correlation token in.</remarks>
+// The body of every refusal is built through ProblemDetailsFactory, which puts the correlation
+// token in.
 public class CsrfRefusalShould : IntegrationTestBase
 {
     public CsrfRefusalShould(DatabaseFixture databaseFixture) : base(databaseFixture)

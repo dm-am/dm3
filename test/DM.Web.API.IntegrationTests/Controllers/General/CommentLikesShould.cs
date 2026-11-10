@@ -15,10 +15,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A like on a comment is on the comment the reader is handed back, in all four
-/// discussions.
-/// </summary>
 /// <remarks>
 /// The likers are filled in a query, so over HTTP, as <see cref="Messaging.PrivateMessageLikesShould" /> is,
 /// through each discussion's routes. The comment carries a marker in its text: the topic and the game are shared.
@@ -38,8 +34,7 @@ public class CommentLikesShould : IntegrationTestBase
     [MemberData(nameof(Surfaces))]
     public async Task CarryTheLikeOnTheListedComment(string surface)
     {
-        var seeded = await SeedAsync(surface);
-        try
+        await WithCommentOn(surface, async seeded =>
         {
             await LikeAsync(seeded);
 
@@ -55,41 +50,29 @@ public class CommentLikesShould : IntegrationTestBase
 
             Names(comment).Should().Equal([Liker.Username],
                 "the author of the comment is shown who liked it");
-        }
-        finally
-        {
-            await DropAsync(seeded);
-        }
+        });
     }
 
     [Theory]
     [MemberData(nameof(Surfaces))]
     public async Task CarryTheLikeOnTheSingleComment(string surface)
     {
-        var seeded = await SeedAsync(surface);
-        try
+        await WithCommentOn(surface, async seeded =>
         {
             await LikeAsync(seeded);
 
             Names(await ReadAsync(seeded.Single, Liker)).Should().Equal([Liker.Username],
                 "after a reload the liker has to see his own like to be able to take it back");
-        }
-        finally
-        {
-            await DropAsync(seeded);
-        }
+        });
     }
 
-    /// <summary>
-    /// The client replaces the comment it holds with the answer to an edit, so the
-    /// likes have to be on that answer too.
-    /// </summary>
+    // The client replaces the comment it holds with the answer to an edit, so the likes have to be
+    // on that answer too.
     [Theory]
     [MemberData(nameof(Surfaces))]
     public async Task CarryTheLikeOnTheAnswerToAnEdit(string surface)
     {
-        var seeded = await SeedAsync(surface);
-        try
+        await WithCommentOn(surface, async seeded =>
         {
             await LikeAsync(seeded);
 
@@ -100,19 +83,14 @@ public class CommentLikesShould : IntegrationTestBase
             response.StatusCode.Should().Be(HttpStatusCode.OK);
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             Names(document.RootElement.GetProperty("resource")).Should().Equal([Liker.Username]);
-        }
-        finally
-        {
-            await DropAsync(seeded);
-        }
+        });
     }
 
     [Theory]
     [MemberData(nameof(Surfaces))]
     public async Task RefuseARepeatedLikeAsAConflict(string surface)
     {
-        var seeded = await SeedAsync(surface);
-        try
+        await WithCommentOn(surface, async seeded =>
         {
             await LikeAsync(seeded);
 
@@ -120,22 +98,14 @@ public class CommentLikesShould : IntegrationTestBase
                 CreateAuthenticatedRequest(HttpMethod.Post, seeded.Likes, Liker));
 
             again.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        }
-        finally
-        {
-            await DropAsync(seeded);
-        }
+        });
     }
 
-    /// <summary>
-    /// A like is taken back only by the one who put it; anybody else is answered with a state conflict.
-    /// </summary>
     [Theory]
     [MemberData(nameof(Surfaces))]
     public async Task RefuseToTakeBackALikeTheReaderNeverPut(string surface)
     {
-        var seeded = await SeedAsync(surface);
-        try
+        await WithCommentOn(surface, async seeded =>
         {
             await LikeAsync(seeded);
 
@@ -144,37 +114,27 @@ public class CommentLikesShould : IntegrationTestBase
 
             response.StatusCode.Should().Be(HttpStatusCode.Conflict);
             Names(await ReadAsync(seeded.Single, Author)).Should().Equal([Liker.Username]);
-        }
-        finally
-        {
-            await DropAsync(seeded);
-        }
+        });
     }
 
     [Theory]
     [MemberData(nameof(Surfaces))]
     public async Task AnswerNotFoundOnTakingALikeOffAMissingComment(string surface)
     {
-        var seeded = await SeedAsync(surface);
-        try
+        await WithCommentOn(surface, async seeded =>
         {
             var response = await Client.SendAsync(CreateAuthenticatedRequest(
                 HttpMethod.Delete, $"{seeded.Prefix}/{Guid.NewGuid()}/likes", Liker));
 
             response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        }
-        finally
-        {
-            await DropAsync(seeded);
-        }
+        });
     }
 
     [Theory]
     [MemberData(nameof(Surfaces))]
     public async Task LetTheLikerTakeTheLikeBack(string surface)
     {
-        var seeded = await SeedAsync(surface);
-        try
+        await WithCommentOn(surface, async seeded =>
         {
             await LikeAsync(seeded);
 
@@ -183,6 +143,15 @@ public class CommentLikesShould : IntegrationTestBase
 
             response.StatusCode.Should().Be(HttpStatusCode.NoContent);
             Names(await ReadAsync(seeded.Single, Liker)).Should().BeEmpty();
+        });
+    }
+
+    private async Task WithCommentOn(string surface, Func<Seeded, Task> test)
+    {
+        var seeded = await SeedAsync(surface);
+        try
+        {
+            await test(seeded);
         }
         finally
         {
@@ -197,11 +166,6 @@ public class CommentLikesShould : IntegrationTestBase
         public string Likes => $"{Single}/likes";
     }
 
-    /// <summary>
-    /// A comment by the test user on the given discussion, and a reader who has put
-    /// no like on it.
-    /// </summary>
-    /// <remarks>The topic and the game are seeded; the blog and the publication are made here.</remarks>
     private async Task<Seeded> SeedAsync(string surface)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -239,10 +203,8 @@ public class CommentLikesShould : IntegrationTestBase
             new GeneralUser { UserId = stranger.UserId, Username = stranger.Username, Role = UserRole.RegularUser });
     }
 
-    /// <summary>
-    /// The comment and everything written against it go, so the shared topic and
-    /// game read as they did before.
-    /// </summary>
+    // The comment and everything written against it go, so the shared topic and game read as they
+    // did before.
     private async Task DropAsync(Seeded seeded)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

@@ -11,7 +11,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createRouter, createMemoryHistory } from "vue-router";
-import { gameApi, useGameDetailsStore, type Game } from "@/entities/game";
+import { gameApi, useGameDetailsStore } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { useAuthStore, type User } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
@@ -39,17 +42,21 @@ function mountSection(tagIds: number[], readerId?: string) {
   setActivePinia(pinia);
   if (readerId) useAuthStore().user = { id: readerId } as User;
   const store = useGameDetailsStore();
+  const base = createMockGame("the-game-guid", "Игра");
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    master: { id: "master-id", username: "Мастер" },
-    title: "Игра",
+    ...base,
+    publicId: asServed("the-game"),
+    master: asServed(createMockUser("master-id", "Мастер")),
     system: "GURPS",
     setting: "Свой мир",
     tagIds,
-    recruitment: { isOpen: true },
-    privacySettings: { viewPrivates: false, viewDice: true },
-  } as unknown as Game;
+    recruitment: asServed({ ...base.recruitment, isOpen: true }),
+    privacySettings: {
+      ...base.privacySettings,
+      viewPrivates: false,
+      viewDice: true,
+    },
+  };
   vi.spyOn(store, "loadGame").mockResolvedValue({ ok: true });
 
   // The link to the game is resolved by the router's table.
@@ -234,7 +241,7 @@ describe("GameInfoSection save confirmation", () => {
     await flushPromises();
     const store = useGameDetailsStore();
     vi.spyOn(store, "loadGame").mockImplementation(async () => {
-      store.game = { ...store.game!, tagIds: [3, 7] } as unknown as Game;
+      store.game = { ...store.game!, tagIds: [3, 7] };
       return { ok: true };
     });
 

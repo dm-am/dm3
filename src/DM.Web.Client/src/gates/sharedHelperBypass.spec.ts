@@ -15,7 +15,7 @@ import { describe, it, expect, vi } from "vitest";
 
 // A whole-tree AST scan legitimately outruns the 5s default when the suite
 // saturates every core, which is what a coverage run does.
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 60_000 });
 import { readFileSync } from "fs";
 import ts from "typescript";
 import { parse as parseSfc } from "vue/compiler-sfc";

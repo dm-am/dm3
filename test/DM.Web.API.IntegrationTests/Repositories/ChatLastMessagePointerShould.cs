@@ -8,24 +8,17 @@ using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// A chat names its newest message, whatever order two writers commit in.
-/// </summary>
-/// <remarks>
-/// LastMessageId orders the conversations and gives the preview, and CreatedUtc is stamped before the write, so the
-/// last commit is not always the newest. Against PostgreSQL: a row lock and a conditional set-based statement.
-/// </remarks>
+// LastMessageId orders the conversations and gives the preview, and CreatedUtc is stamped before
+// the write, so the last commit is not always the newest.
 public class ChatLastMessagePointerShould : IntegrationTestBase
 {
     private static readonly DateTimeOffset Written = new(2026, 5, 1, 9, 0, 0, TimeSpan.Zero);
 
-    /// <summary>
-    /// How long the queued call is watched before it is called blocked. Long
-    /// enough that a call which does not wait at all has finished.
-    /// </summary>
+    // How long the queued call is watched before it is called blocked. Long enough that a call
+    // which does not wait at all has finished.
     private static readonly TimeSpan Probe = TimeSpan.FromSeconds(2);
 
-    /// <summary>The bound on the whole wait, so a lock nobody releases fails.</summary>
+    // The bound on the whole wait, so a lock nobody releases fails.
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
 
     public ChatLastMessagePointerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -49,10 +42,7 @@ public class ChatLastMessagePointerShould : IntegrationTestBase
         (await CountMessages(chatId)).Should().Be(2, "both messages were sent");
     }
 
-    /// <summary>
-    /// The pointer does not walk backwards when an older message lands last.
-    /// </summary>
-    /// <remarks>In order, not in parallel: which concurrent send commits last cannot be pinned.</remarks>
+    // In order, not in parallel: which concurrent send commits last cannot be pinned.
     [Fact]
     public async Task LeaveThePointerOnTheNewerMessageWhenAnOlderOneArrivesAfterIt()
     {
@@ -69,14 +59,8 @@ public class ChatLastMessagePointerShould : IntegrationTestBase
         (await CountMessages(chatId)).Should().Be(2, "both messages were sent");
     }
 
-    /// <summary>
-    /// A send waits for the send in flight beside it and does not take the
-    /// conversation's last line backwards.
-    /// </summary>
-    /// <remarks>
-    /// The newer message is held open by hand in the repository's shape and the older one sent by the real call,
-    /// which must read the chat after the wait.
-    /// </remarks>
+    // The newer message is held open by hand in the repository's shape and the older one sent by
+    // the real call, which must read the chat after the wait.
     [Fact]
     public async Task WaitForTheSendInFlightAndLeaveItsNewerMessageOnThePointer()
     {
@@ -108,11 +92,7 @@ public class ChatLastMessagePointerShould : IntegrationTestBase
         (await CountMessages(chatId)).Should().Be(2, "both messages were sent");
     }
 
-    /// <summary>
-    /// A deletion of the last line decides the pointer after the send in flight
-    /// beside it.
-    /// </summary>
-    /// <remarks>The successor is read from the chat, and a read cannot see an uncommitted message.</remarks>
+    // The successor is read from the chat, and a read cannot see an uncommitted message.
     [Fact]
     public async Task LeaveThePointerOnTheMessageSentWhileTheLastLineWasBeingDeleted()
     {
@@ -145,10 +125,7 @@ public class ChatLastMessagePointerShould : IntegrationTestBase
             "deletion looked, so there was no pointer for it to move");
     }
 
-    /// <summary>
-    /// The pointer names the message this call wrote.
-    /// </summary>
-    /// <remarks>The pointer statement compares (CreatedUtc, MessageId), which must come from one message.</remarks>
+    // The pointer statement compares (CreatedUtc, MessageId), which must come from one message.
     [Fact]
     public async Task PointAtTheMessageItWroteAndNotAtTheOneNamedBesideIt()
     {

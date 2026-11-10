@@ -13,29 +13,19 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// One person holds one live invitation to one game, and accepting an
-/// invitation that was accepted a moment earlier is not a failure.
-/// </summary>
-/// <remarks>
-/// Under READ COMMITTED neither the kill nor the "already an assistant" read sees the other transaction's row. Only a
-/// live database shows whether one write waits for another.
-/// </remarks>
+// Under READ COMMITTED neither the kill nor the "already an assistant" read sees the other
+// transaction's row.
 public class GameInvitationRacesShould : IntegrationTestBase
 {
-    /// <summary>
-    /// Enough callers that the interleaving the defect needs is reached rather
-    /// than left to which of two the scheduler happens to start first.
-    /// </summary>
+    // Enough callers that the interleaving the defect needs is reached rather than left to which of
+    // two the scheduler happens to start first.
     private const int Parallelism = 8;
 
-    /// <summary>
-    /// How long the queued call is watched before it is called blocked. Long
-    /// enough that a call which does not wait at all has finished.
-    /// </summary>
+    // How long the queued call is watched before it is called blocked. Long enough that a call
+    // which does not wait at all has finished.
     private static readonly TimeSpan Probe = TimeSpan.FromSeconds(2);
 
-    /// <summary>The bound on the whole wait, so a lock nobody releases fails.</summary>
+    // The bound on the whole wait, so a lock nobody releases fails.
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
 
     public GameInvitationRacesShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -79,9 +69,6 @@ public class GameInvitationRacesShould : IntegrationTestBase
                 "the count above is about");
     }
 
-    /// <summary>
-    /// The accept that lost the race spends the invitation instead of failing.
-    /// </summary>
     /// <remarks>
     /// The winner is held open by hand in the repository's shape and the accept is the real call. The invitation is
     /// spent either way: it authorises exactly the state the loser found.
@@ -155,10 +142,7 @@ public class GameInvitationRacesShould : IntegrationTestBase
             .Should().Be(1, "a person assists a game once");
     }
 
-    /// <summary>
-    /// One of the simultaneous acceptances of a link answers that it spent it.
-    /// </summary>
-    /// <remarks>The event carries the token, so only the acceptance that spent the link announces it.</remarks>
+    // The event carries the token, so only the acceptance that spent the link announces it.
     [Fact]
     public async Task SpendTheInvitationInExactlyOneOfTheAcceptancesThatMeet()
     {
@@ -285,10 +269,8 @@ public class GameInvitationRacesShould : IntegrationTestBase
         });
     }
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
     {
         var userId = Guid.NewGuid();
@@ -306,7 +288,6 @@ public class GameInvitationRacesShould : IntegrationTestBase
         return userId;
     }
 
-    /// <summary>A game with the master it needs to exist.</summary>
     private static async Task<(Guid MasterId, Guid GameId)> AddGameAsync(DmDbContext dbContext)
     {
         var masterId = await AddUserAsync(dbContext);

@@ -1,4 +1,5 @@
 using System;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Security;
 using DM.Web.API.Shared.Configuration;
@@ -70,7 +71,7 @@ public class TwoFactorChallengeCookie
                 ? challengeId
                 : null;
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is FormatException or CryptographicException)
         {
             return null;
         }

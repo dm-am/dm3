@@ -5,9 +5,6 @@ namespace DM.Domain.Account.Configuration;
 /// </summary>
 public class TokenConfiguration
 {
-    /// <summary>
-    /// Password reset token lifetime in hours
-    /// </summary>
     /// <remarks>
     /// The same window as the activation link: both letters are read by somebody
     /// who cannot get in.

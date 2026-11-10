@@ -20,10 +20,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// A game room chat is authorized by the room it belongs to: it has no participant rows, so the chat's own
-/// participation rule would refuse its own master.
-/// </summary>
+// A game room chat is authorized by the room it belongs to: it has no participant rows, so the
+// chat's own participation rule would refuse its own master.
 public class ChatRoomMessagesShould : IntegrationTestBase
 {
     private const string SeededText = "Chat room message from the fixture.";
@@ -50,10 +48,8 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A room is not moderated, so a removed message of its chat reaches nobody: not the master who reads
-    /// the room, not a moderator.
-    /// </summary>
+    // A room is not moderated, so a removed message of its chat reaches nobody: not the master who
+    // reads the room, not a moderator.
     [Fact]
     public async Task GiveTheTextOfARemovedMessageToNobody()
     {
@@ -111,9 +107,6 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A game room chat is not one of the user's own chats, and the general chat endpoint keeps refusing it.
-    /// </summary>
     [Fact]
     public async Task KeepTheGameRoomChatOutOfTheGeneralChatEndpoint()
     {
@@ -131,10 +124,6 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A message written by one person is unread for the next, and reading the
-    /// room clears it.
-    /// </summary>
     /// <remarks>
     /// The room and the chat are one thing under two identifiers, and the marker is the room's. End to end: each
     /// module is self-consistent on its own.
@@ -171,9 +160,6 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The author is not told about their own message.
-    /// </summary>
     [Fact]
     public async Task NotCountAMessageAsUnreadForItsOwnAuthor()
     {
@@ -227,9 +213,6 @@ public class ChatRoomMessagesShould : IntegrationTestBase
             "a game the stranger does not see takes its open chat room out of his reach");
     }
 
-    /// <summary>
-    /// A guest reads an open chat room of a public game; once the game is hidden, the room answers as nothing.
-    /// </summary>
     [Theory]
     [InlineData(ModuleStatus.Draft, PremoderationStatus.Approved, DraftVisibility.Private)]
     [InlineData(ModuleStatus.Active, PremoderationStatus.AwaitingEdits, DraftVisibility.Public)]
@@ -251,10 +234,6 @@ public class ChatRoomMessagesShould : IntegrationTestBase
             "the open chat room of a game the guest does not see answers him as nothing");
     }
 
-    /// <summary>
-    /// A closed chat room is read by the people it was opened to; a guest gets the answer for an empty address,
-    /// and the same room opened up reads.
-    /// </summary>
     [Fact]
     public async Task AnswerAGuestAboutAClosedChatRoomAsAboutNothing()
     {
@@ -277,9 +256,7 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The status and body a guest gets, minus the trace and with identifiers written alike.
-    /// </summary>
+    // The status and body a guest gets, minus the trace and with identifiers written alike.
     private async Task<string> GuestAnswer(Guid roomId)
     {
         var response = await Client.GetAsync($"/v1/chat-rooms/{roomId}/messages");
@@ -316,9 +293,8 @@ public class ChatRoomMessagesShould : IntegrationTestBase
             .GetInt32();
     }
 
-    /// <summary>
-    /// A chat room of TestGame without a single UserChatLink, as the application creates it, with the room's marker.
-    /// </summary>
+    // A chat room of TestGame without a single UserChatLink, as the application creates it, with
+    // the room's marker.
     private async Task<(Guid RoomId, Guid ChatId)> CreateChatRoom(Guid? readerUserId = null)
     {
         var roomId = Guid.NewGuid();
@@ -383,9 +359,6 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         return (roomId, chatId);
     }
 
-    /// <summary>
-    /// A game of its own, public and approved, with an open chat room holding one message; fresh identifiers.
-    /// </summary>
     private async Task<(Guid GameId, Guid RoomId)> CreateGameWithOpenChatRoom()
     {
         var gameId = Guid.NewGuid();
@@ -448,7 +421,6 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         return (gameId, roomId);
     }
 
-    /// <summary>A signed-in reader with no role in any game.</summary>
     private async Task<GeneralUser> CreateStranger()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

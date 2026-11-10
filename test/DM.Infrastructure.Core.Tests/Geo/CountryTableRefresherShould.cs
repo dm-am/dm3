@@ -19,11 +19,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Geo;
 
-/// <summary>
-/// The country table is downloaded and put in use by the running process, and a
-/// download that is not a table changes nothing.
-/// </summary>
-/// <remarks>203.0.113.42 is in Russia in one table and in Germany in the other, so which answers is visible.</remarks>
+// 203.0.113.42 is in Russia in one table and in Germany in the other, so which answers is visible.
 public class CountryTableRefresherShould : IDisposable
 {
     private const string Probe = "203.0.113.42";
@@ -40,9 +36,6 @@ public class CountryTableRefresherShould : IDisposable
         _path = Path.Combine(_directory, "ip-country.csv");
     }
 
-    /// <summary>
-    /// A table big enough to pass the size check, the probe range in the given country.
-    /// </summary>
     private static byte[] TableOf(string probeCountry)
     {
         var text = new StringBuilder();
@@ -67,10 +60,6 @@ public class CountryTableRefresherShould : IDisposable
         _log,
         new HttpClient(handler));
 
-    /// <summary>
-    /// The point of the whole thing: the running lookup answers from the new
-    /// table, and the new table is what a restart will read.
-    /// </summary>
     [Fact]
     public async Task PutTheDownloadedTableInUseWithoutARestart()
     {
@@ -89,7 +78,6 @@ public class CountryTableRefresherShould : IDisposable
         File.Exists(_path + ".download").Should().BeFalse("the download is renamed into place, not left beside it");
     }
 
-    /// <summary>The first start of a stand: no file yet, and nobody to put one there.</summary>
     [Fact]
     public async Task DownloadTheTableOnStartWhenThereIsNone()
     {
@@ -111,7 +99,6 @@ public class CountryTableRefresherShould : IDisposable
         handler.Requests.Should().Be(1, "after a download the next one is a week away");
     }
 
-    /// <summary>What does not pass changes nothing: not the answers, not the file.</summary>
     [Theory]
     [InlineData("an error page")]
     [InlineData("a page as big as a table")]
@@ -161,10 +148,6 @@ public class CountryTableRefresherShould : IDisposable
             "the failure goes to the log, and the next attempt is the retry");
     }
 
-    /// <summary>
-    /// The schedule follows the file: a restart does not download a table that is
-    /// days old, and a server that was down for longer than a week does at once.
-    /// </summary>
     [Theory]
     [InlineData(1, 6)]
     [InlineData(6.5, 0.5)]
@@ -180,7 +163,6 @@ public class CountryTableRefresherShould : IDisposable
         refresher.FirstWait().Should().Be(TimeSpan.FromDays(waitInDays));
     }
 
-    /// <summary>A fresh file nothing can be read from is replaced now, not in a week.</summary>
     [Fact]
     public async Task DownloadAtOnceOverAFreshFileThatHoldsNoRange()
     {
@@ -192,10 +174,7 @@ public class CountryTableRefresherShould : IDisposable
         refresher.FirstWait().Should().Be(TimeSpan.Zero);
     }
 
-    /// <summary>
-    /// The refresh and the letter must hold one lookup. Two would mean a refresh
-    /// that fills a table no letter ever reads.
-    /// </summary>
+    // Two would mean a refresh that fills a table no letter ever reads.
     [Fact]
     public void ShareOneLookupBetweenTheLetterAndTheRefresh()
     {
@@ -219,7 +198,6 @@ public class CountryTableRefresherShould : IDisposable
     }
 
 
-    /// <summary>Answers every request the same way and counts them.</summary>
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly Func<HttpResponseMessage> _respond;
@@ -232,7 +210,6 @@ public class CountryTableRefresherShould : IDisposable
         public static StubHandler Answering(byte[] body) =>
             new(() => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) });
 
-        /// <summary>A body whose header claims another length, as a server may.</summary>
         public static StubHandler Announcing(byte[] body, long announcedLength) => new(() =>
         {
             var content = new ByteArrayContent(body);
@@ -264,10 +241,7 @@ public class CountryTableRefresherShould : IDisposable
         }
     }
 
-    /// <summary>
-    /// Reads as one source repeated up to a length. Not seekable, so the content
-    /// around it cannot work out a length to announce.
-    /// </summary>
+    // Not seekable, so the content around it cannot work out a length to announce.
     private sealed class RepeatingStream(byte[] source, long length) : Stream
     {
         private long _position;

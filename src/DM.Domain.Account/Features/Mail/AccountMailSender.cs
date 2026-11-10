@@ -6,13 +6,8 @@ using Microsoft.Extensions.Options;
 
 namespace DM.Domain.Account.Features.Mail;
 
-/// <summary>
-/// What every letter the account module sends has in common.
-/// </summary>
-/// <remarks>
-/// Abstract, so the container scan, which registers concrete classes only, never
-/// makes it a service of its own.
-/// </remarks>
+// Abstract, so the container scan, which registers concrete classes only, never makes it a service
+// of its own.
 internal abstract class AccountMailSender
 {
     private readonly ITemplateRenderer _renderer;

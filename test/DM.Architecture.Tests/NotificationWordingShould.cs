@@ -8,10 +8,8 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every notification channel takes its wording from one table.
-/// </summary>
-/// <remarks>Read wherever a notification is put into words: the dispatcher, the API and the domain table both read.</remarks>
+// Read wherever a notification is put into words: the dispatcher, the API and the domain table both
+// read.
 public class NotificationWordingShould
 {
     private const string EventTypeName = "DM.Domain.Core.Enums.EventType";
@@ -19,7 +17,6 @@ public class NotificationWordingShould
     private const BindingFlags DeclaredStatic =
         BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
-    /// <summary>The assemblies that put a notification into words.</summary>
     private static readonly Assembly[] Readers =
     {
         typeof(DM.Workers.NotificationDispatcher.Startup).Assembly,

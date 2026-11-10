@@ -50,9 +50,6 @@ public class Warning
     /// </summary>
     public DateTimeOffset? PointsChangedUtc { get; set; }
 
-    /// <summary>
-    /// Why the points were changed, written by whoever changed them
-    /// </summary>
     public string? PointsChangeText { get; set; }
 
     /// <summary>

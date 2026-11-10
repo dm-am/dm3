@@ -9,11 +9,6 @@ namespace DM.Infrastructure.Core.Extensions;
 /// </summary>
 public static class AttributeExtensions
 {
-    /// <summary>
-    /// Get single attribute of given type
-    /// </summary>
-    /// <returns>The attribute instance</returns>
-    /// <exception cref="AmbiguousAttributesException"></exception>
     public static TAttr GetAttribute<TStruct, TAttr>(this TStruct structValue)
         where TStruct : struct
         where TAttr : Attribute
@@ -26,10 +21,6 @@ public static class AttributeExtensions
         throw new AttributeNotFoundException(typeof(TAttr), typeof(TStruct));
     }
 
-    /// <summary>
-    /// Get all attributes of given type
-    /// </summary>
-    /// <returns>Array of attribute instances</returns>
     private static TAttr[] GetAllAttributes<TStruct, TAttr>(this TStruct structValue)
         where TStruct : struct
         where TAttr : Attribute
@@ -57,9 +48,6 @@ public static class AttributeExtensions
     }
 }
 
-/// <summary>
-/// More than one attribute found
-/// </summary>
 internal class AmbiguousAttributesException : Exception
 {
     public AmbiguousAttributesException(Type attrType)

@@ -9,6 +9,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { useAuthStore } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/common/user";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import Header from "./Header.vue";
 
 const stubs = {
@@ -18,8 +19,10 @@ const stubs = {
 };
 
 /** The reader signed in, as much of him as the header reads. */
-const reader = (role: UserRole) =>
-  ({ id: "u-1", username: "TestUser", role }) as unknown as User;
+const reader = (role: UserRole): User => ({
+  ...createMockUser("u-1", "TestUser"),
+  role,
+});
 
 let wrapper: VueWrapper | null = null;
 

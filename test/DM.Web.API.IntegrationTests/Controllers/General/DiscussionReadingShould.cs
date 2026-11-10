@@ -103,9 +103,6 @@ public class DiscussionReadingShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A mode closing reading is refused by the name "Private" and by the number 2.
-    /// </summary>
     [Fact]
     public async Task RefuseADiscussionModeClosingReading()
     {
@@ -172,9 +169,6 @@ public class DiscussionReadingShould : IntegrationTestBase
         Guid Topic,
         Guid TopicComment);
 
-    /// <summary>
-    /// A master with a discussion of every kind, a stranger, and a user blacklisted everywhere; fresh identifiers.
-    /// </summary>
     private async Task<World> SeedAsync()
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -219,7 +213,6 @@ public class DiscussionReadingShould : IntegrationTestBase
         return game.GameId;
     }
 
-    /// <summary>The master's blog with a publication in it.</summary>
     private static (Guid Blog, Guid Publication) AddBlog(DmDbContext db, Guid masterId, DateTimeOffset now)
     {
         var blogId = Guid.NewGuid();
@@ -251,7 +244,6 @@ public class DiscussionReadingShould : IntegrationTestBase
         return (blogId, publicationId);
     }
 
-    /// <summary>A board of the case's own with the master's topic in it.</summary>
     private static Guid AddTopic(DmDbContext db, Guid masterId, DateTimeOffset now)
     {
         var boardId = Guid.NewGuid();
@@ -277,10 +269,6 @@ public class DiscussionReadingShould : IntegrationTestBase
         return topicId;
     }
 
-    /// <summary>
-    /// The blacklisted user on the lists of both games and of the blog, and on the
-    /// master's personal list.
-    /// </summary>
     private static void AddLists(
         DmDbContext db, Guid masterId, Guid blacklistedId, Guid[] games, Guid blogId, DateTimeOffset now)
     {

@@ -8,14 +8,8 @@ using FluentValidation;
 
 namespace DM.Domain.Game.Features.Characters;
 
-/// <summary>
-/// Rules for submitted attribute values, shared by the create and update validators.
-/// </summary>
 internal static class CharacterAttributeRules
 {
-    /// <summary>
-    /// The message argument the value rules write their refusal into.
-    /// </summary>
     public const string ErrorMessage = nameof(ErrorMessage);
 
     private const string SchemaCacheKey = nameof(SchemaCacheKey);
@@ -49,9 +43,7 @@ internal static class CharacterAttributeRules
         }
     }
 
-    /// <summary>
-    /// The sheet of the game, read once per validated request.
-    /// </summary>
+    // The sheet of the game, read once per validated request.
     public static async Task<Dictionary<Guid, AttributeSpecification>> Specifications(
         IValidationContext context, Func<Task<GameAttributeSchema>> readSchema)
     {
@@ -66,9 +58,6 @@ internal static class CharacterAttributeRules
         return specifications;
     }
 
-    /// <summary>
-    /// The sheet holds a specification for the value and the value fits it.
-    /// </summary>
     public static async Task<bool> FitsSheet<T>(CharacterAttribute attribute, ValidationContext<T> context,
         Func<Task<GameAttributeSchema>> readSchema, IAttributeValueValidator attributeValueValidator)
     {

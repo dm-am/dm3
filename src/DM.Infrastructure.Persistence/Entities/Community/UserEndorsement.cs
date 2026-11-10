@@ -6,9 +6,6 @@ using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
-/// <summary>
-/// DAL model for user endorsement (positive recommendation between users)
-/// </summary>
 /// <remarks>
 /// The Text field is plain text, not BBCode.
 /// Only positive endorsements are allowed - this is a recommendation system.
@@ -17,9 +14,6 @@ namespace DM.Infrastructure.Persistence.Entities.Community;
 [Table("UserEndorsements")]
 public class UserEndorsement : ISoftDeletable
 {
-    /// <summary>
-    /// Endorsement identifier
-    /// </summary>
     [Key]
     public Guid UserEndorsementId { get; set; }
 

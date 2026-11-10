@@ -20,15 +20,12 @@ async function sendMessage(c: MessageChanges, chatId: ChatId, text: string) {
     const { data, error } = await messagingApi.sendMessage(chatId, text);
     if (error) return { error };
     const sent = unwrapResource<Message>(data);
-    if (sent) {
-      c.messages.value.push(sent);
-      if (c.chats.value) {
-        const chat = c.chats.value.resources.find((ch) => ch.id === chatId);
-        if (chat) chat.lastMessage = sent as Chat["lastMessage"];
-      }
-      if (c.selectedChat.value?.id === chatId) {
-        c.selectedChat.value.lastMessage = sent as Chat["lastMessage"];
-      }
+    if (!sent) return { error: null };
+    c.messages.value.push(sent);
+    const chat = c.chats.value?.resources.find((ch) => ch.id === chatId);
+    if (chat) chat.lastMessage = sent as Chat["lastMessage"];
+    if (c.selectedChat.value?.id === chatId) {
+      c.selectedChat.value.lastMessage = sent as Chat["lastMessage"];
     }
   } finally {
     c.sending.value = false;

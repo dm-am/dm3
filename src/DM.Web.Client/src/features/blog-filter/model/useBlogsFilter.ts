@@ -4,7 +4,8 @@ import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import {
-  applySortAction,
+  reduceSortOrClear,
+  sortOrClearDispatchers,
   parseDateFromUrl,
   dateToApiStart,
   dateToApiEnd,
@@ -18,6 +19,7 @@ import type {
 } from "./types";
 import { SORT_OPTIONS, STATUS_OPTIONS, DEFAULT_FILTER_STATE } from "./types";
 import type { BlogStatus } from "@/entities/blog";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 type BlogsFilterAction =
   | { type: "SET_SEARCH"; search: string }
@@ -31,7 +33,7 @@ type BlogsFilterAction =
       toUtc: string | null;
     }
   | { type: "SET_CLOSED_RANGE"; fromUtc: string | null; toUtc: string | null }
-  | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
+  | { type: "SET_SORT"; sortBy: string; sortOrder?: SortDirection }
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
 
@@ -76,18 +78,13 @@ function reducer(
       newState.closedToUtc = action.toUtc;
       return newState;
 
-    case "SET_SORT":
-    case "TOGGLE_SORT_ORDER":
-      applySortAction(newState, action, SORT_OPTIONS);
-      return newState;
-
-    case "CLEAR_FILTERS":
-      return createDefaultState();
-
-    default: {
-      const _exhaustive: never = action;
-      return _exhaustive;
-    }
+    default:
+      return reduceSortOrClear(
+        newState,
+        action,
+        SORT_OPTIONS,
+        createDefaultState,
+      );
   }
 }
 
@@ -242,10 +239,8 @@ export function useBlogsFilter() {
     dispatch({ type: "SET_ACTIVATED_RANGE", fromUtc, toUtc });
   const setClosedRange = (fromUtc: string | null, toUtc: string | null) =>
     dispatch({ type: "SET_CLOSED_RANGE", fromUtc, toUtc });
-  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") =>
-    dispatch({ type: "SET_SORT", sortBy, sortOrder });
-  const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-  const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
+  const { setSort, toggleSortOrder, clearFilters } =
+    sortOrClearDispatchers(dispatch);
 
   return {
     filterState,

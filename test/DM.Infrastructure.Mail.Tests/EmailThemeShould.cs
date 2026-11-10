@@ -7,22 +7,13 @@ using Xunit;
 
 namespace DM.Infrastructure.Mail.Tests;
 
-/// <summary>
-/// A letter is the guest card of the site read in a mailbox, and it cannot load
-/// the site's stylesheet: the theme reaches it as values copied by hand into
-/// EmailConstants. This is the check that the copy still equals its source.
-/// </summary>
-/// <remarks>
-/// The light theme, because a mail client renders a letter on its own ground and
-/// the letter paints its page white. A token renamed or recoloured on the site
-/// fails here, on the letter side, which is the side nobody opens to look.
-/// </remarks>
+// A letter is the guest card of the site read in a mailbox, and it cannot load the site's
+// stylesheet: the theme reaches it as values copied by hand into EmailConstants.
 public class EmailThemeShould
 {
     private static readonly string Styles = Path.Combine(
         DM.Testing.RepositoryLayout.Root, "src", "DM.Web.Client", "src", "assets", "styles");
 
-    /// <summary>Custom properties of the first :root block: the light theme.</summary>
     private static IReadOnlyDictionary<string, string> LightTheme()
     {
         var css = File.ReadAllText(Path.Combine(Styles, "ThemeVariables.css"));
@@ -39,7 +30,6 @@ public class EmailThemeShould
         return tokens;
     }
 
-    /// <summary>A pixel variable of a Sass file, as a number.</summary>
     private static int Pixels(string file, string variable)
     {
         var sass = File.ReadAllText(Path.Combine(Styles, file));

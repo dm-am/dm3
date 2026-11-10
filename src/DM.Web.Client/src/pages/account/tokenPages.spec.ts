@@ -4,8 +4,9 @@
 
 /** The pages a letter opens: one card for the family, and a line while the link is checked. */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import type { Component } from "vue";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { accountApi } from "@/entities/user";
 import AccountActivationPage from "./AccountActivationPage.vue";
 import PasswordResetPage from "./PasswordResetPage.vue";
@@ -13,10 +14,6 @@ import EmailChangePage from "./EmailChangePage.vue";
 import UsernameChangePage from "./UsernameChangePage.vue";
 import TwoFactorRemovalPage from "./TwoFactorRemovalPage.vue";
 import TwoFactorRemovalCancelPage from "./TwoFactorRemovalCancelPage.vue";
-
-vi.mock("vue-router", async () =>
-  (await import("./guestPages.doubles")).vueRouter(),
-);
 
 // The value arrives in the fragment.
 beforeEach(() => {
@@ -26,16 +23,36 @@ beforeEach(() => {
 /** A request that never settles: the page stays in the state under test. */
 const pending = () => new Promise(() => {}) as never;
 
-const options = () => ({
-  global: {
-    plugins: [createPinia()],
-    stubs: { RouterLink: { template: "<a><slot /></a>" } },
-  },
-});
+/** The pages by the addresses their letters carry, and where their cards lead. */
+const routes: Address[] = [
+  ["activation", "/activate"],
+  ["reset-password", "/reset-password"],
+  ["confirm-email", "/confirm-email"],
+  ["change-username", "/change-username"],
+  ["two-factor-removal", "/two-factor/removal"],
+  ["two-factor-removal-cancel", "/two-factor/removal/cancel"],
+  ["home", "/"],
+  ["support", "/support"],
+];
+
+const ownAddress = new Map<Component, string>([
+  [AccountActivationPage, "/activate"],
+  [PasswordResetPage, "/reset-password"],
+  [EmailChangePage, "/confirm-email"],
+  [UsernameChangePage, "/change-username"],
+  [TwoFactorRemovalPage, "/two-factor/removal"],
+  [TwoFactorRemovalCancelPage, "/two-factor/removal/cancel"],
+]);
+
+/** Open a page at the address of its letter. */
+const open = async (page: Component) => {
+  const own = ownAddress.get(page);
+  if (!own) throw new Error("a page with no letter of its own");
+  return (await mountPage(page, own, { routes })).wrapper;
+};
 
 describe("pages reached from a letter", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     sessionStorage.clear();
     vi.restoreAllMocks();
   });
@@ -44,21 +61,24 @@ describe("pages reached from a letter", () => {
   it.each([
     ["the activation card", AccountActivationPage, "getActivationInfo"],
     ["the reset card", PasswordResetPage, "getPasswordResetTokenInfo"],
-  ] as const)("says nothing about a failure in %s yet", (_, page, endpoint) => {
-    vi.spyOn(accountApi, endpoint).mockImplementation(pending);
+  ] as const)(
+    "says nothing about a failure in %s yet",
+    async (_, page, endpoint) => {
+      vi.spyOn(accountApi, endpoint).mockImplementation(pending);
 
-    const wrapper = mount(page, options());
-    const card = wrapper.text();
+      const wrapper = await open(page);
+      const card = wrapper.text();
 
-    expect(card).toContain("Проверяем ссылку...");
-    for (const failure of ["устарел", "истек", "не найден", "Выберите имя"]) {
-      expect(card).not.toContain(failure);
-    }
+      expect(card).toContain("Проверяем ссылку...");
+      for (const failure of ["устарел", "истек", "не найден", "Выберите имя"]) {
+        expect(card).not.toContain(failure);
+      }
 
-    // No help while nothing has gone wrong.
-    expect(wrapper.find(".auth-footnote").exists()).toBe(false);
-    expect(card.trim()).toBe("Проверяем ссылку...");
-  });
+      // No help while nothing has gone wrong.
+      expect(wrapper.find(".auth-footnote").exists()).toBe(false);
+      expect(card.trim()).toBe("Проверяем ссылку...");
+    },
+  );
 
   /** The surface draws the card; the wide measure is kept for the one form that takes a password. */
   it.each([
@@ -89,7 +109,7 @@ describe("pages reached from a letter", () => {
           : { data: null, error: { status: 404 } }) as never,
       );
 
-      const wrapper = mount(page, options());
+      const wrapper = await open(page);
       await flushPromises();
       const card = wrapper.get(".auth-surface > .auth-card").classes();
 

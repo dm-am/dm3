@@ -14,12 +14,8 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Authentication;
 
-/// <summary>
-/// What a login does when the account has a second factor.
-/// </summary>
-/// <remarks>
-/// Between the two factors there is no session, so no authorization surface has to remember a half one.
-/// </remarks>
+// Between the two factors there is no session, so no authorization surface has to remember a half
+// one.
 public class SecondFactorLoginShould : AuthenticationServiceTestBase
 {
     private const string Email = "reader@example.com";
@@ -78,7 +74,6 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
         await repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
     }
 
-    /// <summary>No session exists until the factor is shown.</summary>
     [Fact]
     public async Task CreateNoSessionForAnAccountWithAFactor()
     {
@@ -98,12 +93,7 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>
-    /// The proven password does not reset the attempt counter on its own.
-    /// </summary>
-    /// <remarks>
-    /// Otherwise the password alone buys an unlimited supply of challenges.
-    /// </remarks>
+    // Otherwise the password alone buys an unlimited supply of challenges.
     [Fact]
     public async Task NotResetTheAttemptCounterUntilTheLoginIsFinished()
     {
@@ -132,7 +122,6 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>The code finishes the login and the session is created.</summary>
     [Fact]
     public async Task FinishTheLoginOnAGoodCode()
     {
@@ -150,9 +139,7 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>
-    /// "Remember me" comes from the first step, where the box was.
-    /// </summary>
+    // "Remember me" comes from the first step, where the box was.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -165,7 +152,6 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
         sessionFactory.Received(1).Create(persistent, Arg.Any<SessionContext?>());
     }
 
-    /// <summary>Every way of failing, one answer.</summary>
     [Fact]
     public async Task AnswerEveryFailureTheSameWay()
     {
@@ -197,7 +183,6 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
         });
     }
 
-    /// <summary>The challenge is destroyed once the attempts run out.</summary>
     [Fact]
     public async Task DestroyTheChallengeWhenTheAttemptsRunOut()
     {
@@ -221,10 +206,8 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
             ChallengeId, Arg.Any<CancellationToken>());
     }
 
-    /// <remarks>
-    /// Two counters over one login means two thresholds, and only the lower of
-    /// them would ever be reached.
-    /// </remarks>
+    // Two counters over one login means two thresholds, and only the lower of them would ever be
+    // reached.
     [Fact]
     public async Task CountAWrongCodeInTheCounterOfThePasswordStep()
     {
@@ -251,7 +234,6 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
         await repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
-    /// <summary>A ban issued between the two steps takes effect.</summary>
     [Fact]
     public async Task RefuseALoginBannedBetweenTheTwoSteps()
     {
@@ -277,7 +259,6 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
         await repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
-    /// <summary>A sign-in with the factor calls off a scheduled removal.</summary>
     [Fact]
     public async Task CallOffAScheduledRemovalOnASuccessfulSecondFactor()
     {
@@ -306,12 +287,7 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>
-    /// No session without a password for an account with a factor.
-    /// </summary>
-    /// <remarks>
-    /// Safe by construction, not by the circumstance that today's only caller is a fresh account.
-    /// </remarks>
+    // Safe by construction, not by the circumstance that today's only caller is a fresh account.
     [Fact]
     public async Task RefuseToMintASessionWithoutAPasswordForAnAccountWithAFactor()
     {
@@ -333,10 +309,8 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
         await repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
     }
 
-    /// <summary>
-    /// A second factor is optional for every rank: an account without one acts
-    /// with the rank recorded on it.
-    /// </summary>
+    // A second factor is optional for every rank: an account without one acts with the rank
+    // recorded on it.
     [Theory]
     [InlineData(UserRole.Admin)]
     [InlineData(UserRole.SeniorModerator)]
@@ -350,10 +324,8 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
         identity.User.Role.Should().Be(role);
     }
 
-    /// <summary>
-    /// An ordinary request never asks the storage about the factor: it is asked
-    /// at sign-in, where it is owed, and nowhere else.
-    /// </summary>
+    // An ordinary request never asks the storage about the factor: it is asked at sign-in, where it
+    // is owed, and nowhere else.
     [Fact]
     public async Task NotAskStorageAboutTheFactorOnTheTokenPath()
     {

@@ -17,21 +17,14 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The character sheet of a game: written with the game, replaced under a
-/// version, and taking the values it drops with it.
-/// </summary>
-/// <remarks>The sheet and the game land in one save, the replacement is a predicate on the row, and its deletes reach hidden characters.</remarks>
+// The sheet and the game land in one save, the replacement is a predicate on the row, and its
+// deletes reach hidden characters.
 public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
 {
     public GameAttributeSchemaRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// The game and its sheet are one write, and the identifiers of the
-    /// specifications are the server's.
-    /// </summary>
     [Fact]
     public async Task WriteTheSheetInTheSameSaveAsTheGame()
     {
@@ -63,10 +56,8 @@ public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
             "the server hands every specification of a new sheet an identifier of its own");
     }
 
-    /// <summary>
-    /// A game whose sheet row is missing is a defect of whoever wrote the game,
-    /// and the read says so instead of answering with a sheet nobody chose.
-    /// </summary>
+    // A game whose sheet row is missing is a defect of whoever wrote the game, and the read says so
+    // instead of answering with a sheet nobody chose.
     [Fact]
     public async Task FailLoudlyForAGameWithoutASheet()
     {
@@ -83,11 +74,8 @@ public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
             "an empty sheet would hide every value of every character of that game");
     }
 
-    /// <summary>
-    /// A replacement aimed at a game with no sheet row fails the way a read of
-    /// it does, rather than coming back empty-handed like a lost version.
-    /// </summary>
-    /// <remarks>A lost version sends the caller to reload; a missing sheet is a defect of whoever wrote the game.</remarks>
+    // A lost version sends the caller to reload; a missing sheet is a defect of whoever wrote the
+    // game.
     [Fact]
     public async Task FailLoudlyWhenReplacingTheSheetOfAGameThatHasNone()
     {
@@ -147,10 +135,6 @@ public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
         replaced.Version.Should().Be(1, "a written replacement moves the version by one");
     }
 
-    /// <summary>
-    /// The values of every character of the game go with the specifications the
-    /// new set no longer names, soft-deleted characters included.
-    /// </summary>
     [Fact]
     public async Task DropTheValuesOfEveryCharacterOutsideTheNewSet()
     {
@@ -224,11 +208,7 @@ public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
             .Should().Be(1, "a refused replacement deletes no values either");
     }
 
-    /// <summary>
-    /// A value written after a replacement deleted its row is stored, not
-    /// refused: it becomes one orphan until the next replacement collects it.
-    /// </summary>
-    /// <remarks>The player was entitled to write it when they read the sheet.</remarks>
+    // The player was entitled to write it when they read the sheet.
     [Fact]
     public async Task StoreAValueWrittenAfterItsRowWasDeleted()
     {
@@ -299,9 +279,6 @@ public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
         DiceEnabled = true
     };
 
-    /// <summary>
-    /// A game whose sheet holds one text specification, at version zero.
-    /// </summary>
     private static async Task<(Guid GameId, Guid SpecificationId)> SeedGameWithOneSpecification(
         IServiceScope scope)
     {

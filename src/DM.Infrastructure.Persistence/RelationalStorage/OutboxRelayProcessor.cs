@@ -35,10 +35,6 @@ internal class OutboxRelayProcessor(
     DmDbContext dbContext,
     IDateTimeProvider dateTimeProvider) : IOutboxRelayProcessor
 {
-    /// <summary>
-    /// The claim: pending rows in publication order, locked for this
-    /// transaction, rows locked by a concurrent relay skipped.
-    /// </summary>
     private static readonly string ClaimSql =
         $"""
          SELECT * FROM "OutboxEvents"
@@ -115,10 +111,8 @@ internal class OutboxRelayProcessor(
         });
     }
 
-    /// <summary>
-    /// LastError is a diagnostic line, not a log sink: a driver that unrolls an
-    /// entire connection failure into the message must not grow the table.
-    /// </summary>
+    // LastError is a diagnostic line, not a log sink: a driver that unrolls an entire connection
+    // failure into the message must not grow the table.
     private static string Truncate(string error) =>
         error.Length <= 500 ? error : error[..500];
 }

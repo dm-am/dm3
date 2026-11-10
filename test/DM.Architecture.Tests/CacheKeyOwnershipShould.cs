@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A cache key spelled in more than one place is spelled in CacheKeys.
-/// </summary>
 /// <remarks>
 /// A misspelled key fails silently, as a stale read or a cache that never hits. Keys used inside
 /// a single file stay there.

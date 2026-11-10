@@ -6,11 +6,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Token.EntityId holds a GameId, a BlogId or nothing, so both foreign keys EF would emit on it are removed
-/// from the migration by hand: PostgreSQL checks every foreign key on a non-null value. Run against a throwaway
-/// database built by the migration.
-/// </summary>
+// Token.EntityId holds a GameId, a BlogId or nothing, so both foreign keys EF would emit on it are
+// removed from the migration by hand: PostgreSQL checks every foreign key on a non-null value.
 public class InvitationTokenPersistenceShould : IntegrationTestBase
 {
     public InvitationTokenPersistenceShould(DatabaseFixture databaseFixture) : base(databaseFixture)

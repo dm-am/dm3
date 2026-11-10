@@ -134,9 +134,8 @@ internal class CharacterService : ICharacterService
         return character;
     }
 
-    /// <summary>
-    /// An application under review is seen by everybody; a declined one by nobody, its author and the leads included.
-    /// </summary>
+    // An application under review is seen by everybody; a declined one by nobody, its author and
+    // the leads included.
     private static bool IsVisible(Character character) =>
         character.Status != CharacterStatus.Declined;
 
@@ -225,9 +224,6 @@ internal class CharacterService : ICharacterService
         return updated;
     }
 
-    /// <summary>
-    /// Writes the target status into the change and answers with the event that announces it.
-    /// </summary>
     /// <remarks>
     /// Refused first for the status it starts from, then for the right to make it.
     /// </remarks>
@@ -287,10 +283,8 @@ internal class CharacterService : ICharacterService
         }
     }
 
-    /// <summary>
-    /// A player who lost his last active character stays as a reader, a blacklisted one too:
-    /// following the game is reading.
-    /// </summary>
+    // A player who lost his last active character stays as a reader, a blacklisted one too:
+    // following the game is reading.
     private async Task KeepPlayerAsReader(CharacterToUpdate character, UpdateCharacterEntity entity)
     {
         if (entity.Status != CharacterStatus.Active &&
@@ -322,10 +316,8 @@ internal class CharacterService : ICharacterService
         }
     }
 
-    /// <summary>
-    /// A submitter whose read redacted the hidden values must not blank them: his hidden inputs
-    /// are dropped and the stored values restored.
-    /// </summary>
+    // A submitter whose read redacted the hidden values must not blank them: his hidden inputs are
+    // dropped and the stored values restored.
     private async Task<IEnumerable<CharacterAttributeInput>?> BuildAttributeInputs(
         CharacterToUpdate character,
         IEnumerable<CharacterAttribute>? submitted)

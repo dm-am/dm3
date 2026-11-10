@@ -9,10 +9,8 @@ public class UpdateFundraisingGoalValidatorShould
 {
     private readonly UpdateFundraisingGoalValidator validator = new();
 
-    /// <summary>
-    /// A goal that passes every rule, so each test below states the one field
-    /// it is about instead of restating the other two.
-    /// </summary>
+    // A goal that passes every rule, so each test below states the one field it is about instead of
+    // restating the other two.
     private static UpdateFundraisingGoal Goal(
         string title = "Хостинг на год",
         decimal goalAmount = 100m,

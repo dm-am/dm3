@@ -12,10 +12,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A search preview follows the rules of the page, though it is built in the database for a reader the
-/// projection knows nothing about.
-/// </summary>
+// A search preview follows the rules of the page, though it is built in the database for a reader
+// the projection knows nothing about.
 public class MessageSearchShould : IntegrationTestBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -24,10 +22,8 @@ public class MessageSearchShould : IntegrationTestBase
         Converters = { new JsonStringEnumConverter() },
     };
 
-    /// <summary>The word standing in the public half of the post.</summary>
     private const string PublicWord = "якорьметка";
 
-    /// <summary>The word standing inside the [private] block.</summary>
     private const string PrivateWord = "секретпароль";
 
     public MessageSearchShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -73,9 +69,6 @@ public class MessageSearchShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The column itself holds none of it.
-    /// </summary>
     [Fact]
     public async Task KeepPrivateTextOutOfTheStoredProjectionEntirely()
     {
@@ -167,9 +160,6 @@ public class MessageSearchShould : IntegrationTestBase
         return postId;
     }
 
-    /// <summary>
-    /// Write the projection a row would have carried before the parse was fixed.
-    /// </summary>
     private async Task PoisonProjection(Guid postId, string searchText)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

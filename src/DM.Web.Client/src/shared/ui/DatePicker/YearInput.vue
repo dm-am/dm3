@@ -13,15 +13,12 @@ const props = withDefaults(
     min?: number;
     /** The latest year taken. */
     max?: number;
-    /** Input placeholder. */
-    placeholder?: string;
     /** Accessible label for the field. */
     ariaLabel?: string;
   }>(),
   {
     min: undefined,
     max: undefined,
-    placeholder: "гггг",
     ariaLabel: undefined,
   },
 );
@@ -93,7 +90,7 @@ function onEnter(e: KeyboardEvent) {
     inputmode="numeric"
     autocomplete="off"
     maxlength="4"
-    :placeholder="placeholder"
+    placeholder="гггг"
     :aria-label="ariaLabel"
     @input="onInput"
     @blur="setReason(reasonFor(text))"

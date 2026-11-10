@@ -10,10 +10,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
-/// <summary>
-/// What a senior moderator or an administrator can do without a second factor:
-/// everything the rank gives.
-/// </summary>
 /// <remarks>
 /// The factor is optional for every rank. Through a real cookie session: the identity under test is the one
 /// the sign-in builds.
@@ -36,10 +32,6 @@ public class PrivilegeWithoutSecondFactorShould : IntegrationTestBase
         return (login, email);
     }
 
-    /// <summary>
-    /// The rank is in force from the first request of a session opened by
-    /// password alone.
-    /// </summary>
     [Theory]
     [InlineData(UserRole.Admin)]
     [InlineData(UserRole.SeniorModerator)]
@@ -53,9 +45,6 @@ public class PrivilegeWithoutSecondFactorShould : IntegrationTestBase
             "a second factor is optional for this rank");
     }
 
-    /// <summary>
-    /// The viewer and the factor status carry no trace of a withheld rank.
-    /// </summary>
     [Fact]
     public async Task SayNothingAboutAWithheldRank()
     {
@@ -78,9 +67,6 @@ public class PrivilegeWithoutSecondFactorShould : IntegrationTestBase
         resource["enabled"]!.GetValue<bool>().Should().BeFalse();
     }
 
-    /// <summary>
-    /// An ordinary account short of the rank gets the refusal that names nothing.
-    /// </summary>
     [Fact]
     public async Task KeepTheOrdinaryRefusalForAnOrdinaryAccount()
     {
@@ -97,10 +83,7 @@ public class PrivilegeWithoutSecondFactorShould : IntegrationTestBase
     private static async Task<string?> Title(HttpResponseMessage response) =>
         JsonNode.Parse(await response.Content.ReadAsStringAsync())!["title"]?.GetValue<string>();
 
-    /// <summary>
-    /// The mailed removal path is open to these ranks like to anyone else.
-    /// </summary>
-    /// <remarks>The only way back for a person who lost the phone and the recovery codes.</remarks>
+    // The only way back for a person who lost the phone and the recovery codes.
     [Fact]
     public async Task IssueARemovalLinkForAPrivilegedRank()
     {
@@ -119,10 +102,7 @@ public class PrivilegeWithoutSecondFactorShould : IntegrationTestBase
             .Should().Be(1, "the letter is the way back and the rank does not close it");
     }
 
-    /// <summary>
-    /// The same request for an ordinary account does issue a link.
-    /// </summary>
-    /// <remarks>Without it, an endpoint issuing nothing to anybody would pass the test above.</remarks>
+    // Without it, an endpoint issuing nothing to anybody would pass the test above.
     [Fact]
     public async Task IssueARemovalLinkForAnOrdinaryAccount()
     {

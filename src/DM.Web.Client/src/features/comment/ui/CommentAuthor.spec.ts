@@ -2,23 +2,17 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { enableAutoUnmount, mount, type VueWrapper } from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { enableAutoUnmount, type VueWrapper } from "@vue/test-utils";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { markupOutline } from "@/shared/lib/testing/markupOutline";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import CommentItem from "./CommentItem.vue";
 import {
-  RouterLinkStub,
   comment,
   freshComment,
   mountComponent,
+  mountItem,
   signInAs,
 } from "./CommentItem.fixtures";
-
-vi.mock("vue-router", async () =>
-  (await import("./CommentItem.doubles")).vueRouter(),
-);
 
 enableAutoUnmount(afterEach);
 
@@ -27,10 +21,17 @@ beforeEach(freshComment);
 describe("CommentItem author", () => {
   const nameIn = (wrapper: VueWrapper) => wrapper.get(".comment-header a");
 
-  it("names a removed account in the full layout the way it names an author", () => {
-    const living = nameIn(mountComponent(vi.fn(), {}, { compact: false }));
+  it("names a removed account in the full layout the way it names an author", async () => {
+    const living = nameIn(
+      await mountComponent(vi.fn(), {}, { compact: false }),
+    );
+    expect(living.attributes("href")).toBe("/users/SolohinLex");
     const removed = nameIn(
-      mountComponent(vi.fn(), { author: null as never }, { compact: false }),
+      await mountComponent(
+        vi.fn(),
+        { author: null as never },
+        { compact: false },
+      ),
     );
 
     expect(living.text()).toBe("SolohinLex");
@@ -64,8 +65,8 @@ describe("CommentItem at every width", () => {
     );
   };
 
-  it("keeps the name, the letter of the role and [offline] in the header, a space of the line apart", () => {
-    const wrapper = moderatorsComment(false);
+  it("keeps the name, the letter of the role and [offline] in the header, a space of the line apart", async () => {
+    const wrapper = await moderatorsComment(false);
     const line = wrapper.get(".comment-header .author-line");
 
     expect(
@@ -86,8 +87,8 @@ describe("CommentItem at every width", () => {
     expect(line.find(".copy-space").exists()).toBe(false);
   });
 
-  it("names a removed account in the header without a mark of presence", () => {
-    const wrapper = mountComponent(
+  it("names a removed account in the header without a mark of presence", async () => {
+    const wrapper = await mountComponent(
       vi.fn(),
       { author: null as never },
       { compact: false },
@@ -100,16 +101,16 @@ describe("CommentItem at every width", () => {
     expect(line.text()).toBe("Аккаунт удален");
   });
 
-  it("writes the date of the author's column with its time in one text", () => {
-    const wrapper = moderatorsComment(false);
+  it("writes the date of the author's column with its time in one text", async () => {
+    const wrapper = await moderatorsComment(false);
     const date = wrapper.get(".comment-header .comment-date");
 
     expect(spaced(date.text())).toBe(spaced(formatDateFull(CREATED)));
     expect(date.element.children.length).toBe(0);
   });
 
-  it("writes the date of the compact caption with its time in one part", () => {
-    const wrapper = moderatorsComment(true);
+  it("writes the date of the compact caption with its time in one part", async () => {
+    const wrapper = await moderatorsComment(true);
     const date = wrapper
       .findAll(".comment-footer .caption-line__part")
       .find(
@@ -124,21 +125,15 @@ describe("CommentItem at every width", () => {
 
 describe("CommentItem of a guest", () => {
   const guests = (compact: boolean) =>
-    mount(CommentItem, {
-      global: {
-        plugins: [createPinia()],
-        stubs: { RouterLink: RouterLinkStub },
-      },
-      props: {
-        comment: comment({ author: null as never }),
-        readonly: true,
-        guest: true,
-        compact,
-      },
+    mountItem({
+      comment: comment({ author: null as never }),
+      readonly: true,
+      guest: true,
+      compact,
     });
 
-  it("signs the header with the word, in the name's place and weight", () => {
-    const wrapper = guests(false);
+  it("signs the header with the word, in the name's place and weight", async () => {
+    const wrapper = await guests(false);
     const line = wrapper.get(".comment-header .author-line");
 
     expect(line.text()).toBe("Гость");
@@ -150,36 +145,30 @@ describe("CommentItem of a guest", () => {
     ).toEqual([["SPAN", "author-name"]]);
   });
 
-  it("leads nowhere from the picture or the word", () => {
-    const wrapper = guests(false);
+  it("leads nowhere from the picture or the word", async () => {
+    const wrapper = await guests(false);
 
-    expect(wrapper.findAllComponents(RouterLinkStub)).toEqual([]);
+    expect(wrapper.findAll("a")).toEqual([]);
     expect(wrapper.get(".avatar-link").element.tagName).toBe("SPAN");
     expect(
       wrapper.get(".avatar-link .default-avatar").attributes("aria-label"),
     ).toBe("Гость");
   });
 
-  it("signs the compact caption with the word", () => {
-    const wrapper = guests(true);
+  it("signs the compact caption with the word", async () => {
+    const wrapper = await guests(true);
 
     expect(
       wrapper.get(".comment-footer .author-info").text().replace(/\s+/g, " "),
     ).toBe("Автор: Гость");
-    expect(wrapper.findAllComponents(RouterLinkStub)).toEqual([]);
+    expect(wrapper.findAll("a")).toEqual([]);
   });
 
-  it("is a removed account where the comment does not say it is a guest's", () => {
-    const wrapper = mount(CommentItem, {
-      global: {
-        plugins: [createPinia()],
-        stubs: { RouterLink: RouterLinkStub },
-      },
-      props: {
-        comment: comment({ author: null as never }),
-        readonly: true,
-        compact: false,
-      },
+  it("is a removed account where the comment does not say it is a guest's", async () => {
+    const wrapper = await mountItem({
+      comment: comment({ author: null as never }),
+      readonly: true,
+      compact: false,
     });
 
     expect(wrapper.get(".comment-header .author-line").text()).toBe(
@@ -190,9 +179,9 @@ describe("CommentItem of a guest", () => {
 
 // The role badge of the author column: its nodes, their styles, its tooltip.
 describe("CommentAuthor role badge", () => {
-  it("draws the brackets inside the letter, under its tooltip", () => {
+  it("draws the brackets inside the letter, under its tooltip", async () => {
     const senior = { username: "Старший", role: "SeniorModerator" };
-    const wrapper = mountComponent(
+    const wrapper = await mountComponent(
       vi.fn(),
       { author: { ...senior, lastActivityUtc: null } as never },
       { compact: false },
@@ -200,7 +189,7 @@ describe("CommentAuthor role badge", () => {
 
     expect(markupOutline(wrapper, ".author-line")).toEqual([
       "span.author-line { display: block; padding-bottom: 4px }",
-      "  a.author-name { color: var(--text); display: inline-block; font-size: 16px; font-weight: 700; max-width: 100%; text-decoration: none; transition: color 0.15s ease }",
+      `  a.author-name[href="/users/${encodeURIComponent("Старший")}"] { color: var(--text); display: inline-block; font-size: 16px; font-weight: 700; max-width: 100%; text-decoration: none; transition: color 0.15s ease }`,
       '    "Старший"',
       "  span.author-gap { word-spacing: calc(2px - 0.2676em) }",
       '    " "',

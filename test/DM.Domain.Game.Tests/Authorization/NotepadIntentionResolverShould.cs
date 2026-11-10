@@ -34,7 +34,6 @@ public class NotepadIntentionResolverShould
             GameRoles = roles
         };
 
-    /// <summary>The same notepad, asked about one entry standing in it.</summary>
     private static NotepadAuthContext Entry(
         Guid authorId,
         NotepadType type,

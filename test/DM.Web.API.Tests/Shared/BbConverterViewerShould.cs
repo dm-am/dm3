@@ -10,9 +10,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// The converter takes the viewer from the request scope, and a scope already gone renders for a guest.
-/// </summary>
+// The converter takes the viewer from the request scope, and a scope already gone renders for a
+// guest.
 public class BbConverterViewerShould
 {
     [Fact]

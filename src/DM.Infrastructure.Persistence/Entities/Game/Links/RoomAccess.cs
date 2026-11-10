@@ -40,9 +40,6 @@ public class RoomAccess
     /// </summary>
     public RoomAccessPolicy Policy { get; set; }
 
-    /// <summary>
-    /// Character navigation
-    /// </summary>
     [ForeignKey(nameof(CharacterId))]
     public virtual Character? Character { get; set; }
 

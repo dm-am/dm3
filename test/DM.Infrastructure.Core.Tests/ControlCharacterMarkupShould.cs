@@ -10,15 +10,8 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// A character the parser removes before it reads the text does not let the
-/// save path and the page read two different texts.
-/// </summary>
-/// <remarks>
-/// The parser drops controls before reading, which joins what stood on either side, so the save path
-/// must read the same text. Each check puts one control, whitespace, format or surrogate character into
-/// every place of a tag and asks the save path and the page together.
-/// </remarks>
+// The parser drops controls before reading, which joins what stood on either side, so the save path
+// must read the same text.
 public class ControlCharacterMarkupShould
 {
     private const string Secret = "SECRET";
@@ -34,7 +27,6 @@ public class ControlCharacterMarkupShould
                                 char.IsSurrogate(character) ||
                                 char.GetUnicodeCategory(character) == UnicodeCategory.Format);
 
-    /// <summary>The spelling with the character put at every place from the bracket to the bracket.</summary>
     private static IEnumerable<string> Spliced(string tag, char character) =>
         Enumerable.Range(1, tag.Length - 1).Select(at => tag.Insert(at, character.ToString()));
 

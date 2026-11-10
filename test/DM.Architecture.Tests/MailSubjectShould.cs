@@ -10,10 +10,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every letter the site sends opens its subject with the same prefix, and that
-/// prefix is the only place the site is named.
-/// </summary>
 /// <remarks>
 /// A mailbox filter matches the beginning of a subject. The prefix is written once, in MailSubject, and
 /// AccountLetterShould sends every account letter to see it arrive. Sources only here: what a run does not
@@ -30,10 +26,6 @@ public class MailSubjectShould
     /// <remarks>Constructing the letter, or deriving from <c>AccountMailSender</c>, which constructs it.</remarks>
     private static readonly string[] LetterTypes = ["EmailLetter", "AccountMailSender"];
 
-    /// <summary>
-    /// A subject that does not go through MailSubject: anything assigned to the Subject of a letter but
-    /// MailSubject.Of, or the subject of another message carried over as it is.
-    /// </summary>
     private static readonly Regex SubjectPastThePrefix = new(
         @"(?:^|[^\w.])[Ss]ubject\s*=(?>\s*)(?!MailSubject\.Of\(|\w+\.Subject\b)",
         RegexOptions.Compiled);
@@ -113,7 +105,6 @@ public class MailSubjectShould
             .Select(match => line with { Text = match.Groups[1].Value }))
         .ToList();
 
-    /// <summary>The code lines of every source that constructs a letter.</summary>
     private static IReadOnlyList<SourceLine> Lines()
     {
         var root = RepositoryLayout.Root;

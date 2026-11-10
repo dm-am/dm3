@@ -5,9 +5,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// Integration tests for GameController on one game. The list of games is in GameListShould.
-/// </summary>
 public class GameControllerShould : IntegrationTestBase
 {
     public GameControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -24,9 +21,6 @@ public class GameControllerShould : IntegrationTestBase
         content.Should().Contain("\"id\""); // Resource returned directly without wrapper
     }
 
-    /// <summary>
-    /// Get non-existent game should return NotFound, as for a game this reader may not see.
-    /// </summary>
     [Fact]
     public async Task GetGameWithNonExistentIdReturnsNotFound()
     {
@@ -45,9 +39,6 @@ public class GameControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// GetGameDetails returns the game's active characters in `activeCharacters`, which the game and room tooltips read.
-    /// </summary>
     [Fact]
     public async Task GetGameDetailsIncludesActiveCharactersWithOwners()
     {
@@ -64,9 +55,6 @@ public class GameControllerShould : IntegrationTestBase
         json.Should().Contain(TestConstants.SecondUserLogin);
     }
 
-    /// <summary>
-    /// GetGameDetails carries the recruitment PcCount the tooltip shows as "Персонажи: N/∞".
-    /// </summary>
     [Fact]
     public async Task GetGameDetailsCarriesRealPcCount()
     {
@@ -77,9 +65,6 @@ public class GameControllerShould : IntegrationTestBase
         json.Should().Contain("\"pcCount\":2");
     }
 
-    /// <summary>
-    /// One endpoint, two ways to address the game, one payload.
-    /// </summary>
     /// <remarks>The alias and the GUID take different repository paths; asserted as an equality of the two responses.</remarks>
     [Fact]
     public async Task GetGameAnswerTheSameWhetherAddressedByAliasOrByGuid()
@@ -103,7 +88,6 @@ public class GameControllerShould : IntegrationTestBase
             .Should().Be(byGuid.GetProperty("recruitment").GetProperty("pcCount").GetInt32());
     }
 
-    /// <summary>The `resource` of a single-game read, as a JSON element.</summary>
     private async Task<JsonElement> ReadGameAsync(string url)
     {
         var response = await Client.GetAsync(url);

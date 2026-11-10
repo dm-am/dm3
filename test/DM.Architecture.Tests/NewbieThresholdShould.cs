@@ -9,10 +9,8 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A newbie is one number, and the stored column agrees with it.
-/// </summary>
-/// <remarks>Read out of the sources: the migration and snapshots build the database; a number names the copy that moved.</remarks>
+// Read out of the sources: the migration and snapshots build the database; a number names the copy
+// that moved.
 public class NewbieThresholdShould
 {
 
@@ -40,10 +38,7 @@ public class NewbieThresholdShould
         }
     }
 
-    /// <summary>
-    /// No second spelling of the rule; the schema's four files are compared to the constant above.
-    /// </summary>
-    /// <remarks>Matched through the escaped quotes the SQL carries.</remarks>
+    // Matched through the escaped quotes the SQL carries.
     [Fact]
     public void BeSpelledNowhereElse()
     {
@@ -75,10 +70,7 @@ public class NewbieThresholdShould
             "beside it; a copy of either answers differently the first time the product rule moves");
     }
 
-    /// <summary>
-    /// The number the published documentation states is the number the code uses.
-    /// </summary>
-    /// <remarks>An XML doc cannot interpolate a constant, so its number is held to the constant here.</remarks>
+    // An XML doc cannot interpolate a constant, so its number is held to the constant here.
     [Fact]
     public void BeTheNumberTheApiDocumentationPromises()
     {

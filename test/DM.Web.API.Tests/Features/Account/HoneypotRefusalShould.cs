@@ -17,11 +17,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Account;
 
-/// <summary>
-/// A form with its trap filled is refused before its action runs, under a field
-/// the request declares.
-/// </summary>
-/// <remarks>Asserted against the properties of the request type, so a renamed field takes the key with it.</remarks>
+// Asserted against the properties of the request type, so a renamed field takes the key with it.
 public class HoneypotRefusalShould
 {
     private const string Filled = "http://spam.example";
@@ -60,10 +56,8 @@ public class HoneypotRefusalShould
         act.Should().NotThrow();
     }
 
-    /// <summary>
-    /// The filter only sees a form that says it has a trap: a request with the
-    /// field and without the interface would go through with the field filled.
-    /// </summary>
+    // The filter only sees a form that says it has a trap: a request with the field and without the
+    // interface would go through with the field filled.
     [Fact]
     public void KnowEveryRequestThatCarriesATrap()
     {

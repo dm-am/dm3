@@ -5,17 +5,9 @@ using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 
 namespace DM.Web.API.IntegrationTests.Helpers;
 
-/// <summary>
-/// Rows the room and search suites put in front of the API, and the cleanup that
-/// takes them out again.
-/// </summary>
-/// <remarks>Written straight to the database: the rules are about what the read path does with existing rows.</remarks>
+// Written straight to the database: the rules are about what the read path does with existing rows.
 public static class PostTestHelper
 {
-    /// <summary>
-    /// One post in the seeded room, carrying a [private] block whose frozen
-    /// snapshot resolves the addressed character to the second seeded user.
-    /// </summary>
     public static async Task<Guid> CreatePrivatePost(
         DatabaseFixture dbFixture, string publicText, string privateText)
     {
@@ -43,7 +35,6 @@ public static class PostTestHelper
         return postId;
     }
 
-    /// <summary>Takes one post out of the shared database.</summary>
     public static async Task DropPost(DatabaseFixture dbFixture, Guid postId)
     {
         using var scope = dbFixture.Factory.Services.CreateScope();
@@ -52,7 +43,6 @@ public static class PostTestHelper
             """DELETE FROM "Posts" WHERE "PostId" = {0}""", postId);
     }
 
-    /// <summary>Takes the comments of every topic of a board out.</summary>
     public static async Task DropComments(DatabaseFixture dbFixture, Guid boardId)
     {
         using var scope = dbFixture.Factory.Services.CreateScope();

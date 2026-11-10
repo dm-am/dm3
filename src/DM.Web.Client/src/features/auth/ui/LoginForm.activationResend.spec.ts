@@ -18,17 +18,15 @@ import { problem } from "./authForms.fixtures";
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
 );
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
-);
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
 );
 
-// Mocked, not stubbed: AuthDialog imports Dialog.vue directly.
-vi.mock("vue-final-modal", async () =>
-  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
-);
+// Mocked, not stubbed: AuthDialog imports Dialog.vue directly; the page keeps the real container.
+vi.mock("vue-final-modal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("vue-final-modal")>()),
+  ...(await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+}));
 
 enableAutoUnmount(afterEach);
 

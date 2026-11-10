@@ -11,28 +11,35 @@
  * cards the shape is the message.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { nextTick } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { nextTick, type Component } from "vue";
+import { flushPromises } from "@vue/test-utils";
 import type { VueWrapper } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import type { Router } from "vue-router";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { accountApi } from "@/entities/user";
 import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
 import TwoFactorRemovalPage from "./TwoFactorRemovalPage.vue";
 import TwoFactorRemovalCancelPage from "./TwoFactorRemovalCancelPage.vue";
-import { push } from "./guestPages.doubles";
+/** The two pages, and every address their cards lead to. */
+const routes: Address[] = [
+  ["two-factor-removal", "/two-factor/removal"],
+  ["two-factor-removal-cancel", "/two-factor/removal/cancel"],
+  ["home", "/"],
+  ["support", "/support"],
+];
 
-vi.mock("vue-router", async () =>
-  (await import("./guestPages.doubles")).vueRouter(),
-);
+let router: Router;
 
-const options = () => ({
-  global: {
-    plugins: [createPinia()],
-    stubs: {
-      RouterLink: { template: "<a><slot /></a>" },
-    },
-  },
-});
+/** Open a page at its own address, as its letter does. */
+const open = async (page: Component) => {
+  const own =
+    page === TwoFactorRemovalCancelPage
+      ? "/two-factor/removal/cancel"
+      : "/two-factor/removal";
+  const opened = await mountPage(page, own, { routes });
+  router = opened.router;
+  return opened.wrapper;
+};
 
 /** The heading and the body lines of the card, in the order they are read. */
 const headline = (wrapper: VueWrapper) => wrapper.get(".auth-card h1").text();
@@ -47,10 +54,7 @@ const boxLines = (wrapper: VueWrapper) => {
 };
 
 beforeEach(() => {
-  setActivePinia(createPinia());
   vi.restoreAllMocks();
-  // Not a spy, so restoreAllMocks does not reach it.
-  push.mockClear();
   // The value arrives in the fragment.
   window.location.hash = "#token=a-token";
 });
@@ -59,7 +63,7 @@ describe("scheduling a removal from the letter", () => {
   it("waits for a press instead of acting on open", async () => {
     const schedule = vi.spyOn(accountApi, "scheduleTwoFactorRemoval");
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
 
     expect(schedule).not.toHaveBeenCalled();
@@ -69,7 +73,7 @@ describe("scheduling a removal from the letter", () => {
 
   /** The card is the page: no heading above it. */
   it("names itself in the card and nowhere above it", async () => {
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
 
     expect(wrapper.findAll("h1")).toHaveLength(1);
@@ -78,7 +82,7 @@ describe("scheduling a removal from the letter", () => {
 
   /** Both consequences stand in the caution box: the reader decides on them. */
   it("states both consequences before the press, and nothing else", async () => {
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
 
     expect(boxLines(wrapper)).toEqual([
@@ -95,7 +99,7 @@ describe("scheduling a removal from the letter", () => {
       error: { status: 404, title: "Ссылка недействительна или устарела" },
     } as never);
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
     await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
@@ -116,7 +120,7 @@ describe("scheduling a removal from the letter", () => {
       },
     } as never);
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
     await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
@@ -135,7 +139,7 @@ describe("scheduling a removal from the letter", () => {
       .spyOn(Api, "post")
       .mockResolvedValue({ data: null, error: null } as never);
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
     await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
@@ -164,7 +168,7 @@ describe("scheduling a removal from the letter", () => {
       } as never);
 
     const press = async () => {
-      const wrapper = mount(TwoFactorRemovalPage, options());
+      const wrapper = await open(TwoFactorRemovalPage);
       await flushPromises();
       await wrapper.get(".auth-button").trigger("click");
       await flushPromises();
@@ -233,7 +237,7 @@ describe("scheduling a removal from the letter", () => {
   it("marks a dead link with the cross, as the other dead links are marked", async () => {
     window.location.hash = "";
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
 
     expect(wrapper.find(".auth-status--error").exists()).toBe(true);
@@ -244,7 +248,7 @@ describe("scheduling a removal from the letter", () => {
   it("leads home from a dead link with one button", async () => {
     window.location.hash = "";
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
 
     const ways = wrapper.findAll("button");
@@ -253,14 +257,15 @@ describe("scheduling a removal from the letter", () => {
     expect(ways[0].text()).toBe("На главную");
 
     await ways[0].trigger("click");
-    expect(push).toHaveBeenCalledWith("/");
+    await flushPromises();
+    expect(router.currentRoute.value.fullPath).toBe("/");
   });
 
   it("does not offer the press when the link carries no value", async () => {
     window.location.hash = "";
     const schedule = vi.spyOn(accountApi, "scheduleTwoFactorRemoval");
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
 
     expect(schedule).not.toHaveBeenCalled();
@@ -274,7 +279,7 @@ describe("scheduling a removal from the letter", () => {
       error: null,
     } as never);
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
     await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
@@ -297,7 +302,7 @@ describe("scheduling a removal from the letter", () => {
       error: null,
     } as never);
 
-    const wrapper = mount(TwoFactorRemovalPage, options());
+    const wrapper = await open(TwoFactorRemovalPage);
     await flushPromises();
     expect(wrapper.find(".auth-footnote").exists()).toBe(true);
 
@@ -310,12 +315,12 @@ describe("scheduling a removal from the letter", () => {
 
 describe("calling a scheduled removal off", () => {
   /** The card says what it is doing while the request is out. */
-  it("says what it is doing while the request is in flight", () => {
+  it("says what it is doing while the request is in flight", async () => {
     vi.spyOn(accountApi, "cancelTwoFactorRemoval").mockImplementation(
       () => new Promise(() => {}) as never,
     );
 
-    const wrapper = mount(TwoFactorRemovalCancelPage, options());
+    const wrapper = await open(TwoFactorRemovalCancelPage);
 
     expect(wrapper.get(".auth-card").text()).toBe("Проверяем ссылку...");
     expect(wrapper.find("h1").exists()).toBe(false);
@@ -328,7 +333,7 @@ describe("calling a scheduled removal off", () => {
       .spyOn(accountApi, "cancelTwoFactorRemoval")
       .mockResolvedValue({ data: null, error: null } as never);
 
-    const wrapper = mount(TwoFactorRemovalCancelPage, options());
+    const wrapper = await open(TwoFactorRemovalCancelPage);
     await flushPromises();
 
     expect(cancel).toHaveBeenCalledWith("a-token");
@@ -351,7 +356,7 @@ describe("calling a scheduled removal off", () => {
       },
     } as never);
 
-    const wrapper = mount(TwoFactorRemovalCancelPage, options());
+    const wrapper = await open(TwoFactorRemovalCancelPage);
     await flushPromises();
 
     expect(headline(wrapper)).toBe("Ссылка недействительна");
@@ -364,7 +369,7 @@ describe("calling a scheduled removal off", () => {
     window.location.hash = "";
     const cancel = vi.spyOn(accountApi, "cancelTwoFactorRemoval");
 
-    const wrapper = mount(TwoFactorRemovalCancelPage, options());
+    const wrapper = await open(TwoFactorRemovalCancelPage);
     await flushPromises();
 
     expect(cancel).not.toHaveBeenCalled();

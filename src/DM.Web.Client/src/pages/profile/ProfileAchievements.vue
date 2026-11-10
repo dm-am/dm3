@@ -8,16 +8,15 @@ import type { User } from "@/shared/api/models/community";
 import { SecondaryText } from "@/shared/ui/Layout";
 import ProfileAwardsSection from "./ProfileAwardsSection.vue";
 import ProfileAchievementsSection from "./ProfileAchievementsSection.vue";
+import type { AchievementsBlockState } from "./achievementsTabState";
 
 defineProps<{
   username: string;
   user: User;
 }>();
 
-type SectionState = "loading" | "error" | "empty" | "content";
-
-const awardsState = ref<SectionState>("loading");
-const achievementsState = ref<SectionState>("loading");
+const awardsState = ref<AchievementsBlockState>("loading");
+const achievementsState = ref<AchievementsBlockState>("loading");
 </script>
 
 <template>

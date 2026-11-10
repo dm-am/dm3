@@ -11,14 +11,8 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
-/// <summary>
-/// The one place a submitted set of tags is read, and therefore the one place
-/// the per-group limits are applied.
-/// </summary>
-/// <remarks>
-/// Creation and the settings page both come through here, so a case proved on
-/// this method is proved for both of them.
-/// </remarks>
+// Creation and the settings page both come through here, so a case proved on this method is proved
+// for both of them.
 public class GameTagResolverShould : UnitTestBase
 {
     private static readonly Guid FirstSystemTag = Guid.NewGuid();
@@ -54,9 +48,6 @@ public class GameTagResolverShould : UnitTestBase
             .Which.ValidationErrors["tags"].Should().Contain("Система");
     }
 
-    /// <summary>
-    /// A field that was not sent is not a set to measure.
-    /// </summary>
     /// <remarks>
     /// The update endpoint takes tags as optional, where absence means "leave
     /// them alone". Games imported from DM2 may carry more tags of a group than
@@ -74,10 +65,8 @@ public class GameTagResolverShould : UnitTestBase
         await repository.DidNotReceive().GetTags(Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// An identifier the catalogue does not know is dropped, and dropped before
-    /// it is counted: a limit must not be reached by tags that do not exist.
-    /// </summary>
+    // An identifier the catalogue does not know is dropped, and dropped before it is counted: a
+    // limit must not be reached by tags that do not exist.
     [Fact]
     public async Task CountOnlyTagsTheCatalogueKnows()
     {
@@ -86,9 +75,6 @@ public class GameTagResolverShould : UnitTestBase
         resolved.Should().BeEquivalentTo(new[] { FirstSystemTag, SecondSystemTag });
     }
 
-    /// <summary>
-    /// The same tag named twice is one tag, and counts once.
-    /// </summary>
     [Fact]
     public async Task CountARepeatedTagOnce()
     {
@@ -97,11 +83,8 @@ public class GameTagResolverShould : UnitTestBase
         await resolve.Should().NotThrowAsync();
     }
 
-    /// <summary>
-    /// A catalogue of one limited group and one unlimited one. Written out here
-    /// rather than read from the seed: the rule under test is "whatever the group
-    /// says", not the numbers the site happens to ship with.
-    /// </summary>
+    // Written out here rather than read from the seed: the rule under test is "whatever the group
+    // says", not the numbers the site happens to ship with.
     private static IEnumerable<GameTag> Catalogue =>
     [
         SystemTag(FirstSystemTag, 1),

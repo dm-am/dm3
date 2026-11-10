@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
-/// <summary>
-/// A game may take only so many tags out of one group.
-/// </summary>
 /// <remarks>
 /// The number is the group's own, served with the catalogue, so these cases
 /// build groups rather than name the ones the site ships with: the rule is
@@ -41,10 +38,8 @@ public class TagGroupLimitShould
             .And.Contain("2", "and the number it may not go past");
     }
 
-    /// <summary>
-    /// A group taking one tag is a switch on the form, and the refusal says so
-    /// in words rather than as an arithmetic bound.
-    /// </summary>
+    // A group taking one tag is a switch on the form, and the refusal says so in words rather than
+    // as an arithmetic bound.
     [Fact]
     public void SayASingleTagInWordsWhenTheLimitIsOne()
     {
@@ -79,11 +74,8 @@ public class TagGroupLimitShould
         check.Should().NotThrow("tags of one group do not count against another");
     }
 
-    /// <summary>
-    /// One refusal, every group that is over, in the order the form draws them:
-    /// the master fixes the whole set once instead of resubmitting to discover
-    /// the next group.
-    /// </summary>
+    // One refusal, every group that is over, in the order the form draws them: the master fixes the
+    // whole set once instead of resubmitting to discover the next group.
     [Fact]
     public void NameEveryGroupOverItsLimit()
     {

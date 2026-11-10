@@ -15,16 +15,10 @@ public interface IUserRepository : IUserReadRepository
 {
     // Write
 
-    /// <summary>
-    /// Update user and settings
-    /// </summary>
     Task UpdateUser(UpdateUserEntity userUpdate, UpdateUserSettingsEntity settingsUpdate);
 
     Task ReplaceUserContacts(Guid userId, IEnumerable<UserContactEntity> contacts);
 
-    /// <summary>
-    /// Get confirmed avatar upload ID for user
-    /// </summary>
     Task<Guid?> GetConfirmedAvatarUpload(Guid userId, Guid uploadId);
 
     /// <summary>

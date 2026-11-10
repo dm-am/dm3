@@ -103,7 +103,7 @@ const MORE: Array<[string, BBCodeContext]> = [
   ['[private="Вася"]раз [private]два[/private][/private]', "post"],
   ["[b]раз [private]два[/b] три[/private][/b]", "post"],
   [`[private=${"а".repeat(60)}]текст[/private]`, "post"],
-  ["[b]".repeat(600) + "текст", "common"],
+  [`${"[b]".repeat(600)}текст`, "common"],
 ];
 
 /** Every finding the check makes over the table and the inputs above. */
@@ -400,8 +400,7 @@ describe("validateBBCode", () => {
 
   // The save path of every surface but the game post refuses a text with a
   // hidden block in it (PrivateBlockMarkup.DescribeSurfaceRefusal), and the
-  // page erases such a block for every reader. The check used to read every
-  // surface as a game post and said nothing about it.
+  // page erases such a block for every reader.
   it("names a hidden block on a surface that has none, once", () => {
     expect(
       validateBBCode(

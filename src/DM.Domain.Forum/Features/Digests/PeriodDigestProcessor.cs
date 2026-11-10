@@ -16,7 +16,7 @@ namespace DM.Domain.Forum.Features.Digests;
 /// <inheritdoc />
 internal class PeriodDigestProcessor : IPeriodDigestProcessor
 {
-    /// <summary>Well-known migration-seeded board the digests are posted to.</summary>
+    // Well-known migration-seeded board the digests are posted to.
     private static readonly Guid NewsBoardId = Guid.Parse("00000000-0000-0000-0000-00000000000b");
 
     private static readonly string[] MonthsGenitive =
@@ -128,10 +128,7 @@ internal class PeriodDigestProcessor : IPeriodDigestProcessor
         return title;
     }
 
-    /// <summary>
-    /// Writes the topic of a claimed period, and gives the claim back when the
-    /// write refuses.
-    /// </summary>
+    // Writes the topic of a claimed period, and gives the claim back when the write refuses.
     private async Task<Topic> CreateDigestTopic(Guid topicId, string title, CancellationToken ct)
     {
         // The claim is committed and the topic is not, so a refused creation gives

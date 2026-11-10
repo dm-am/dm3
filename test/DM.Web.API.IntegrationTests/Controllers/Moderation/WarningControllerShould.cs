@@ -11,10 +11,6 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// The warning endpoints of moderation: who may read the list and write to it,
-/// the issue of a warning and the change of its points.
-/// </summary>
 public class WarningControllerShould : WarningControllerTestBase
 {
     public WarningControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -75,9 +71,6 @@ public class WarningControllerShould : WarningControllerTestBase
         }
     }
 
-    /// <summary>
-    /// The moderation list reads a page of the same log, evidence included.
-    /// </summary>
     [Fact]
     public async Task ServeTheModerationListAPageWithTheEvidence()
     {
@@ -128,9 +121,6 @@ public class WarningControllerShould : WarningControllerTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// A moderator warns a reader, not a senior moderator or an administrator (ModerationRank); refused, nothing written.
-    /// </summary>
     [Theory]
     [InlineData(TestConstants.SeniorModeratorUserLogin)]
     [InlineData(TestConstants.AdminUserLogin)]
@@ -148,11 +138,7 @@ public class WarningControllerShould : WarningControllerTestBase
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// A warning names a place only from the one list of them (WarningEntityType). A post of a game room, a
-    /// message outside the global chat and any name the list has not got are refused, and nothing is written:
-    /// nothing in a room or a conversation is moderated.
-    /// </summary>
+    // A warning names a place only from the one list of them (WarningEntityType).
     [Theory]
     [InlineData("Post")]
     [InlineData("Message")]
@@ -183,10 +169,8 @@ public class WarningControllerShould : WarningControllerTestBase
         (await db.Warnings.AnyAsync(w => w.Text == reason)).Should().BeFalse();
     }
 
-    /// <summary>
-    /// For what was done where nothing is moderated, the warning goes to the user alone: no place, no copy and
-    /// no link, the points counted as any warning's. The open log draws it naming nothing.
-    /// </summary>
+    // For what was done where nothing is moderated, the warning goes to the user alone: no place,
+    // no copy and no link, the points counted as any warning's.
     [Fact]
     public async Task IssueAWarningToTheUserWithNoPlace()
     {
@@ -225,10 +209,7 @@ public class WarningControllerShould : WarningControllerTestBase
         }
     }
 
-    /// <summary>
-    /// A body that leaves the points out is refused, not read as zero.
-    /// </summary>
-    /// <remarks>Absence means "leave alone" in a patch, and zero takes the warning off the scale.</remarks>
+    // Absence means "leave alone" in a patch, and zero takes the warning off the scale.
     [Fact]
     public async Task RefuseAChangeThatNamesNoPoints()
     {
@@ -263,9 +244,6 @@ public class WarningControllerShould : WarningControllerTestBase
         return Client.SendAsync(request);
     }
 
-    /// <summary>
-    /// A moderator who did not issue the warning cannot touch its points.
-    /// </summary>
     [Fact]
     public async Task RefuseTheChangeToAModeratorWhoDidNotIssueTheWarning()
     {
@@ -291,10 +269,6 @@ public class WarningControllerShould : WarningControllerTestBase
         }
     }
 
-    /// <summary>
-    /// The senior moderator takes the points off, the warning stays, and the row
-    /// carries who did it, when and why.
-    /// </summary>
     [Fact]
     public async Task WriteTheSecondSignatureWhenTheSeniorModeratorZeroesThePoints()
     {
@@ -332,9 +306,8 @@ public class WarningControllerShould : WarningControllerTestBase
         }
     }
 
-    /// <summary>
-    /// The scale counts the points as they stand, so a warning corrected to zero stays in the log and weighs nothing.
-    /// </summary>
+    // The scale counts the points as they stand, so a warning corrected to zero stays in the log
+    // and weighs nothing.
     [Fact]
     public async Task CountTheUserTotalByTheChangedPoints()
     {
@@ -376,10 +349,6 @@ public class WarningControllerShould : WarningControllerTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// The explanation of the change is required, and the points stay inside the
-    /// scale.
-    /// </summary>
     [Theory]
     [InlineData(0, "")]
     [InlineData(7, "Слишком много баллов")]

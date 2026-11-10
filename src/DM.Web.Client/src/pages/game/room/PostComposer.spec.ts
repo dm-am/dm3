@@ -191,12 +191,12 @@ describe("PostComposer by the room's accesses", () => {
   }
 
   const full = (id: string) => ({
-    id: "a-" + id,
+    id: `a-${id}`,
     policy: "Full",
     character: { id },
   });
   const readOnly = (id: string) => ({
-    id: "a-" + id,
+    id: `a-${id}`,
     policy: "ReadOnly",
     character: { id },
   });

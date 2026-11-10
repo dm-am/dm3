@@ -5,7 +5,6 @@ namespace DM.Domain.Core.Notepads;
 /// </summary>
 public class UpdateNotepadEntry
 {
-    /// <summary>Entry title</summary>
     public string? Title { get; set; }
 
     /// <summary>Entry content</summary>

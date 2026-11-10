@@ -24,33 +24,26 @@ public class PrivateAddresseeSnapshotShould
     private static readonly Guid AnnaCharacter = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
     private static readonly Guid BorisCharacter = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000002");
 
-    /// <summary>Characters with access to the room the post goes into.</summary>
     private static readonly PrivateAddressee[] Roster =
     {
         new(AnnaCharacter, "Анна", AnnaOwner),
         new(BorisCharacter, "Борис", BorisOwner)
     };
 
-    /// <summary>
-    /// The room as it stood when the post was written: Anna's character is
-    /// called "Чак".
-    /// </summary>
+    // The room as it stood when the post was written: Anna's character is called "Чак".
     private static readonly PrivateAddressee[] RosterBeforeTheRenames =
     {
         new(AnnaCharacter, "Чак", AnnaOwner)
     };
 
-    /// <summary>
-    /// The same room after two renames: Anna's character is now "Владимир", and
-    /// the name it gave up has been taken by a character of Boris's.
-    /// </summary>
+    // The same room after two renames: Anna's character is now "Владимир", and the name it gave up
+    // has been taken by a character of Boris's.
     private static readonly PrivateAddressee[] RosterAfterTheRenames =
     {
         new(AnnaCharacter, "Владимир", AnnaOwner),
         new(BorisCharacter, "Чак", BorisOwner)
     };
 
-    /// <summary>The same room, after only the first of those renames.</summary>
     private static readonly PrivateAddressee[] RosterAfterTheFirstRename =
     {
         new(AnnaCharacter, "Владимир", AnnaOwner)
@@ -69,12 +62,7 @@ public class PrivateAddresseeSnapshotShould
         Render(text, snapshot, Stranger).Should().NotContain("секрет");
     }
 
-    /// <summary>
-    /// A spelling the grammar does not accept addresses nobody, whichever name it
-    /// seems to carry: the block stays with the author and the leads, and the save
-    /// path refuses the text and says how to write it.
-    /// </summary>
-    /// <remarks>Reading a name out of an unquoted value means guessing where it ends.</remarks>
+    // Reading a name out of an unquoted value means guessing where it ends.
     [Theory]
     [InlineData("[private=Анна]секрет[/private]")]
     [InlineData("[PRIVATE=Анна]секрет[/private]")]
@@ -172,10 +160,8 @@ public class PrivateAddresseeSnapshotShould
         PrivateAddresseeSnapshot.Read(rebuilt).OwnerUserIdsByAttribute.Should().NotContainKey("Анна");
     }
 
-    /// <summary>
-    /// A name is not an identity: the same key may mean one character in a frozen block and another later,
-    /// so the doubt is put to the author. Nothing leaks, delivery breaks.
-    /// </summary>
+    // A name is not an identity: the same key may mean one character in a frozen block and another
+    // later, so the doubt is put to the author. Nothing leaks, delivery breaks.
     [Fact]
     public void RefuseASaveWhenTheNameNowBelongsToAnotherCharacter()
     {
@@ -188,10 +174,6 @@ public class PrivateAddresseeSnapshotShould
             .WithMessage(PrivateAddresseeSnapshot.DescribeRenameRefusal("Чак"));
     }
 
-    /// <summary>
-    /// Not a refusal: the name still points at the character it was frozen to,
-    /// so nothing is in doubt and the frozen answer stands.
-    /// </summary>
     [Fact]
     public void KeepTheFrozenAddresseeWhenTheNameStillMeansTheSameCharacter()
     {
@@ -239,11 +221,7 @@ public class PrivateAddresseeSnapshotShould
         Render(renamed, rebuilt, BorisOwner).Should().NotContain("секрет");
     }
 
-    /// <summary>
-    /// The recipients are the reader's only statement of who else is in on the
-    /// block. Built from the tag text they name whoever the author typed,
-    /// including names that reached nobody.
-    /// </summary>
+    // The recipients are the reader's only statement of who else is in on the block.
     [Fact]
     public void NameOnlyTheResolvedAddresseesInTheRecipients()
     {
@@ -273,9 +251,7 @@ public class PrivateAddresseeSnapshotShould
             .Should().Contain("data-recipients=\"DungeonMaster, Assistant, Владимир\"");
     }
 
-    /// <summary>
-    /// The stored shape is a contract with rows nobody rewrites.
-    /// </summary>
+    // The stored shape is a contract with rows nobody rewrites.
     [Fact]
     public void RecordTheCharacterBesideItsOwner()
     {

@@ -12,9 +12,6 @@ public class UsernameAvailabilityResult
     /// </summary>
     public UsernameUnavailableReason? Reason { get; init; }
 
-    /// <summary>
-    /// Username is available
-    /// </summary>
     public static UsernameAvailabilityResult Available() =>
         new() { IsAvailable = true };
 
@@ -23,9 +20,6 @@ public class UsernameAvailabilityResult
     /// </summary>
     public static UsernameAvailabilityResult Taken() =>
         new() { IsAvailable = false, Reason = UsernameUnavailableReason.Taken };
-    /// <summary>
-    /// Username has invalid format
-    /// </summary>
     public static UsernameAvailabilityResult InvalidFormat() =>
         new() { IsAvailable = false, Reason = UsernameUnavailableReason.InvalidFormat };
 }

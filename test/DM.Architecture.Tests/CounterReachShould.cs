@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A counter that goes up on a live row comes back down on a row that may not be.
-/// </summary>
 /// <remarks>
 /// The soft-delete filter is global, so a set-based update that lowers a counter misses removed
 /// rows and reports success. Asserted on the text: ExecuteUpdate has no in-memory provider.
@@ -24,10 +21,6 @@ public class CounterReachShould
     /// </summary>
     private static readonly string[] Counters = ["QuantityRating"];
 
-    /// <summary>
-    /// One set-based write of a counter: everything from the set it starts at to
-    /// the update that ends it.
-    /// </summary>
     private static readonly Regex Update = new(
         @"_dbContext\.\w+(?<between>(?:\s*\.\w+\([^;]*?)?)\.ExecuteUpdateAsync\((?<body>[^;]*?)\);",
         RegexOptions.Compiled | RegexOptions.Singleline);

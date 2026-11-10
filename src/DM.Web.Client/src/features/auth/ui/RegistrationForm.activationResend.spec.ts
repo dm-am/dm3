@@ -11,13 +11,11 @@ import {
   resetRegistrationForm,
   type Wrapper,
 } from "./RegistrationForm.fixtures";
+import RegistrationForm from "./RegistrationForm.vue";
 import { AuthDialogStub, problem } from "./authForms.fixtures";
 
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
-);
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
 );
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
@@ -71,7 +69,9 @@ describe("RegistrationForm", () => {
         ownsRefusal: true,
         ownsRateLimit: true,
       });
-      expect(wrapper.emitted("openRecovery")).toBeUndefined();
+      expect(
+        wrapper.findComponent(RegistrationForm).emitted("openRecovery"),
+      ).toBeUndefined();
       expect(wrapper.text()).toContain("Проверьте почту");
       expect(wrapper.text()).toContain(
         "Мы отправили повторное письмо со ссылкой для активации на",

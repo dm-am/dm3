@@ -4,10 +4,7 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The model the schema rules read is the model and nothing beside it.
-/// </summary>
-/// <remarks>The predicate is an exemption, and one that widens quietly stops a rule applying.</remarks>
+// The predicate is an exemption, and one that widens quietly stops a rule applying.
 public class SchemaSourcesShould
 {
     private const string Entry = "protected override void OnModelCreating(ModelBuilder modelBuilder) { }";

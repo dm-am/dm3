@@ -19,16 +19,12 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// The finished game whose hidden parts an outsider must not read: a hidden attribute with
-    /// values, a hidden dice roll, and a hidden block that mentions one of two attachments.
-    /// </summary>
+    // The finished game whose hidden parts an outsider must not read: a hidden attribute with
+    // values, a hidden dice roll, and a hidden block that mentions one of two attachments.
     internal const string HiddenContentGameTitle = "Шепот Туманной Долины";
 
-    /// <summary>"Класс", a hidden attribute of the game's sheet with a value for each player.</summary>
     internal static readonly Guid HiddenClassAttributeId = FixedGuid(0xc0, 1);
 
-    /// <summary>The character the hidden block is written for.</summary>
     internal const string HiddenBlockAddresseeName = "Бран Молчун";
 
     private const string ScoutName = "Мирра Тихая";
@@ -89,7 +85,6 @@ internal sealed partial class DataSeeder
             "a hidden block with an attachment it mentions and one it does not");
     }
 
-    /// <summary>The row of the game, finished long ago, and its own sheet.</summary>
     private async Task<DbGame> NewHiddenContentGame(DbUser master)
     {
         // The readable address comes from the sequence before the insert, as in the repository.
@@ -146,7 +141,6 @@ internal sealed partial class DataSeeder
         return specifications;
     }
 
-    /// <summary>The open room of the game, where both kinds of hiding are on.</summary>
     private Room HiddenContentRoom(DbGame game)
     {
         var room = new Room
@@ -166,7 +160,6 @@ internal sealed partial class DataSeeder
         return room;
     }
 
-    /// <summary>An active character of the game with its class, admitted to the room.</summary>
     private Character AddHiddenGamePlayer(
         DbGame game, Room room, DbUser player, string name, string className, ComprehensiveSeedResult result)
     {
@@ -216,7 +209,6 @@ internal sealed partial class DataSeeder
         return post;
     }
 
-    /// <summary>The rolls of the scout's post: what everybody sees, and what only the leads and she do.</summary>
     internal static DiceRoll[] ScoutRolls(Guid postId, DateTimeOffset createdUtc, Guid shownRollId, Guid hiddenRollId) =>
     [
         new()
@@ -280,23 +272,21 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>The mark of the map: the addressee of the block, frozen as the upload path freezes it.</summary>
+    // The mark of the map: the addressee of the block, frozen as the upload path freezes it.
     internal static string StrangerNoteMapAddressees(Guid addresseeCharacterId, Guid addresseeOwnerId) =>
         PrivateAddresseeSnapshot.BuildList(
             [addresseeCharacterId],
             [new PrivateAddressee(addresseeCharacterId, HiddenBlockAddresseeName, addresseeOwnerId)]);
 
-    /// <summary>
-    /// The note's text. The map is mentioned by the path of its file, inside the block and nowhere
-    /// else: a path is text the grammar keeps, where a link to the stand's own host is refused.
-    /// </summary>
+    // The map is mentioned by the path of its file, inside the block and nowhere else: a path is
+    // text the grammar keeps, where a link to the stand's own host is refused.
     internal static string StrangerNoteText(Guid mapUploadId) =>
         "Незнакомец греет руки у огня и долго молчит.\n\n" +
         $"[private=\"{HiddenBlockAddresseeName}\"]Уходя, он незаметно вкладывает Брану в ладонь сложенный лист. " +
         $"Это карта тайника под старой мельницей: /v1/uploads/{mapUploadId:D}/content[/private]\n\n" +
         "К утру от незнакомца остаются только следы на мокрой траве.";
 
-    /// <summary>The addressee frozen as the save path freezes it, from the roster of the room.</summary>
+    // The addressee frozen as the save path freezes it, from the roster of the room.
     internal static string StrangerNoteSnapshot(string text, Guid addresseeCharacterId, Guid addresseeOwnerId) =>
         PrivateAddresseeSnapshot.Build(
             text, [new PrivateAddressee(addresseeCharacterId, HiddenBlockAddresseeName, addresseeOwnerId)]);

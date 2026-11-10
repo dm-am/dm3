@@ -5,14 +5,8 @@ namespace DM.Domain.Core.Identity;
 /// </summary>
 public interface IIdentity
 {
-    /// <summary>
-    /// Current authenticated user
-    /// </summary>
     AuthenticatedUser User { get; }
 
-    /// <summary>
-    /// Current authentication session
-    /// </summary>
     Session? Session { get; }
 
     /// <summary>

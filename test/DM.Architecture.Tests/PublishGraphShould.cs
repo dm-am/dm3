@@ -9,21 +9,15 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Nothing reaches the registry ahead of a check that could have stopped it.
-/// </summary>
-/// <remarks>"Every other job in the file", not a list: a new job is in <c>needs</c> or named here as an exception.</remarks>
+// "Every other job in the file", not a list: a new job is in needs or named here as an exception.
 public class PublishGraphShould
 {
     private const string Workflow = ".github/workflows/dotnet.yml";
 
-    /// <summary>The job that gives the images their moving names.</summary>
     private const string Promotion = "promote-images";
 
-    /// <summary>The needs list of the job it follows, in the inline form the file uses.</summary>
     private static readonly Regex NeedsList = new(@"^    needs:\s*\[([^\]]*)\]", RegexOptions.Compiled);
 
-    /// <summary>Every job in the workflow, with the jobs each one waits for.</summary>
     private static IReadOnlyDictionary<string, string[]> Jobs() => WorkflowJobs.Read("dotnet.yml")
         .ToDictionary(
             job => job.Name,
@@ -58,26 +52,19 @@ public class PublishGraphShould
         }
     }
 
-    /// <summary>The job that runs the end-to-end suite in shares, one leg of a matrix each.</summary>
     private const string EndToEnd = "e2e";
 
-    /// <summary>The legs of that matrix, in the inline form the file uses.</summary>
     private static readonly Regex ShardLegs = new(@"^shard:\s*\[([^\]]*)\]$", RegexOptions.Compiled);
 
-    /// <summary>The share a leg hands the suite: its own number out of the count of legs.</summary>
     private static readonly Regex ShardFlag = new(
         @"--shard=\$\{\{\s*matrix\.shard\s*\}\}/(\$\{\{\s*strategy\.job-total\s*\}\}|\d+)\s*$",
         RegexOptions.Compiled);
 
-    /// <summary>The lines of one job, from its key to the next job's, comments out.</summary>
     private static List<string> JobLines(string job) =>
         WorkflowJobs.Body("dotnet.yml", job).Where(WorkflowJobs.IsCode).ToList();
 
     private static int IndentOf(string line) => line.Length - line.TrimStart().Length;
 
-    /// <summary>
-    /// The legs of the end-to-end job run the whole suite between them.
-    /// </summary>
     /// <remarks>
     /// A share no leg runs gates nothing. The count is read from strategy.job-total, so the shard is the
     /// only dimension of this matrix.
@@ -139,9 +126,6 @@ public class PublishGraphShould
         }
     }
 
-    /// <summary>
-    /// One tag means one commit, and the moving names are set once.
-    /// </summary>
     /// <remarks>
     /// Compose pins all four images to one tag, so a publisher pushes one immutable tag and the promotion
     /// job moves the names by digest.
@@ -176,9 +160,6 @@ public class PublishGraphShould
             "the tag a publisher does push has to name the commit it was built from");
     }
 
-    /// <summary>
-    /// The security scans are part of this graph, not a workflow beside it.
-    /// </summary>
     [Fact]
     public void ReachTheSecurityScansThroughTheGraph()
     {

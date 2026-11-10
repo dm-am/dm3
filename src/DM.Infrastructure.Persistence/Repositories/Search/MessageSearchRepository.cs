@@ -34,9 +34,6 @@ internal class MessageSearchRepository : IMessageSearchRepository
         _cursorService = cursorService;
     }
 
-    /// <summary>
-    /// Fills in the preview of a page: a window around the match, with the match marked.
-    /// </summary>
     private async Task Preview(MessageSearchHit[] page, string query, CancellationToken ct)
     {
         var messageIds = page.Where(h => h.SourceType != GameSourceType).Select(h => h.Id).ToArray();
@@ -126,7 +123,6 @@ internal class MessageSearchRepository : IMessageSearchRepository
         return await PageOf(combined, query.EffectiveLimit, criteria.FreeText, ct);
     }
 
-    /// <summary>The messages of the global chat (readable by everyone).</summary>
     private IQueryable<MessageSearchHit> GlobalChatHits(MessageSearchQuery query, Criteria criteria)
     {
         var globalChatId = WellKnownChats.GlobalChatId;
@@ -178,7 +174,6 @@ internal class MessageSearchRepository : IMessageSearchRepository
         });
     }
 
-    /// <summary>The game posts the reader may read, through the canonical room read gate.</summary>
     private IQueryable<MessageSearchHit> GamePostHits(Guid userId, List<Guid>? gameIds, Criteria criteria)
     {
         var q = _dbContext.Rooms
@@ -203,7 +198,6 @@ internal class MessageSearchRepository : IMessageSearchRepository
         });
     }
 
-    /// <summary>The messages a search asks for: its words, its author, its dates, past its cursor.</summary>
     private static IQueryable<DbMessage> Matching(IQueryable<DbMessage> q, Criteria c)
     {
         if (c.HasText)
@@ -219,7 +213,6 @@ internal class MessageSearchRepository : IMessageSearchRepository
         return q;
     }
 
-    /// <summary>The game posts a search asks for, by the same criteria as the messages.</summary>
     private static IQueryable<DbPost> Matching(IQueryable<DbPost> q, Criteria c)
     {
         if (c.HasText)
@@ -235,10 +228,6 @@ internal class MessageSearchRepository : IMessageSearchRepository
         return q;
     }
 
-    /// <summary>
-    /// One page of the hits of every source, newest first, with its preview and
-    /// the cursor of the next page.
-    /// </summary>
     private async Task<CursorResult<MessageSearchHit>> PageOf(
         IQueryable<MessageSearchHit> hits, int limit, string freeText, CancellationToken ct)
     {

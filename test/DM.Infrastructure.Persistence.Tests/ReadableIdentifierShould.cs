@@ -7,10 +7,8 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests;
 
-/// <summary>
-/// A readable page address is unique and indexed, for every entity that has one.
-/// </summary>
-/// <remarks>Every link resolves a page by PublicId with equality; stated over the model, so a new entity inherits it.</remarks>
+// Every link resolves a page by PublicId with equality; stated over the model, so a new entity
+// inherits it.
 public class ReadableIdentifierShould
 {
     private const string ReadableId = "PublicId";

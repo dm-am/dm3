@@ -24,9 +24,6 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 /// </remarks>
 internal static class RetryableWrite
 {
-    /// <summary>
-    /// Run <paramref name="write" /> through the strategy.
-    /// </summary>
     public static Task Run(DmDbContext dbContext, Func<Task> write) =>
         Run(dbContext, (_, _) => write());
 
@@ -38,10 +35,6 @@ internal static class RetryableWrite
     public static Task Run(DmDbContext dbContext, Func<bool, Task> write) =>
         Run(dbContext, (isRetry, _) => write(isRetry));
 
-    /// <summary>
-    /// Run <paramref name="write" /> through the strategy, on the token the
-    /// strategy hands it.
-    /// </summary>
     public static Task Run(
         DmDbContext dbContext, Func<CancellationToken, Task> write, CancellationToken ct) =>
         Run(dbContext, (_, cancellation) => write(cancellation), ct);

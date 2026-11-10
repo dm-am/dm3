@@ -95,9 +95,6 @@ public class CreateUser
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// User role
-    /// </summary>
     public UserRole Role { get; set; } = UserRole.RegularUser;
 
     public AccessPolicy AccessPolicy { get; set; } = AccessPolicy.NotSpecified;

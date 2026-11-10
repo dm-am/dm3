@@ -13,19 +13,14 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// A deactivated account keeps its address and login: the unique indexes over lower("Email") and lower("Username")
-/// carry no predicate, so every "may a new account take this" check sees that row.
-/// </summary>
+// A deactivated account keeps its address and login: the unique indexes over lower("Email") and
+// lower("Username") carry no predicate, so every "may a new account take this" check sees that row.
 public class AccountReservationShould : IntegrationTestBase
 {
     public AccountReservationShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// Every caller at once: the two validators, the email change, the rename and the two probes of the forms.
-    /// </summary>
     [Fact]
     public async Task RefuseTheAddressAndTheLoginOfADeactivatedAccount()
     {
@@ -53,9 +48,8 @@ public class AccountReservationShould : IntegrationTestBase
             .Should().BeFalse("the probe behind the activation form answers the same question");
     }
 
-    /// <summary>
-    /// Uniqueness covers the whole table: a predicate would let two rows hold one address once either came back.
-    /// </summary>
+    // Uniqueness covers the whole table: a predicate would let two rows hold one address once
+    // either came back.
     [Fact]
     public async Task LeaveTheDatabaseRefusingASecondAccountOnTheSameAddress()
     {
@@ -86,9 +80,6 @@ public class AccountReservationShould : IntegrationTestBase
             .Which.SqlState.Should().Be("23505", "that is unique_violation");
     }
 
-    /// <summary>
-    /// An account of its own per run, deactivated through the repository the site uses.
-    /// </summary>
     private async Task<(Guid UserId, string Username, string Email)> SeedDeactivatedAccountAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

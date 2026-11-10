@@ -11,6 +11,10 @@ import {
   clearRegistry,
   hasAny,
 } from "@/shared/lib/composables/useExpandableRegistry";
+import { createMockCharacter } from "@/entities/game/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
+import { UserRole } from "@/shared/api/models/common/user";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import {
   post,
@@ -47,14 +51,13 @@ describe("GamePost dice rolls", () => {
     comment,
   });
 
-  const withRolls = (count: number) =>
-    ({
-      ...post,
-      metagameText: "<p>Метаигровой текст</p>",
-      diceRolls: Array.from({ length: count }, (_, i) =>
-        rollOf(i + 1, `Бросок ${i + 1}`),
-      ),
-    }) as unknown as Post;
+  const withRolls = (count: number): Post => ({
+    ...post,
+    metagameText: "<p>Метаигровой текст</p>",
+    diceRolls: Array.from({ length: count }, (_, i) =>
+      rollOf(i + 1, `Бросок ${i + 1}`),
+    ),
+  });
 
   const rows = (wrapper: PostWrapper) =>
     wrapper.findAll(".dice-rolls > div").map((row) => seen(row.text()));
@@ -70,7 +73,7 @@ describe("GamePost dice rolls", () => {
   });
 
   it("writes every roll on a line of its own, between the game text and the metagame text", async () => {
-    const wrapper = await render("/", withRolls(1) as unknown as Post);
+    const wrapper = await render("/", withRolls(1));
 
     expect(rows(wrapper)).toEqual([
       "Результаты бросков:",
@@ -87,7 +90,7 @@ describe("GamePost dice rolls", () => {
     const wrapper = await render("/", {
       ...withRolls(8),
       reviewCount: 0,
-    } as unknown as Post);
+    });
 
     // The reviews are the only fold of a post with nothing rated and no file.
     expect(hasAny.value).toBe(false);
@@ -101,11 +104,10 @@ describe("GamePost geometry", () => {
     const wrapper = await render("/", {
       ...post,
       character: {
-        id: "ch-1",
-        name: "Джек",
-        picture: { smallUrl: "/s.png", mediumUrl: "/m.png" },
+        ...createMockCharacter("ch-1", "Джек"),
+        picture: asServed({ smallUrl: "/s.png", mediumUrl: "/m.png" }),
       },
-    } as unknown as Post);
+    });
 
     expect(wrapper.get("img.avatar").attributes("sizes")).toBe("128px");
     wrapper.unmount();
@@ -115,12 +117,15 @@ describe("GamePost geometry", () => {
 // In the game a person plays: the name stands without the badge of a site role.
 describe("GamePost author", () => {
   it("names a staff author without the role, with or without a character", async () => {
-    const staff = { ...post, author: { username: "Author", role: "Admin" } };
-    const bare = await render("/", staff as unknown as Post);
+    const staff: Post = {
+      ...post,
+      author: { ...createMockUser("u-author", "Author"), role: UserRole.Admin },
+    };
+    const bare = await render("/", staff);
     const played = await render("/", {
       ...staff,
-      character: { id: "ch-1", name: "Джек" },
-    } as unknown as Post);
+      character: createMockCharacter("ch-1", "Джек"),
+    });
 
     for (const wrapper of [bare, played]) {
       expect(wrapper.get(".meta-inner .user-link").text()).toBe("Author");

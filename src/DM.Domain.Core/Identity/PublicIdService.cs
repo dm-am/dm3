@@ -9,15 +9,11 @@ namespace DM.Domain.Core.Identity;
 /// </summary>
 public class PublicIdService
 {
-    /// <summary>
-    /// Alphabet for encoding (23 chars: a-z without i, l, o to avoid confusion with 1, I, 0, O)
-    /// </summary>
+    // Alphabet for encoding (23 chars: a-z without i, l, o to avoid confusion with 1, I, 0, O)
     private const string Alphabet = "abcdefghjkmnpqrstuvwxyz";
 
-    /// <summary>
-    /// Minimum length of encoded public ID: the first 23^5 = 6 436 343 serials all take five
-    /// letters, so an address keeps its width as the site grows, and a shorter string is no code.
-    /// </summary>
+    // Minimum length of encoded public ID: the first 23^5 = 6 436 343 serials all take five
+    // letters, so an address keeps its width as the site grows, and a shorter string is no code.
     private const int MinLength = 5;
 
     private static readonly int Base = Alphabet.Length; // 23

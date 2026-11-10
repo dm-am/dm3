@@ -6,9 +6,6 @@ namespace DM.Domain.Moderation.Features.Profiles;
 
 public interface IModeratedProfileRepository
 {
-    /// <summary>
-    /// Update the Info field of the user
-    /// </summary>
     Task UpdateUserInfo(string username, string info, CancellationToken ct = default);
 
     Task SetUserRole(string username, UserRole role, CancellationToken ct = default);

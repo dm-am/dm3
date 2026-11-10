@@ -105,10 +105,8 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
             gameId => _eventProducer.SendAsync(EventType.StatusGameClosed, gameId));
     }
 
-    /// <summary>
-    /// One game failing does not stop the pass, and a write that did not land is not announced:
-    /// it changed since the selection, and nothing was written.
-    /// </summary>
+    // One game failing does not stop the pass, and a write that did not land is not announced: it
+    // changed since the selection, and nothing was written.
     private async Task ProcessAsync(
         IEnumerable<Guid> gameIds, Func<Guid, Task<bool>> write, Func<Guid, Task> announce)
     {

@@ -16,10 +16,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The whole outbox with the broker in the loop: the real relay, the real confirm producer, a queue bound to
-/// dm.events, and a broker container that goes down and comes back.
-/// </summary>
 /// <remarks>
 /// After the broker returns, the backlog leaves in order while the lag metric rises and falls back; the happy path
 /// pins one relay tick plus the batch, bounded at five seconds.
@@ -141,10 +137,6 @@ public class OutboxDeliveryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The outage itself: the broker goes down, three events are said while it is
-    /// gone, and the rows the outbox holds for them are read back.
-    /// </summary>
     /// <returns>The entity the events were about and their event ids, in the order they were said.</returns>
     private async Task<(Guid EntityId, Guid[] Stored)> StoreDuringOutageAsync()
     {
@@ -179,10 +171,8 @@ public class OutboxDeliveryShould : IntegrationTestBase
         return (entityId, stored);
     }
 
-    /// <summary>
-    /// The relay exactly as the host runs it - the periodic service over the
-    /// factory's own container, producer and confirm timeout included.
-    /// </summary>
+    // The relay exactly as the host runs it - the periodic service over the factory's own
+    // container, producer and confirm timeout included.
     private OutboxRelayService Relay()
     {
         var services = DatabaseFixture.Factory.Services;
@@ -208,9 +198,6 @@ public class OutboxDeliveryShould : IntegrationTestBase
         return queue;
     }
 
-    /// <summary>
-    /// Polls the queue with a fresh connection per round until every id arrived or the budget ran out.
-    /// </summary>
     private async Task<HashSet<Guid>> Consume(string queue, Guid[] expected, TimeSpan budget)
     {
         var delivered = new HashSet<Guid>();
@@ -250,9 +237,7 @@ public class OutboxDeliveryShould : IntegrationTestBase
         return await configuration.CreateConnectionFactory().CreateConnectionAsync();
     }
 
-    /// <summary>
-    /// Reads the outbox instruments off the meter: the gauges are what the alerts consume.
-    /// </summary>
+    // Reads the outbox instruments off the meter: the gauges are what the alerts consume.
     private static MeterListener Listen(Action<long> onPublishFailed, Action<double> onLag)
     {
         var listener = new MeterListener

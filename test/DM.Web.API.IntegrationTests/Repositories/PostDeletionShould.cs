@@ -8,19 +8,14 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Removing a post: the mark, and the author's post count it takes down once.
-/// </summary>
 public class PostDeletionShould : PostRepositoryTestBase
 {
     public PostDeletionShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// Removing a post takes the author's post count down with it, once.
-    /// </summary>
-    /// <remarks>QuantityRating feeds the user rating and the stored IsNewbie column, and nothing recomputes either.</remarks>
+    // QuantityRating feeds the user rating and the stored IsNewbie column, and nothing recomputes
+    // either.
     [Fact]
     public async Task TakeTheAuthorsPostCountDownWithTheRemovedPost()
     {
@@ -47,9 +42,6 @@ public class PostDeletionShould : PostRepositoryTestBase
         post.DeletedByUserId.Should().Be(context.UserId);
     }
 
-    /// <summary>
-    /// A post that is not there moves nobody's count.
-    /// </summary>
     [Fact]
     public async Task LeaveTheCountAloneWhenThereIsNoSuchPost()
     {
@@ -67,10 +59,7 @@ public class PostDeletionShould : PostRepositoryTestBase
         author.QuantityRating.Should().Be(7);
     }
 
-    /// <summary>
-    /// One post removed twice at once costs its author one post, not two.
-    /// </summary>
-    /// <remarks>A scope apiece and a timeout on the pair: the second removal waits on the row lock.</remarks>
+    // A scope apiece and a timeout on the pair: the second removal waits on the row lock.
     [Fact]
     public async Task TakeTheAuthorsPostCountDownOnceWhenTwoRemovalsRaceForOnePost()
     {
@@ -100,7 +89,7 @@ public class PostDeletionShould : PostRepositoryTestBase
             "decrement for one post is a drift with nothing left to catch it");
     }
 
-    /// <summary>One removal on a scope of its own, as a request would have.</summary>
+    // One removal on a scope of its own, as a request would have.
     private Task<bool> Remove(Guid postId, Guid deletedByUserId) => Task.Run(async () =>
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

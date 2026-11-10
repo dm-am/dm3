@@ -7,7 +7,6 @@ namespace DM.Domain.Account.Features.Authentication;
 /// Counted per pair so that wrong passwords from one address cannot lock the
 /// account out everywhere; a spread-out attack meets the per-address rate limit.
 /// </remarks>
-/// <param name="Email">Account being attempted.</param>
 /// <param name="IpAddress">Client address, null when it cannot be determined.</param>
 public readonly record struct LoginAttemptOrigin(string Email, string? IpAddress)
 {

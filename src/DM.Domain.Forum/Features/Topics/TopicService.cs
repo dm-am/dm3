@@ -233,9 +233,6 @@ internal class TopicService : ITopicService
         return topic;
     }
 
-    /// <summary>
-    /// How many comments of a topic this viewer has not read.
-    /// </summary>
     /// <remarks>
     /// Filled per request and never cached. An anonymous viewer has no read state
     /// at all, so the total stands in for it.
@@ -270,10 +267,8 @@ internal class TopicService : ITopicService
         }
     }
 
-    /// <summary>
-    /// A listing query is cache-friendly when it has no dynamic filters and uses
-    /// the default page size or smaller: filters would blow up the cache key space.
-    /// </summary>
+    // A listing query is cache-friendly when it has no dynamic filters and uses the default page
+    // size or smaller: filters would blow up the cache key space.
     private static bool IsCacheableListingQuery(TopicsQuery query) =>
         query.IsAttached != true &&
         string.IsNullOrEmpty(query.Search) &&
@@ -421,9 +416,7 @@ internal class TopicService : ITopicService
         await _repository.ReplaceAttachOrder(board.Id, topicIds, ct);
     }
 
-    /// <summary>
-    /// 410 only for a topic that existed and was removed; one that never existed is an honest 404.
-    /// </summary>
+    // 410 only for a topic that existed and was removed; one that never existed is an honest 404.
     private static HttpException TopicNotFound(bool existed, string refusal) =>
         new(existed ? HttpStatusCode.Gone : HttpStatusCode.NotFound, refusal);
 }

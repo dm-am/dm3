@@ -10,13 +10,7 @@ using DtoSpecification = DM.Domain.Game.Features.AttributeSchemas.AttributeSpeci
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 
-/// <summary>
-/// An attribute the master left without a maximum length comes back without one.
-/// </summary>
-/// <remarks>
-/// A stored zero reads back as a cap of zero characters. Over the document conversion every store of
-/// specifications goes through, asserted on the specification that comes back.
-/// </remarks>
+// A stored zero reads back as a cap of zero characters.
 public class AttributeSchemaMaxLengthShould
 {
     private static DtoSpecification RoundTrip(AttributeSpecificationType type, int? maxLength) =>

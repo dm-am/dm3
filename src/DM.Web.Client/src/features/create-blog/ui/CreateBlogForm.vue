@@ -48,9 +48,7 @@ const isSubmitting = ref(false);
 const titleError = ref("");
 const descriptionError = ref("");
 
-const canCreate = computed(() => {
-  return user.value && title.value.trim().length > 0;
-});
+const canCreate = computed(() => user.value && title.value.trim().length > 0);
 
 const createResult = useActionResult();
 

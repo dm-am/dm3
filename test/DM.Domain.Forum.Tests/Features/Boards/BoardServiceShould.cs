@@ -74,9 +74,6 @@ public class BoardServiceShould : UnitTestBase
         await unreadCountersRepository.Received(1).SelectTotalUnreadByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>());
     }
 
-    /// <summary>
-    /// The reader who signed in gets the same board as a guest does, with the counters of his own.
-    /// </summary>
     [Fact]
     public async Task KeepEveryFieldOfTheBoardForAuthenticatedUser()
     {

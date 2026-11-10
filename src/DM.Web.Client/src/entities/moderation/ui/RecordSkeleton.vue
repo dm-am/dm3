@@ -1,20 +1,13 @@
 <script setup lang="ts">
 // One twin for the warning and the ban lists, which draw on the same parts.
-withDefaults(
-  defineProps<{
-    count?: number;
-    /** A line of text above the caption. */
-    withText?: boolean;
-  }>(),
-  { count: 1, withText: true },
-);
+withDefaults(defineProps<{ count?: number }>(), { count: 1 });
 </script>
 
 <template>
   <div class="record-skeleton-list" aria-hidden="true">
     <div v-for="n in count" :key="n" class="record-skeleton">
       <div class="skeleton-block">
-        <div v-if="withText" class="skeleton-line skeleton-text"></div>
+        <div class="skeleton-line skeleton-text"></div>
         <div class="skeleton-line skeleton-caption"></div>
       </div>
       <div class="skeleton-verdict">

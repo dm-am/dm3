@@ -9,10 +9,7 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The contract and the domain check a game's text fields by the same numbers.
-/// </summary>
-/// <remarks>Asserted through the attributes: the contract states its bounds in DataAnnotations.</remarks>
+// Asserted through the attributes: the contract states its bounds in DataAnnotations.
 public class GameFieldLimitsShould
 {
     [Theory]

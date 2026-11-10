@@ -8,9 +8,6 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Persistence.Entities.Game;
 
-/// <summary>
-/// DAL model for post review (review of a game post with rating)
-/// </summary>
 /// <remarks>
 /// BBCode is supported in the Text field.
 /// Any sentiment text is allowed.
@@ -20,9 +17,6 @@ namespace DM.Infrastructure.Persistence.Entities.Game;
 [Table("PostReviews")]
 public class PostReview : ISoftDeletable
 {
-    /// <summary>
-    /// Review identifier
-    /// </summary>
     [Key]
     public Guid PostReviewId { get; set; }
 

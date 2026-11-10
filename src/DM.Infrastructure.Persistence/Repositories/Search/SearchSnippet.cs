@@ -22,9 +22,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 /// </remarks>
 internal static class SearchSnippet
 {
-    /// <summary>
-    /// Maximum preview length before an ellipsis is appended.
-    /// </summary>
     public const int Length = 280;
 
     /// <summary>
@@ -50,9 +47,6 @@ internal static class SearchSnippet
         return Regex.Replace(stripped, @"\s+", " ");
     }
 
-    /// <summary>
-    /// Trims and cuts a preview to <see cref="Length"/>.
-    /// </summary>
     /// <remarks>
     /// The fallback for a search with no words in it - a filter by author or by
     /// date matches every row equally, so there is no match to build a window
@@ -81,25 +75,15 @@ internal static class SearchSnippet
 
     private const char MatchEnd = '\u0012';
 
-    /// <summary>
-    /// Options handed to ts_headline: a window of about twenty words around the
-    /// match, at most two fragments of it, marked with the sentinels above.
-    /// </summary>
     public const string HeadlineOptions =
         "StartSel=\u0011, StopSel=\u0012, MaxWords=20, MinWords=8, MaxFragments=2, FragmentDelimiter=…";
 
-    /// <summary>
-    /// The searchable text of one row of a page, keyed by the row.
-    /// </summary>
     internal sealed class Body
     {
         public Guid Id { get; set; }
         public string Text { get; set; } = string.Empty;
     }
 
-    /// <summary>
-    /// The window around the match for every row of a page that has one, keyed by the row.
-    /// </summary>
     /// <remarks>
     /// A pass over the page rather than the ranked query: ts_headline re-parses its document,
     /// so it runs only for the rows a reader sees. It reads the document and not the vector,
@@ -138,9 +122,6 @@ internal static class SearchSnippet
         return headlines;
     }
 
-    /// <summary>
-    /// Splits a marked headline into the runs a reader sees, matched and not.
-    /// </summary>
     /// <remarks>
     /// The marks never reach anybody: they are removed here, and what leaves is
     /// text and a flag. A preview that carried them as markup would be the one
@@ -183,10 +164,6 @@ internal static class SearchSnippet
         return segments;
     }
 
-    /// <summary>
-    /// A preview with nothing marked in it, for the search that had nothing to
-    /// look for.
-    /// </summary>
     public static IReadOnlyList<SnippetSegment> Plain(string? text)
     {
         var preview = Truncate(StripPrivateBlocks(text));

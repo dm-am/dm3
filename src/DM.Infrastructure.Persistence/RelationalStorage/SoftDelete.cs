@@ -16,9 +16,6 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 /// </remarks>
 internal static class SoftDelete
 {
-    /// <summary>
-    /// Mark <paramref name="entity" /> deleted by <paramref name="deletedByUserId" />.
-    /// </summary>
     /// <remarks>
     /// The author is nullable because some removals have none: a token consumed by the flow
     /// that issued it, a row swept by a background collector. Null there is the honest answer;
@@ -31,9 +28,6 @@ internal static class SoftDelete
         entity.DeletedUtc = deletedUtc;
     }
 
-    /// <summary>
-    /// Mark every row of <paramref name="rows" /> deleted in one statement; answers how many it marked.
-    /// </summary>
     public static Task<int> MarkWhere<TEntity>(
         IQueryable<TEntity> rows, Guid? deletedByUserId, DateTimeOffset deletedUtc, CancellationToken ct = default)
         where TEntity : class, ISoftDeletable =>

@@ -6,13 +6,9 @@ using System.Reflection;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The shipped types, loaded out of the directory the test binary runs from.
-/// </summary>
-/// <remarks>The build copies every project's output next to this one, so the directory is the set.</remarks>
+// The build copies every project's output next to this one, so the directory is the set.
 internal static class ProductionAssemblies
 {
-    /// <summary>Every type the product declares, test assemblies left out.</summary>
     public static IEnumerable<Type> Types() => Directory
         .EnumerateFiles(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
         .Where(path => !Path.GetFileNameWithoutExtension(path)

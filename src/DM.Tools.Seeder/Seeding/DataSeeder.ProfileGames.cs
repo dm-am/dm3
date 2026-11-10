@@ -11,11 +11,7 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// Creates 10 retired characters of SolohinLex that left their game
-    /// (<see cref="Character.IsPlayerLeft"/>), in games he
-    /// does not master. Retired does not compete with an active character. Idempotent.
-    /// </summary>
+    // Retired does not compete with an active character.
     private async Task SeedSolohinLexDrops(List<DbUser> users, ComprehensiveSeedResult result)
     {
         var solohin = users.FirstOrDefault(u => u.Username == PrimaryLogin);
@@ -71,9 +67,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"SolohinLex drops seeded: {toCreate} created (total {targetCount}) for \"дропы\" demo");
     }
 
-    /// <summary>
-    /// The games SolohinLex drops out of: any games he does not master.
-    /// </summary>
     private async Task<List<DbGame>> SolohinLexDropGames(DbUser solohin, int toCreate)
     {
         // The games of this run from the change tracker
@@ -96,10 +89,6 @@ internal sealed partial class DataSeeder
         return availableGames;
     }
 
-    /// <summary>
-    /// The player characters of SolohinLex, by the index of the game they are
-    /// placed in (see <see cref="SeedSolohinLexPlayerCharacters"/>).
-    /// </summary>
     private static readonly (int GameIndex, string Name, CharacterStatus Status, bool IsDead, bool IsPlayerLeft, int DaysAgo, string Story)[] SolohinLexCharacterPlans =
     [
         // Game 0: active character + a dead one.
@@ -180,10 +169,6 @@ internal sealed partial class DataSeeder
             $"SolohinLex player characters seeded: {pending.Count} across {gameByPlanIndex.Count} game(s) for profile games table status column");
     }
 
-    /// <summary>
-    /// The games SolohinLex gets his player characters in: non-draft games he
-    /// does not master and holds no character in yet.
-    /// </summary>
     private async Task<List<DbGame>> SolohinLexPlayerGames(DbUser solohin, int gamesNeeded)
     {
         // Not where SolohinLex already has a character, so he never gets two active ones in a game.

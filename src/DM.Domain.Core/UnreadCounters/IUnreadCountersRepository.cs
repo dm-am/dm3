@@ -2,36 +2,16 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.UnreadCounters;
 
-/// <summary>
-/// Unread counters storage
-/// </summary>
 /// <remarks>
 /// What ParentId holds is explained on <see cref="UnreadMarker" />: a container for
 /// the overload with a parent, the reader for the overload with a list of readers.
 /// </remarks>
 public interface IUnreadCountersRepository
 {
-    /// <summary>
-    /// Create a counter for the entity for a certain user
-    /// </summary>
-    /// <param name="entityId">Entity Id</param>
-    /// <param name="entryType">Entry type</param>
-    /// <param name="userIds">User Ids</param>
     Task CreateMarkerAsync(Guid entityId, UnreadEntryType entryType, IEnumerable<Guid> userIds);
 
-    /// <summary>
-    /// Create a counter for the entity
-    /// </summary>
-    /// <param name="entityId">Entity Id</param>
-    /// <param name="parentId">Parent entity Id</param>
-    /// <param name="entryType">Entry type</param>
     Task CreateMarkerAsync(Guid entityId, Guid parentId, UnreadEntryType entryType);
 
-    /// <summary>
-    /// Increment counter of the entity for every user
-    /// </summary>
-    /// <param name="entityId">Entity Id</param>
-    /// <param name="entryType">Entry type</param>
     /// <remarks>
     /// Does not throw. Every caller reaches the three adjusting writes after its
     /// own write has been committed, and no transaction spans the two stores, so
@@ -48,12 +28,6 @@ public interface IUnreadCountersRepository
     /// </remarks>
     Task IncrementAsync(Guid entityId, UnreadEntryType entryType);
 
-    /// <summary>
-    /// Increment counter of the entity for every user except the specified one
-    /// </summary>
-    /// <param name="entityId">Entity Id</param>
-    /// <param name="entryType">Entry type</param>
-    /// <param name="excludeUserId">User Id to exclude from increment</param>
     /// <remarks><inheritdoc cref="IncrementAsync" path="/remarks" /></remarks>
     Task IncrementExcludingAsync(Guid entityId, UnreadEntryType entryType, Guid excludeUserId);
 
@@ -66,11 +40,6 @@ public interface IUnreadCountersRepository
     /// <remarks><inheritdoc cref="IncrementAsync" path="/remarks" /></remarks>
     Task DecrementAsync(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate);
 
-    /// <summary>
-    /// Remove counter for everyone
-    /// </summary>
-    /// <param name="entityId">Entity Id</param>
-    /// <param name="entryType">Entry type</param>
     Task DeleteAsync(Guid entityId, UnreadEntryType entryType);
 
     /// <summary>
@@ -120,20 +89,8 @@ public interface IUnreadCountersRepository
     Task<IDictionary<Guid, int>> SelectByEntitiesAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] entityIds);
 
-    /// <summary>
-    /// Mark entity as read
-    /// </summary>
-    /// <param name="userId">User Id</param>
-    /// <param name="entryType">Entry type</param>
-    /// <param name="entityId">Entity Id</param>
     Task FlushAsync(Guid userId, UnreadEntryType entryType, Guid entityId);
 
-    /// <summary>
-    /// Mark all according entities as read
-    /// </summary>
-    /// <param name="userId">User Id</param>
-    /// <param name="entryType">Entry type</param>
-    /// <param name="parentId">Parent entity Id</param>
     Task FlushAllAsync(Guid userId, UnreadEntryType entryType, Guid parentId);
 
     /// <summary>

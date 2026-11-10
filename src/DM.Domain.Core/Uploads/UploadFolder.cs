@@ -12,10 +12,6 @@ namespace DM.Domain.Core.Uploads;
 /// </remarks>
 public static class UploadFolder
 {
-    /// <summary>
-    /// Prefix the type's objects live under.
-    /// </summary>
-    /// <param name="type">Upload type.</param>
     public static string For(UploadType type) => type switch
     {
         UploadType.UserAvatar => "avatars",

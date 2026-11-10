@@ -11,9 +11,6 @@ namespace DM.Infrastructure.Persistence.Entities.Messaging;
 [Table("UserChatLinks")]
 public class UserChatLink : ISoftDeletable
 {
-    /// <summary>
-    /// Link identifier
-    /// </summary>
     public Guid UserChatLinkId { get; set; }
 
     /// <summary>

@@ -24,16 +24,12 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
-/// <summary>
-/// Who may put a file on a post, read one off it, and take one off it.
-/// </summary>
 /// <remarks>
 /// Three different answers to what looks like one question, and the reason they
 /// differ is the point of this file. Attaching is authorship, so it is the author
 /// alone. Reading is visibility, so it is whoever may read the post. Removing is
 /// editing what a room contains, so it follows the post's edit rule and reaches
 /// the master.
-///
 /// Existence is never a separate check: every path goes through
 /// PostRepository.Get with the caller's own id, which is the read that applies
 /// the room filter, so an invisible post is absent rather than refused.
@@ -70,7 +66,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
             carrierRepository);
     }
 
-    /// <summary>A post the caller can see, written by whoever is named.</summary>
     private void PostVisible(Guid authorId) =>
         postRepository.Get(postId, currentUserId).Returns(new Post
         {
@@ -82,10 +77,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
             MetagameText = string.Empty,
         });
 
-    /// <summary>
-    /// A post of somebody else the caller can see, whose text shows the file only inside a block
-    /// addressed to the reader named.
-    /// </summary>
     private void PostShowingTheFileOnlyInABlockFor(Guid addresseeId) =>
         postRepository.Get(postId, currentUserId).Returns(LetterFor(addresseeId));
 
@@ -100,7 +91,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         PrivateAddresseeSnapshotJson = $"{{\"Горим\":[{{\"owner\":\"{addresseeId}\"}}]}}",
     };
 
-    /// <summary>The file asked about, on the post, marked for everybody unless a mark is named.</summary>
     private StoredUpload Upload(string? addresseesJson = null) => new()
     {
         Id = uploadId,
@@ -109,7 +99,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         AddresseesJson = addresseesJson,
     };
 
-    /// <summary>A post outside the caller's scope: the read answers with nothing.</summary>
     private void PostInvisible() =>
         postRepository.Get(postId, currentUserId).Returns((Post?)null);
 
@@ -126,11 +115,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         await act.Should().NotThrowAsync();
     }
 
-    /// <summary>
-    /// The rule this narrows. Being allowed to write in the room is what creates
-    /// a post of one's own; it is not permission to add material to somebody
-    /// else's, which would publish a file under their name.
-    /// </summary>
+    // Being allowed to write in the room is what creates a post of one's own; it is not permission
+    // to add material to somebody else's, which would publish a file under their name.
     [Fact]
     public async Task RefuseAnybodyElseAttachingToAPostTheyDidNotWrite()
     {
@@ -142,10 +128,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
             .Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// The room's write permission is never consulted, so the master of the game
-    /// is refused here exactly as any other non-author is.
-    /// </summary>
+    // The room's write permission is never consulted, so the master of the game is refused here
+    // exactly as any other non-author is.
     [Fact]
     public async Task NeverAskWhetherTheCallerMayPostInTheRoom()
     {
@@ -180,10 +164,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
             "the file is visible wherever the post is, which is not only to its author");
     }
 
-    /// <summary>
-    /// 404, not 403. A refusal that distinguishes "no such file" from "not for
-    /// you" tells an outsider that a private game has one.
-    /// </summary>
+    // A refusal that distinguishes "no such file" from "not for you" tells an outsider that a
+    // private game has one.
     [Fact]
     public async Task AnswerNotFoundWhenReadingAnAttachmentOfAnInvisiblePost()
     {
@@ -195,11 +177,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
             .Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// The read is scoped to the caller. Passing anything else — an empty id, a
-    /// system identity — would make every closed room readable through this one
-    /// method while every other read of the same post stayed shut.
-    /// </summary>
+    // Passing anything else — an empty id, a system identity — would make every closed room
+    // readable through this one method while every other read of the same post stayed shut.
     [Fact]
     public async Task ReadThePostInTheCallersOwnScope()
     {
@@ -211,10 +190,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         await postRepository.DidNotReceive().Get(Arg.Any<Guid>(), Arg.Is<Guid>(id => id != currentUserId));
     }
 
-    /// <summary>
-    /// A reader of the post the block is not addressed to: the file is as absent to him as one of
-    /// a post he cannot see, and the refusal names the file, not the post he does see.
-    /// </summary>
+    // A reader of the post the block is not addressed to: the file is as absent to him as one of a
+    // post he cannot see, and the refusal names the file, not the post he does see.
     [Fact]
     public async Task AnswerNotFoundForAFileShownOnlyInABlockNotAddressedToTheCaller()
     {
@@ -237,10 +214,9 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         await act.Should().NotThrowAsync("the block is open to him, and the file with it");
     }
 
-    /// <summary>
-    /// The file's own right lets Moderator+ past the room, and not past a hidden block: the post is read
-    /// wherever it stands, and the file in a block he does not read is refused him as to anybody.
-    /// </summary>
+    // The file's own right lets Moderator+ past the room, and not past a hidden block: the post is
+    // read wherever it stands, and the file in a block he does not read is refused him as to
+    // anybody.
     [Fact]
     public async Task KeepAFileShownOnlyInABlockFromACallerTheFileRightLetsPastTheRoom()
     {
@@ -251,7 +227,7 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         await postRepository.DidNotReceive().Get(Arg.Any<Guid>(), Arg.Any<Guid>());
     }
 
-    /// <summary>A file whose post is gone fails closed: no text is left to say it was not kept.</summary>
+    // A file whose post is gone fails closed: no text is left to say it was not kept.
     [Fact]
     public async Task KeepAFileWhosePostIsGoneFromACallerTheFileRightLetsPastTheRoom()
     {
@@ -266,7 +242,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
 
     private static readonly PrivateAddressee Vasya = new(VasyaCharacterId, "Вася", VasyaOwnerId);
 
-    /// <summary>A character of the game no longer let into the room.</summary>
     private static readonly PrivateAddressee Gone = new(
         Guid.Parse("00000000-0000-0000-0000-0000000000d3"), "Ушедший", Guid.Parse("00000000-0000-0000-0000-0000000000d4"));
 
@@ -275,7 +250,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         "[" + string.Join(",", characters.Select(c =>
             $"{{\"character\":\"{c.CharacterId}\",\"name\":\"{c.CharacterName}\",\"owner\":\"{c.OwnerUserId}\"}}")) + "]";
 
-    /// <summary>The room with the addressee let into it.</summary>
     private void RoomWithVasya() =>
         roomRepository.GetForUpdate(roomId, currentUserId).Returns(new RoomToUpdate
         {
@@ -294,10 +268,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
             ],
         });
 
-    /// <summary>
-    /// The post of the caller, carrying the file asked about under the name given, and another file when
-    /// its mark is named.
-    /// </summary>
     private void OwnPostWithTheFile(string gameText, string? addresseesJson = null, string? anotherFileMark = null)
     {
         List<PostAttachment> attachments = [Attachment(uploadId, "karta.png", addresseesJson)];
@@ -318,7 +288,7 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
     private static PostAttachment Attachment(Guid id, string fileName, string? addresseesJson) =>
         new() { Id = id, FileName = fileName, ContentType = "image/png", AddresseesJson = addresseesJson };
 
-    /// <summary>A new file for everybody needs nothing read: nothing is frozen and nothing mentions it yet.</summary>
+    // A new file for everybody needs nothing read: nothing is frozen and nothing mentions it yet.
     [Fact]
     public async Task StoreNoMarkForANewFileForEverybody()
     {
@@ -326,7 +296,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         await postRepository.DidNotReceive().Get(Arg.Any<Guid>(), Arg.Any<Guid>());
     }
 
-    /// <summary>The characters chosen are frozen with their owners from the roster of the room.</summary>
     [Fact]
     public async Task FreezeTheChosenCharacterWithItsOwnerFromTheRoom()
     {
@@ -343,7 +312,7 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         addressees.Names.Should().Equal("Вася");
     }
 
-    /// <summary>"Выбранные" without a character is a mark for nobody: the author and the leads.</summary>
+    // "Выбранные" without a character is a mark for nobody: the author and the leads.
     [Fact]
     public async Task StoreAMarkForNobodyWhenNoCharacterIsChosen()
     {
@@ -356,7 +325,7 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         PrivateAddresseeSnapshot.ReadList(mark)!.NamesAddressees.Should().BeFalse();
     }
 
-    /// <summary>A character outside the room is refused by name of the rule, not dropped.</summary>
+    // A character outside the room is refused by name of the rule, not dropped.
     [Fact]
     public async Task RefuseACharacterNotLetIntoTheRoom()
     {
@@ -371,10 +340,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         refusal.Message.Should().Be(RefusalMessage.CharacterNotInRoom);
     }
 
-    /// <summary>
-    /// A character gone from the room stays on the file whose mark names him while his box stays checked,
-    /// as the mark froze him; the one still in the room is frozen from the room.
-    /// </summary>
+    // A character gone from the room stays on the file whose mark names him while his box stays
+    // checked, as the mark froze him; the one still in the room is frozen from the room.
     [Fact]
     public async Task KeepACharacterGoneFromTheRoomOnTheFileWhoseMarkNamesHim()
     {
@@ -387,7 +354,7 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         PrivateAddresseeSnapshot.ReadList(mark)!.Characters.Should().BeEquivalentTo(new[] { Gone, Vasya });
     }
 
-    /// <summary>Only the mark of the file itself keeps him: another file of the post lets him into nothing.</summary>
+    // Only the mark of the file itself keeps him: another file of the post lets him into nothing.
     [Fact]
     public async Task RefuseACharacterGoneFromTheRoomThatTheMarkOfTheFileDoesNotName()
     {
@@ -400,10 +367,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         (await act.Should().ThrowAsync<HttpException>()).Which.Message.Should().Be(RefusalMessage.CharacterNotInRoom);
     }
 
-    /// <summary>
-    /// "Все" for a file the text keeps only inside a block would say two things at once, so the author is
-    /// asked to choose; a file the text shows outside a block is everybody's to have.
-    /// </summary>
+    // "Все" for a file the text keeps only inside a block would say two things at once, so the
+    // author is asked to choose; a file the text shows outside a block is everybody's to have.
     [Fact]
     public async Task RefuseEverybodyForAFileTheTextPutsOnlyInsideHiddenBlocks()
     {
@@ -427,10 +392,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         (await sut.FreezeAudienceAsync(postId, uploadId, UploadAudience.All)).Should().BeNull();
     }
 
-    /// <summary>
-    /// The file's own right lets Moderator+ past the room and not past a mark: a file chosen for the addressee
-    /// is kept from him, one for everybody is not, one question for the page.
-    /// </summary>
+    // The file's own right lets Moderator+ past the room and not past a mark: a file chosen for the
+    // addressee is kept from him, one for everybody is not, one question for the page.
     [Fact]
     public async Task KeepAMarkedFileFromACallerTheFileRightLetsPastTheRoom()
     {
@@ -452,7 +415,6 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         await carrierRepository.Received(1).GetCarriers(Arg.Any<IReadOnlyCollection<Guid>>());
     }
 
-    /// <summary>The address of a marked file answers a reader of the post it was not chosen for as a missing one.</summary>
     [Fact]
     public async Task AnswerNotFoundForAMarkedFileToAReaderNotChosen()
     {

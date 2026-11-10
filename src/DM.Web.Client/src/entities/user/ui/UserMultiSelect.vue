@@ -15,38 +15,35 @@ const props = withDefaults(
   defineProps<{
     selectedUsers: Set<string>;
     placeholder?: string;
-    maxSuggestions?: number;
-    debounceMs?: number;
     /** The users away for thirty days and more too. */
     includeInactive?: boolean;
   }>(),
   {
     placeholder: "Поиск пользователя",
-    maxSuggestions: 6,
-    debounceMs: 150,
     includeInactive: false,
   },
 );
 
 const emit = defineEmits<{
   add: [username: string];
-  remove: [username: string];
   keydown: [event: KeyboardEvent];
 }>();
+
+const SHOWN = 6;
 
 const searchInput = ref("");
 const highlightedIndex = ref(-1);
 
 const { results, loading, search, clear } = useUserSearch({
   limit: 10,
-  debounceMs: props.debounceMs,
+  debounceMs: 150,
   activity: props.includeInactive ? UserActivityFilter.All : undefined,
 });
 
 const suggestions = computed<UserSuggestion[]>(() =>
   results.value
     .filter((u) => !props.selectedUsers.has(u.username))
-    .slice(0, props.maxSuggestions)
+    .slice(0, SHOWN)
     .map((u) => ({
       username: u.username,
       picture: u.picture?.smallUrl,

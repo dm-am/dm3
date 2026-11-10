@@ -14,10 +14,8 @@ public class BbAddressShould
 {
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 
-    /// <summary>
-    /// Every address here names the reader's machine or its network. Four spellings of 127.0.0.1: `new Uri`
-    /// normalises three and leaves the IPv4-mapped one alone; fd12:: and fe81:: match no common prefix.
-    /// </summary>
+    // Four spellings of 127.0.0.1: `new Uri` normalises three and leaves the IPv4-mapped one alone;
+    // fd12:: and fe81:: match no common prefix.
     [Theory]
     [InlineData("http://127.0.0.1/x.png")]
     [InlineData("http://127.1/x.png")]
@@ -73,10 +71,7 @@ public class BbAddressShould
             .Should().Be(bbCode);
     }
 
-    /// <summary>
-    /// A check that only says "no" would pass the theories above. The last row is a host name that merely
-    /// starts like a private address.
-    /// </summary>
+    // A check that only says "no" would pass the theories above.
     [Theory]
     [InlineData("https://example.com/x.png")]
     [InlineData("http://93.184.216.34/x.png")]
@@ -87,10 +82,8 @@ public class BbAddressShould
         Comment($"[img]{url}[/img]").Should().Contain($"<img src=\"{url}\"");
     }
 
-    /// <summary>
-    /// Raw whitespace turns a quoted attribute into two, an event handler in the second row; such content is
-    /// not one address and shows as text.
-    /// </summary>
+    // Raw whitespace turns a quoted attribute into two, an event handler in the second row; such
+    // content is not one address and shows as text.
     [Theory]
     [InlineData("https://example.com/a b.png")]
     [InlineData("https://example.com/a.png onmouseover=alert(1) x=")]
@@ -111,9 +104,6 @@ public class BbAddressShould
         Comment("[img]\n  https://example.com/a.png\n[/img]").Should().Contain("<img src=\"https://example.com/a.png\"");
     }
 
-    /// <summary>
-    /// A bracket that opens no tag is an ordinary URL character.
-    /// </summary>
     [Theory]
     [InlineData("http://[2001:db8::1]/x.png")]
     [InlineData("https://example.com/x.png?filter[name]=a")]

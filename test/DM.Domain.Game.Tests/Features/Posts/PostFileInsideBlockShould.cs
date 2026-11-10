@@ -27,7 +27,6 @@ public class PostFileInsideBlockShould : PostServiceTestBase
 
     private string Image => $"[img]https://dm.am/v1/uploads/{mapId:D}/content[/img]";
 
-    /// <summary>The caller's post, carrying the map with the mark named.</summary>
     private void OwnPostWithTheMap(string? addresseesJson, string storedText = "было")
     {
         var post = new Post
@@ -74,7 +73,7 @@ public class PostFileInsideBlockShould : PostServiceTestBase
         await repository.Received(1).Update(Arg.Any<UpdatePostEntity>());
     }
 
-    /// <summary>A file the author already marked for chosen readers is his choice, in a block or not.</summary>
+    // A file the author already marked for chosen readers is his choice, in a block or not.
     [Fact]
     public async Task SaveAMarkedFileInsideAHiddenBlock()
     {
@@ -85,7 +84,7 @@ public class PostFileInsideBlockShould : PostServiceTestBase
         await repository.Received(1).Update(Arg.Any<UpdatePostEntity>());
     }
 
-    /// <summary>A save that sends no game text changes no place of a file, and is not asked about one.</summary>
+    // A save that sends no game text changes no place of a file, and is not asked about one.
     [Fact]
     public async Task NotAskWhenTheGameTextIsNotSent()
     {

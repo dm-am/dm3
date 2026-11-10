@@ -7,11 +7,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared.Binding;
 
-/// <summary>
-/// An identifier in a request body reads from either spelling the site hands
-/// out and is written back in the plain one.
-/// </summary>
-/// <remarks>Inserted first into the options every body goes through; a value they cannot read is refused, as the route binder refuses it.</remarks>
+// Inserted first into the options every body goes through; a value they cannot read is refused, as
+// the route binder refuses it.
 public class ReadableGuidConverterShould
 {
     private static readonly Guid Identifier = Guid.Parse("8b1e4c2a-37d5-4f61-9a0b-c3d4e5f60718");

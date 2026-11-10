@@ -21,13 +21,9 @@ const isNewGame = computed(
 );
 
 // A game with neither id would throw "Missing required param" in the router and take the tree down; an empty string throws too.
-const routeId = computed(() => {
-  const pid = props.game?.publicId;
-  const id = props.game?.id;
-  if (pid && typeof pid === "string" && pid.length > 0) return pid;
-  if (id && typeof id === "string" && id.length > 0) return id;
-  return undefined;
-});
+const routeId = computed(
+  () => props.game.publicId || props.game.id || undefined,
+);
 
 const to = computed(() =>
   routeId.value ? { name: "game", params: { id: routeId.value } } : undefined,

@@ -4,7 +4,7 @@ import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 /** @param failure What the page says when the list did not come. */
 export function createListSlice<T>(
-  fetch: (gameId: string) => Promise<ApiResult<ListEnvelope<T>>>,
+  fetch: (moduleId: string) => Promise<ApiResult<ListEnvelope<T>>>,
   failure: string,
 ) {
   const items = ref([]) as Ref<T[]>;
@@ -12,12 +12,12 @@ export function createListSlice<T>(
   const error = ref<string | null>(null);
   const guard = createRequestGuard();
 
-  async function load(gameId: string): Promise<void> {
+  async function load(moduleId: string): Promise<void> {
     const requestId = guard.next();
     loading.value = true;
     error.value = null;
 
-    const { data, error: failed } = await fetch(gameId);
+    const { data, error: failed } = await fetch(moduleId);
 
     if (!guard.isCurrent(requestId)) return;
 

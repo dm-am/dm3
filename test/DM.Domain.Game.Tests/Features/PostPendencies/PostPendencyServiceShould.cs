@@ -142,10 +142,8 @@ public class PostPendencyServiceShould : UnitTestBase
         await producer.Received(1).SendAsync(EventType.RoomPendencyCreated, pendencyId);
     }
 
-    /// <summary>
-    /// The site names the character and nothing else: the one waited for is
-    /// the player of that character, and the one who waits is the caller.
-    /// </summary>
+    // The site names the character and nothing else: the one waited for is the player of that
+    // character, and the one who waits is the caller.
     [Fact]
     public async Task WaitForThePlayerOfTheCharacterOnBehalfOfTheCaller()
     {
@@ -166,10 +164,7 @@ public class PostPendencyServiceShould : UnitTestBase
         factory.Received(1).Create(createPendency, identityProvider.Current.User.UserId, playerId);
     }
 
-    /// <summary>
-    /// A character the room does not let in, or one with no player behind it,
-    /// is nobody to wait for.
-    /// </summary>
+    // A character the room does not let in, or one with no player behind it, is nobody to wait for.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -218,11 +213,8 @@ public class PostPendencyServiceShould : UnitTestBase
         await producer.Received(1).SendAsync(EventType.RoomPendencyDeleted, pendencyId);
     }
 
-    /// <summary>
-    /// The projection that carries the game, which is what the permission rule
-    /// reads: asked with the flat one the manager finds no resolver and refuses
-    /// everybody.
-    /// </summary>
+    // The projection that carries the game, which is what the permission rule reads: asked with the
+    // flat one the manager finds no resolver and refuses everybody.
     private static RoomToUpdate CreateRoomWithAccesses(Guid characterId, Guid? playerId) => new()
     {
         Game = new GameDto(),

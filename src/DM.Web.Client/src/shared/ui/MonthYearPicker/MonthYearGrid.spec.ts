@@ -2,14 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The keyboard of the month and year grids.
- *
- * Each grid is one stop of Tab, the way the day grid of the calendar is: the
- * twelve cells used to be twelve stops, and the arrows did nothing. The grid
- * is shared by the calendar and the statistics period picker, so both take
- * the same keys.
- */
+// The grid is shared by the calendar and the statistics period picker, so both
+// take the same keys.
 import { describe, it, expect, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import MonthYearGrid from "./MonthYearGrid.vue";

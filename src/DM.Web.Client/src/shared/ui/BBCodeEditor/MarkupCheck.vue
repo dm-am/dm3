@@ -7,7 +7,7 @@
  *
  * Its root carries the id the field's aria-describedby names.
  */
-import { ref, watch } from "vue";
+import { onBeforeUnmount, ref, watch } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import {
   validateBBCode,
@@ -37,6 +37,8 @@ watch([() => props.text, () => props.active], () => {
     findings.value = validateBBCode(props.text, props.context);
   }, 300);
 });
+
+onBeforeUnmount(() => clearTimeout(pending));
 </script>
 
 <template>

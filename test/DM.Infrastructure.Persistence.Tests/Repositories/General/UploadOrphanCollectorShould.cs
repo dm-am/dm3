@@ -15,15 +15,11 @@ using IObjectStorage = DM.Domain.Core.Uploads.IObjectStorage;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.General;
 
-/// <summary>
-/// The orphan sweeper looks for soft-deleted uploads past the global "not removed" filter: a row past the
-/// grace period is collected, fresh and live rows are not.
-/// </summary>
+// The orphan sweeper looks for soft-deleted uploads past the global "not removed" filter
 public class UploadOrphanCollectorShould : UnitTestBase
 {
-    /// <summary>
-    /// The instant every row here is dated from, owned by the test rather than read off the wall clock.
-    /// </summary>
+    // The instant every row here is dated from, owned by the test rather than read off the wall
+    // clock.
     private static readonly DateTimeOffset Now = new(2020, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
@@ -60,7 +56,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
         await dbContext.SaveChangesAsync();
     }
 
-    /// <summary>One pass, on a context of its own as a background scope has.</summary>
+    // One pass, on a context of its own as a background scope has.
     private async Task Sweep()
     {
         await using var dbContext = Context();
@@ -107,9 +103,6 @@ public class UploadOrphanCollectorShould : UnitTestBase
         (await RemainingUploads()).Should().Be(1);
     }
 
-    /// <summary>
-    /// One row is left alone before the deadline and collected after it, with only the clock moving.
-    /// </summary>
     [Fact]
     public async Task CollectUploadOnceTheClockPassesTheGracePeriod()
     {
@@ -125,9 +118,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
         (await RemainingUploads()).Should().Be(0);
     }
 
-    /// <summary>
-    /// The thumbnails of an avatar go with it: no row names them, so nothing would find them later.
-    /// </summary>
+    // The thumbnails of an avatar go with it: no row names them, so nothing would find them later.
     [Fact]
     public async Task CollectTheThumbnailsOfAnAvatarWithIt()
     {
@@ -178,9 +169,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
         await dbContext.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// An avatar a warning pinned outlives its replacement: the open log shows it as the evidence.
-    /// </summary>
+    // An avatar a warning pinned outlives its replacement: the open log shows it as the evidence.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -197,10 +186,8 @@ public class UploadOrphanCollectorShould : UnitTestBase
         (await RemainingUploads()).Should().Be(1);
     }
 
-    /// <summary>
-    /// The pin does not keep a picture from moderation: deleted by anybody but
-    /// its owner, the pinned avatar is collected as any other.
-    /// </summary>
+    // The pin does not keep a picture from moderation: deleted by anybody but its owner, the pinned
+    // avatar is collected as any other.
     [Fact]
     public async Task CollectAPinnedAvatarModerationDeleted()
     {
@@ -215,9 +202,6 @@ public class UploadOrphanCollectorShould : UnitTestBase
         (await RemainingUploads()).Should().Be(0);
     }
 
-    /// <summary>
-    /// An avatar nothing pins goes after the grace period.
-    /// </summary>
     [Fact]
     public async Task CollectAReplacedAvatarNothingPins()
     {
@@ -230,10 +214,8 @@ public class UploadOrphanCollectorShould : UnitTestBase
         (await RemainingUploads()).Should().Be(0);
     }
 
-    /// <summary>
-    /// An avatar uploaded and never saved to the profile: the tab was closed
-    /// before "Сохранить", and nothing ever marked it deleted.
-    /// </summary>
+    // An avatar uploaded and never saved to the profile: the tab was closed before "Сохранить", and
+    // nothing ever marked it deleted.
     [Fact]
     public async Task CollectAnAvatarNeverSavedToTheProfile()
     {
@@ -245,9 +227,6 @@ public class UploadOrphanCollectorShould : UnitTestBase
         (await RemainingUploads()).Should().Be(0);
     }
 
-    /// <summary>
-    /// Within the grace period the avatar is still on its way to "Сохранить".
-    /// </summary>
     [Fact]
     public async Task LeaveAnUnsavedAvatarWithinTheGracePeriod()
     {

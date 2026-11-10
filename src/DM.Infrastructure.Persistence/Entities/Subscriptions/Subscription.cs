@@ -12,15 +12,9 @@ namespace DM.Infrastructure.Persistence.Entities.Subscriptions;
 [Table("Subscriptions")]
 public class Subscription
 {
-    /// <summary>
-    /// Subscription identifier
-    /// </summary>
     [Key]
     public Guid SubscriptionId { get; set; }
 
-    /// <summary>
-    /// Subscriber user identifier
-    /// </summary>
     public Guid SubscriberId { get; set; }
 
     /// <summary>
@@ -48,9 +42,6 @@ public class Subscription
     /// </summary>
     public DateTimeOffset? UpdatedUtc { get; set; }
 
-    /// <summary>
-    /// Subscriber user
-    /// </summary>
     [ForeignKey(nameof(SubscriberId))]
     public virtual User Subscriber { get; set; } = null!;
 }

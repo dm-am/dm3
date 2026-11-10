@@ -15,6 +15,7 @@ import {
   fetchUser,
 } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
+import HomeButton from "./HomeButton.vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { supportFor } from "@/entities/ticket";
 import { linkLifetimeNote } from "@/features/auth";
@@ -140,10 +141,6 @@ async function submit() {
     // The stored viewer still has the old name; the server has the rest, so it is refetched.
     await fetchUser();
   }
-}
-
-function goHome() {
-  router.push("/");
 }
 </script>
 
@@ -287,14 +284,7 @@ function goHome() {
         <p class="auth-text">
           Возможно ссылка уже была использована или срок ее действия истек
         </p>
-        <Button
-          type="button"
-          variant="primary"
-          class="auth-button auth-button--spaced"
-          @click="goHome"
-        >
-          На главную
-        </Button>
+        <HomeButton />
       </template>
 
       <!-- Help under every answer but the checking and the changed name. -->

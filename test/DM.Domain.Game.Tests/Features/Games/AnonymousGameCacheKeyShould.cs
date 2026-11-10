@@ -8,12 +8,7 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
-/// <summary>
-/// One anonymous listing, one cache entry.
-/// </summary>
-/// <remarks>
-/// Walked by reflection, so a new query field must end up in the key or in the shared list.
-/// </remarks>
+// Walked by reflection, so a new query field must end up in the key or in the shared list.
 public class AnonymousGameCacheKeyShould
 {
     [Fact]
@@ -63,12 +58,7 @@ public class AnonymousGameCacheKeyShould
         return query;
     }
 
-    /// <summary>
-    /// The two directions of a sort are two listings.
-    /// </summary>
-    /// <remarks>
-    /// The repository reads the order in every branch, the default one included.
-    /// </remarks>
+    // The repository reads the order in every branch, the default one included.
     [Fact]
     public void TellTheTwoDirectionsOfASortApart()
     {
@@ -80,12 +70,7 @@ public class AnonymousGameCacheKeyShould
             "whether or not a sort field came with it");
     }
 
-    /// <summary>
-    /// Both spellings of the same listing are one entry.
-    /// </summary>
-    /// <remarks>
-    /// The repository lowercases the sort field and reads the statuses as a set.
-    /// </remarks>
+    // The repository lowercases the sort field and reads the statuses as a set.
     [Fact]
     public void HoldOneEntryForTwoSpellingsOfTheSameListing()
     {

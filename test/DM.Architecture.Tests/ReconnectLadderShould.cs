@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The browser reconnects its socket on the ladder the host resubscribes to the broker on.
-/// </summary>
 /// <remarks>
 /// Both cap the wait so that an outage is not followed by minutes of silence; the client's
 /// ladder is read out of its source, the host's is called.

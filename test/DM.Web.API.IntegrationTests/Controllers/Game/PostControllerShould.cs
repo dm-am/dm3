@@ -13,10 +13,7 @@ public class PostControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// The rated posts endpoint returns `post.room.game` as a full sidebar-tier GameRef. Asserted by JSON traversal:
-    /// a stray `"master":` anywhere would pass a substring match.
-    /// </summary>
+    // Asserted by JSON traversal: a stray `"master":` anywhere would pass a substring match.
     [Fact]
     public async Task GetRatedPostsReturnsFullGameRefOnPostRoomGame()
     {
@@ -71,13 +68,8 @@ public class PostControllerShould : IntegrationTestBase
         owners.Should().Contain(TestConstants.SecondUserLogin);
     }
 
-    /// <summary>
-    /// The reader bit on `post.room.game.participation`, over the wire.
-    /// </summary>
-    /// <remarks>
-    /// The one field of the attached game that depends on who is asking. "Reader" is capitalised: the enum
-    /// converter has no naming policy, and the client mirrors the string.
-    /// </remarks>
+    // "Reader" is capitalised: the enum converter has no naming policy, and the client mirrors the
+    // string.
     [Fact]
     public async Task GetRatedPostsReportsTheViewerAsAReaderOfTheGameTheySubscribeTo()
     {
@@ -99,10 +91,7 @@ public class PostControllerShould : IntegrationTestBase
         participation.Should().Contain("Reader");
     }
 
-    /// <summary>
-    /// The same read for somebody who subscribes to nothing. Without it the
-    /// assertion above passes on a resolver that returns every bit for everyone.
-    /// </summary>
+    // Without it the assertion above passes on a resolver that returns every bit for everyone.
     [Fact]
     public async Task GetRatedPostsDoesNotReportAStrangerAsAReader()
     {
@@ -125,9 +114,6 @@ public class PostControllerShould : IntegrationTestBase
         participation.Should().NotContain("Reader");
     }
 
-    /// <summary>
-    /// `participation` off the first rated post of the seeded game, as strings.
-    /// </summary>
     private async Task<string[]> ReadRatedPostParticipationAsync(HttpRequestMessage request)
     {
         var response = await Client.SendAsync(request);

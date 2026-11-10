@@ -94,16 +94,11 @@ public interface IBlogService
     /// </summary>
     Task<Rubric> UpdateRubric(UpdateRubric updateRubric, CancellationToken ct = default);
 
-    /// <summary>
-    /// Replace the order of a blog's rubrics. The position of each id in
-    /// <paramref name="orderedRubricIds"/> becomes the rubric's sort order.
-    /// </summary>
     /// <remarks>
     /// The whole order, not a correction to it: <paramref name="orderedRubricIds"/>
     /// names every rubric of the blog exactly once, and a list that does not is
     /// refused.
     /// </remarks>
-    /// <returns>The rubrics in their new order</returns>
     Task<IEnumerable<Rubric>> ReorderRubrics(
         Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default);
 

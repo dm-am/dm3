@@ -24,6 +24,7 @@
         <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
         <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
         <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+        <!-- The three hosts call UseSerilog and get the package through this reference. -->
         <PackageReference Include="Serilog.AspNetCore" />
         <PackageReference Include="Serilog.Formatting.Compact" />
         <PackageReference Include="Serilog.Sinks.Console" />

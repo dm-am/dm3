@@ -14,10 +14,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostReviews;
 
-/// <summary>
-/// An edit of a review: the window it is open for, what reaches storage and
-/// what is left alone, and what a newbie may change.
-/// </summary>
 public class PostReviewEditShould : PostReviewServiceTestBase
 {
     [Fact]
@@ -60,10 +56,6 @@ public class PostReviewEditShould : PostReviewServiceTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// The whole point of the edit: a review is a sign and the sentence under
-    /// it, and both reach storage.
-    /// </summary>
     [Fact]
     public async Task SaveTheEditedTextWithTheSign()
     {
@@ -87,10 +79,8 @@ public class PostReviewEditShould : PostReviewServiceTestBase
         written.ModifiedByUserId.Should().Be(currentUserId);
     }
 
-    /// <summary>
-    /// An omitted field keeps what is stored: correcting a typo must not reset
-    /// the rating, and re-picking the sign must not blank the sentence.
-    /// </summary>
+    // An omitted field keeps what is stored: correcting a typo must not reset the rating, and
+    // re-picking the sign must not blank the sentence.
     [Fact]
     public async Task LeaveTheTextAloneWhenTheRequestDoesNotCarryIt()
     {
@@ -131,10 +121,8 @@ public class PostReviewEditShould : PostReviewServiceTestBase
         written!.Text.Should().Be("Предупреждение");
     }
 
-    /// <summary>
-    /// Probation holds on the way out as well: a newbie publishes the neutral
-    /// review the form allows them, and an edit is not a second door to a plus.
-    /// </summary>
+    // Probation holds on the way out as well: a newbie publishes the neutral review the form allows
+    // them, and an edit is not a second door to a plus.
     [Fact]
     public async Task ThrowForbiddenWhenANewbieMovesTheirReviewOffNeutral()
     {
@@ -151,9 +139,6 @@ public class PostReviewEditShould : PostReviewServiceTestBase
         await repository.DidNotReceive().UpdateAsync(Arg.Any<UpdatePostReviewEntity>());
     }
 
-    /// <summary>
-    /// The same newbie may still fix the wording of what they wrote.
-    /// </summary>
     [Fact]
     public async Task LetANewbieEditTheTextOfTheirNeutralReview()
     {
@@ -221,10 +206,8 @@ public class PostReviewEditShould : PostReviewServiceTestBase
         result.Should().BeFalse();
     }
 
-    /// <summary>
-    /// A review of the current user, published just now, so the edit window is
-    /// open and the only thing under test is what the update itself does.
-    /// </summary>
+    // A review of the current user, published just now, so the edit window is open and the only
+    // thing under test is what the update itself does.
     private PostReview EditableReview(Guid reviewId, ReviewSign sign = ReviewSign.Positive) => new()
     {
         Id = reviewId,

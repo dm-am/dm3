@@ -117,9 +117,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// A reader row takes both policies: the policy decides whether the reader speaks in the chat.
-    /// </summary>
+    // A reader row takes both policies: the policy decides whether the reader speaks in the chat.
     [Fact]
     public async Task PassForAReaderGrantedWriting()
     {

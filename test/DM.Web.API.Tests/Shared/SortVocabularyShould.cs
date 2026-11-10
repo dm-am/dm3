@@ -15,10 +15,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// A sort field the endpoint does not have is an error, not a different order.
-/// </summary>
-/// <remarks>A default arm in a sort switch answers 200 in a fallback order.</remarks>
+// A default arm in a sort switch answers 200 in a fallback order.
 public class SortVocabularyShould
 {
     private readonly SortVocabularyFilter _filter = new();
@@ -97,9 +94,7 @@ public class SortVocabularyShould
         ran.Should().BeTrue();
     }
 
-    /// <summary>
-    /// The vocabulary is keyed by the bound type, so every list endpoint's SortBy needs an entry.
-    /// </summary>
+    // The vocabulary is keyed by the bound type, so every list endpoint's SortBy needs an entry.
     [Fact]
     public void NameTheFieldsOfEverySortableQueryTheApiBinds()
     {

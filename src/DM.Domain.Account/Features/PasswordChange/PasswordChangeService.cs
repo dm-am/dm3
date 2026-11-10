@@ -134,10 +134,8 @@ internal class PasswordChangeService : IPasswordChangeService
         return user;
     }
 
-    /// <summary>
-    /// Refuses a new password the account must not take: the one it already
-    /// has, and one that has turned up in a breach.
-    /// </summary>
+    // Refuses a new password the account must not take: the one it already has, and one that has
+    // turned up in a breach.
     private async Task RefuseUnfitPassword(AuthenticatedUser user, string newPassword)
     {
         if (_securityManager.ComparePasswords(newPassword, user.Salt, user.PasswordHash))

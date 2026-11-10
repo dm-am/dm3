@@ -14,11 +14,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// The reviews of the seed: testimonials of the site, game reviews and
-    /// endorsements, then the post reviews of the finished games, the showcase
-    /// posts of the home page among them.
-    /// </summary>
     private async Task CreateReviews(List<DbUser> users, List<Guid> gameIds, ComprehensiveSeedResult result)
     {
         var existingTestimonialsCount = await _dbContext.WebsiteTestimonials.CountAsync();
@@ -58,9 +53,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Created {result.ReviewsCreated} reviews");
     }
 
-    /// <summary>
-    /// Testimonials of the site: texts and how many days ago, enough for more than one page.
-    /// </summary>
     private void SeedWebsiteTestimonials(List<DbUser> users, ComprehensiveSeedResult result)
     {
         var testimonials = new (string Text, int DaysAgo)[]
@@ -116,10 +108,7 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// Game reviews (only for experienced users): two closed games, each by
-    /// somebody other than its master. A review is written on a closed game alone.
-    /// </summary>
+    // A review is written on a closed game alone.
     private async Task SeedGameReviews(
         List<Guid> gameIds, List<DbUser> experiencedUsers, ComprehensiveSeedResult result)
     {
@@ -148,9 +137,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// User endorsements between experienced users.
-    /// </summary>
     private async Task SeedUserEndorsements(
         List<DbUser> experiencedUsers, ComprehensiveSeedResult result)
     {

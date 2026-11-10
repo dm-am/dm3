@@ -33,11 +33,6 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Created);
     }
 
-    /// <summary>
-    /// A complaint about a person and a request to remove an account are filed
-    /// from an account: a guest is refused under the reason, and nothing is
-    /// filed.
-    /// </summary>
     [Theory]
     [InlineData("UserComplaint")]
     [InlineData("AccountRemoval")]
@@ -58,10 +53,8 @@ public class TicketIntakeControllerShould : IntegrationTestBase
             .Select(field => field.Name.ToLowerInvariant()).Should().Contain("subtype");
     }
 
-    /// <summary>
-    /// The violator of a complaint is named and found; an unknown name is
-    /// refused under its own field rather than failing the whole form.
-    /// </summary>
+    // The violator of a complaint is named and found; an unknown name is refused under its own
+    // field rather than failing the whole form.
     [Fact]
     public async Task CreateTicketRefusesAnUnknownViolatorUnderItsField()
     {
@@ -304,7 +297,6 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>A ticket filed through the form by the test user, by its identifier.</summary>
     private async Task<Guid> FileAsTheTestUser(string text)
     {
         var post = CreateAuthenticatedRequest(HttpMethod.Post, "/v1/tickets");
@@ -315,7 +307,6 @@ public class TicketIntakeControllerShould : IntegrationTestBase
             .RootElement.GetProperty("ticketId").GetGuid();
     }
 
-    /// <summary>A ticket filed through the form by a guest, with its tracking token.</summary>
     private async Task<(Guid TicketId, string Token)> FileAsAGuest(string text)
     {
         var created = await Client.PostAsJsonAsync("/v1/tickets", new
@@ -337,7 +328,6 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         return Client.SendAsync(request);
     }
 
-    /// <summary>The tracking page of a guest ticket.</summary>
     private async Task<JsonElement> Track(string token)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, "/v1/tickets/track");
@@ -348,7 +338,6 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         return JsonDocument.Parse(body).RootElement.GetProperty("resource").Clone();
     }
 
-    /// <summary>The field names a validation refusal names.</summary>
     private static IEnumerable<string> FieldsRefused(string body) =>
         JsonDocument.Parse(body).RootElement
             .GetProperty("errors")

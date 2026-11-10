@@ -16,13 +16,8 @@ namespace DM.Infrastructure.Persistence.Shared.Comments;
 /// </remarks>
 internal static class CommentSorting
 {
-    /// <summary>
-    /// Order <paramref name="query" /> by the field the reader asked for.
-    /// </summary>
-    /// <param name="query">Comments already narrowed to one discussion.</param>
     /// <param name="sortBy">"likes"; anything else, null included, orders by creation.</param>
     /// <param name="sortOrder">"desc" for descending, anything else for ascending.</param>
-    /// <param name="dbContext">Context the like counts are read through.</param>
     public static IOrderedQueryable<DbComment> Apply(
         IQueryable<DbComment> query,
         string? sortBy,

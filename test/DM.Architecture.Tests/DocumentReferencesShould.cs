@@ -10,17 +10,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A reference to a document reaches what it names: the section a comment cites,
-/// the file a relative link points at, and the heading an anchor jumps to.
-/// </summary>
 /// <remarks>
 /// Paths from the root are DocumentedPathsShould's. A section is a heading, a bold lead or a table
 /// row, looked for in the parts of a document cut into an index too.
 /// </remarks>
 public class DocumentReferencesShould
 {
-    /// <summary>The trees whose files cite documents.</summary>
     private static readonly string[] CitingTrees = ["src", "test", "scripts", "docker", ".claude", ".github", "docs"];
 
     private static readonly string[] CitingExtensions =
@@ -28,12 +23,8 @@ public class DocumentReferencesShould
         ".cs", ".ts", ".vue", ".sass", ".js", ".cjs", ".mjs", ".sh", ".ps1", ".yml", ".yaml", ".md",
     ];
 
-    /// <summary>
-    /// A markdown link: the target up to an optional anchor.
-    /// </summary>
     private static readonly Regex Link = new(@"\]\((?<target>[^)\s#]*)(?:#(?<anchor>[^)\s]+))?\)", RegexOptions.Compiled);
 
-    /// <summary>A fence that opens or closes a block of code in a document.</summary>
     private static readonly Regex Fence = new(@"^\s*(```|~~~)", RegexOptions.Compiled);
 
 
@@ -56,9 +47,6 @@ public class DocumentReferencesShould
                 "carries any more sends the reader looking for something that was renamed or moved");
     }
 
-    /// <summary>
-    /// What counts as a citation, and what a section can be found as.
-    /// </summary>
     [Theory]
     [InlineData("// See UI_STANDARDS.md → \"Шапка\".", "## Шапка", true)]
     [InlineData("// (UI_STANDARDS, \"Шапка\")", "## Шапка", true)]
@@ -83,9 +71,6 @@ public class DocumentReferencesShould
         CitationsIn("probe.ts", "readFileSync(UI_STANDARDS, \"utf8\")", ["UI_STANDARDS"])
             .Should().BeEmpty();
 
-    /// <summary>
-    /// A document cut into an index and its parts still answers for the sections it had.
-    /// </summary>
     [Fact]
     public void FollowTheIndexOfADocumentIntoItsParts()
     {
@@ -165,7 +150,6 @@ public class DocumentReferencesShould
                 "is left to find the section the link promised");
     }
 
-    /// <summary>The anchors a heading answers to, by the rules the code host renders them with.</summary>
     [Theory]
     [InlineData("## Грамматика разметки", "грамматика-разметки")]
     [InlineData("### `Envelope<T>` и списки", "envelopet-и-списки")]
@@ -183,18 +167,13 @@ public class DocumentReferencesShould
 
     private sealed record MarkdownLink(string Target, string? Anchor);
 
-    /// <summary>The documents a citation can name, by name, with the lines a section is searched in.</summary>
     private static IReadOnlyDictionary<string, string[]> Documents() => FilesUnder("docs")
         .Where(path => path.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
         .Where(path => Regex.IsMatch(Path.GetFileNameWithoutExtension(path), "^[A-Z][A-Z0-9_]+$"))
         .GroupBy(path => Path.GetFileNameWithoutExtension(path), StringComparer.Ordinal)
         .ToDictionary(group => group.Key, group => group.SelectMany(SearchedLines).ToArray(), StringComparer.Ordinal);
 
-    /// <summary>
-    /// The lines of a document, and of its parts once it has been cut: the files
-    /// it links to inside the folder that carries its name.
-    /// </summary>
-    /// <remarks>Only the parts: a section found in a merely mentioned neighbour would pass a dead citation.</remarks>
+    // Only the parts: a section found in a merely mentioned neighbour would pass a dead citation.
     private static IEnumerable<string> SearchedLines(string document)
     {
         var parts = Path.Combine(
@@ -239,7 +218,6 @@ public class DocumentReferencesShould
             .ToList();
     }
 
-    /// <summary>Whether a heading, a bold lead or a table row of the lines carries the section.</summary>
     private static bool Resolves(IEnumerable<string> lines, string section)
     {
         var wanted = Normalized(section);
@@ -265,7 +243,6 @@ public class DocumentReferencesShould
     private static IEnumerable<string> MarkdownFiles() => RepositoryFiles.CommittableFiles()
         .Where(path => path.EndsWith(".md", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The links of a markdown file, those inside blocks of code left out.</summary>
     private static IEnumerable<MarkdownLink> LinksIn(string file)
     {
         var inCode = false;
@@ -323,12 +300,6 @@ public class DocumentReferencesShould
         return paths;
     });
 
-    /// <summary>
-    /// The anchors the headings of a document answer to: the heading as rendered,
-    /// lower case, with every character but letters, digits, the underscore, the
-    /// space and the hyphen dropped, and spaces turned into hyphens; a repeated
-    /// heading takes a number. Explicit anchors count too.
-    /// </summary>
     private static IReadOnlySet<string> Anchors(IEnumerable<string> lines)
     {
         var anchors = new HashSet<string>(StringComparer.Ordinal);
@@ -404,10 +375,6 @@ public class DocumentReferencesShould
         return slug.ToString();
     }
 
-    /// <summary>
-    /// The files of the repository under one of its top directories (see
-    /// <see cref="RepositoryFiles.CommittableFiles"/> for which files those are).
-    /// </summary>
     private static IEnumerable<string> FilesUnder(string tree)
     {
         var prefix = Path.Combine(RepositoryLayout.Root, tree) + Path.DirectorySeparatorChar;

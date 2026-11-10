@@ -12,11 +12,7 @@ using DomainBlogInvitation = DM.Domain.Blog.Features.Invitations.BlogInvitation;
 
 namespace DM.Web.API.Tests.Features.Blog;
 
-/// <summary>
-/// A blog invitation names its role in the same words as a game invitation and
-/// the account's list of received invitations.
-/// </summary>
-/// <remarks>The account's list shows both kinds, so both answer with the API word.</remarks>
+// The account's list shows both kinds, so both answer with the API word.
 public class BlogInvitationApiServiceShould
 {
     private readonly IBlogInvitationService _invitationService = Substitute.For<IBlogInvitationService>();
@@ -47,10 +43,6 @@ public class BlogInvitationApiServiceShould
         invitation.Type.Should().Be("assistant");
     }
 
-    /// <summary>
-    /// The invitee is a reference like any other: the role and the newbie mark
-    /// of the account, not a guest without one.
-    /// </summary>
     [Fact]
     public async Task NameTheInviteeWithTheRoleAndTheNewbieMark()
     {

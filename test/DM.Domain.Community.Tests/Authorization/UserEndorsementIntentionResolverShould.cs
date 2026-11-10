@@ -10,11 +10,8 @@ using Xunit;
 
 namespace DM.Domain.Community.Tests.Authorization;
 
-/// <summary>
-/// Gates endorsements one user writes about another. The endorsement is signed
-/// and shown on the endorsed user's profile, so an allow that is too wide lets
-/// somebody rewrite a recommendation over another person's name.
-/// </summary>
+// The endorsement is signed and shown on the endorsed user's profile, so an allow that is too wide
+// lets somebody rewrite a recommendation over another person's name.
 public class UserEndorsementIntentionResolverShould
 {
     private readonly UserEndorsementIntentionResolver resolver = new();

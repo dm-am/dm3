@@ -20,7 +20,6 @@ public class CreateGlobalChatEventValidatorShould
         validator = new CreateGlobalChatEventValidator(dateTimeProvider);
     }
 
-    /// <summary>An event an hour from now, changed by the case in the one field it is about.</summary>
     private CreateGlobalChatEvent ValidEvent(Action<CreateGlobalChatEvent>? change = null)
     {
         var input = new CreateGlobalChatEvent { Title = "Valid title", StartsUtc = now.AddHours(1) };

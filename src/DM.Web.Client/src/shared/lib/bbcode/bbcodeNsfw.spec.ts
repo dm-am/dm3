@@ -51,10 +51,9 @@ describe("the nsfw block", () => {
     const container = render();
 
     expect(container.innerHTML).toBe(
-      '<a href="#" class="nsfw-head" data-swaptext="Скрыть шокирующий контент" ' +
-        'data-initialized="true" role="button" tabindex="0" aria-expanded="false">' +
-        "Показать шокирующий контент</a>" +
-        BODY,
+      `<a href="#" class="nsfw-head" data-swaptext="Скрыть шокирующий контент" ` +
+        `data-initialized="true" role="button" tabindex="0" aria-expanded="false">` +
+        `Показать шокирующий контент</a>${BODY}`,
     );
   });
 
@@ -64,10 +63,9 @@ describe("the nsfw block", () => {
     initNsfw(container);
 
     expect(container.innerHTML).toBe(
-      '<a href="#" class="nsfw-head" data-swaptext="Скрыть шокирующий контент" ' +
-        'role="button" tabindex="0" aria-expanded="false" data-initialized="true">' +
-        "Показать шокирующий контент</a>" +
-        BODY,
+      `<a href="#" class="nsfw-head" data-swaptext="Скрыть шокирующий контент" ` +
+        `role="button" tabindex="0" aria-expanded="false" data-initialized="true">` +
+        `Показать шокирующий контент</a>${BODY}`,
     );
   });
 

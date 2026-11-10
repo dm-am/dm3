@@ -38,10 +38,6 @@ internal class RatedPostRow
     public required string RoomTitle { get; init; }
 }
 
-/// <summary>
-/// The rated posts: the open posts of every visible game, with their rating, for
-/// the home-page widgets and the profile pages
-/// </summary>
 internal partial class PostRepository
 {
     /// <summary>
@@ -117,9 +113,6 @@ internal partial class PostRepository
         return (posts, totalCount);
     }
 
-    /// <summary>
-    /// The filters on who reviewed a post and when it was last reviewed.
-    /// </summary>
     private IQueryable<DbPost> WhereReviewed(IQueryable<DbPost> baseQuery, PostsQuery query)
     {
         // Reviewer filter — keep only posts which have at least one active
@@ -176,9 +169,6 @@ internal partial class PostRepository
         };
     }
 
-    /// <summary>
-    /// The post of one page row, with the room it was written in.
-    /// </summary>
     private static Post ToRatedPost(RatedPostRow row)
     {
         var post = row.Post;
@@ -196,9 +186,6 @@ internal partial class PostRepository
         return post;
     }
 
-    /// <summary>
-    /// The game of every post on the page, attached to the post's room.
-    /// </summary>
     private async Task AttachGames(Post[] posts, Guid viewerId)
     {
         // Batched game hydration — fetch the full GameRef-tier payload

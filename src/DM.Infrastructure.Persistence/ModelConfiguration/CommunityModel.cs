@@ -9,10 +9,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The community module of the model: endorsements, testimonials, the fundraising
-/// goal, the indexes of the statistics periods, awards, achievements and polls.
-/// </summary>
 internal static class CommunityModel
 {
     internal static void Configure(ModelBuilder modelBuilder)

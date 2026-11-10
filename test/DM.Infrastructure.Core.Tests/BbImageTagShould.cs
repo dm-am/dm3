@@ -6,17 +6,10 @@ using static DM.Infrastructure.Core.Tests.BbAudienceRender;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The [img] tag: the attributes every emitter agrees on, its size, where it
-/// renders, and the gate the global chat puts it behind (BBCODE_RENDERING.md,
-/// "Набор тегов" and "Картинки глобального чата").
-/// </summary>
 public class BbImageTagShould
 {
-    /// <summary>
-    /// Image markup is emitted by this renderer, the client renderer and the TipTap node; the client half is
-    /// bbcodePaste.spec.ts. The attribute set is frozen, not the byte order.
-    /// </summary>
+    // Image markup is emitted by this renderer, the client renderer and the TipTap node; the client
+    // half is bbcodePaste.spec.ts.
     [Theory]
     [InlineData("class=\"bb-image\"")]
     [InlineData("data-bb-tag=\"img\"")]
@@ -43,7 +36,6 @@ public class BbImageTagShould
         Comment($"[img={url}]").Should().Be($"[img={url}]");
     }
 
-    /// <summary>A size is a parameter, and one side is enough.</summary>
     [Theory]
     [InlineData("[img width=\"200\"]https://example.org/p.png[/img]", "data-bb-width=\"200\"")]
     [InlineData("[img height=\"100\"]https://example.org/p.png[/img]", "data-bb-height=\"100\"")]
@@ -56,9 +48,6 @@ public class BbImageTagShould
         html.Should().Contain("<img").And.Contain("example.org/p.png").And.Contain(expected);
     }
 
-    /// <summary>
-    /// Text that looks like an old placeholder is text.
-    /// </summary>
     [Theory]
     [InlineData("__IMG_0__")]
     [InlineData("I0")]
@@ -83,12 +72,8 @@ public class BbImageTagShould
             "<span class=\"private-message\" data-recipients=\"DungeonMaster, Assistant, __IMG_0__\">text</span>");
     }
 
-    /// <summary>
-    /// The global chat puts an image behind a spoiler marked as the gate, which
-    /// the client opens in the full layout and keeps closed in the compact one;
-    /// the rest embed it.
-    /// </summary>
-    /// <remarks>The image tag of each rendering decides the gate.</remarks>
+    // The global chat puts an image behind a spoiler marked as the gate, which the client opens in
+    // the full layout and keeps closed in the compact one
     [Theory]
     [InlineData(BbSurface.GlobalChatMessage, true)]
     [InlineData(BbSurface.GamePost, false)]
@@ -104,10 +89,8 @@ public class BbImageTagShould
         html.Contains("data-bb-gate=\"image\"").Should().Be(gated);
     }
 
-    /// <summary>
-    /// The gate the author wrote is not the reader's to open: a spoiler around an
-    /// image in the chat carries no mark, and the image inside it carries its own.
-    /// </summary>
+    // The gate the author wrote is not the reader's to open: a spoiler around an image in the chat
+    // carries no mark, and the image inside it carries its own.
     [Fact]
     public void MarkOnlyTheGateTheServerAdded()
     {

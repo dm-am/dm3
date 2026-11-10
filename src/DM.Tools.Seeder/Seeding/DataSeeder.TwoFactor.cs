@@ -12,7 +12,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>The account whose second factor is on.</summary>
     internal const string TwoFactorLogin = "Player.Three";
 
     /// <summary>
@@ -22,13 +21,8 @@ internal sealed partial class DataSeeder
     /// </summary>
     internal const string TwoFactorSecret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 
-    /// <summary>The account whose second factor an administrator took off.</summary>
     private const string FactorRemovedLogin = "TestUser";
 
-    /// <summary>
-    /// A second factor that is on, and one an administrator took off: the journals of the owner and
-    /// of the administrator hold what TwoFactorRemovalService.ClearForColleague writes into each.
-    /// </summary>
     /// <remarks>
     /// No recovery codes: their hash is the domain's own (RecoveryCodeFactory), so the account section
     /// says the codes have nearly run out and offers a new set.
@@ -68,15 +62,11 @@ internal sealed partial class DataSeeder
             $"Second factor on for {owner.Username}; taken off {removedFrom.Username} by {admin.Username}");
     }
 
-    /// <summary>
-    /// The owner's line of an administrator's removal, word for word as the service writes it.
-    /// </summary>
+    // The owner's line of an administrator's removal, word for word as the service writes it.
     internal static string RemovedByAdminOwnerDetails(string adminUsername) =>
         $"Администратор: {adminUsername}";
 
-    /// <summary>
-    /// The administrator's line of the same removal, word for word as the service writes it.
-    /// </summary>
+    // The administrator's line of the same removal, word for word as the service writes it.
     internal static string RemovedByAdminDetails(string username) =>
         $"Учетная запись: {username}, роль администратора: Администратор";
 

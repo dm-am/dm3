@@ -38,10 +38,6 @@ public class BbErasedBlockShould
         _parserProvider.GetForSurface(BbSurface.GamePost)
         .RenderText(bbCode, RenderContext.ForPlainText() with { Surface = BbSurface.GamePost });
 
-    /// <summary>
-    /// The link the rest of its content makes: its address, and its own text or
-    /// the word "ссылка".
-    /// </summary>
     [Theory]
     [InlineData("[link]https://example.com/[private]x[/private][/link]",
         "<a href=\"https://example.com/\" target=\"_blank\" rel=\"noopener\">ссылка</a>")]
@@ -95,10 +91,7 @@ public class BbErasedBlockShould
     public void GiveThePlainTextTheLinkTheRestOfItsContentMakes() =>
         PlainText("[link]https://example.com/[private]x[/private][/link]").Should().Be("https://example.com/");
 
-    /// <summary>
-    /// A post line by line: a bold tag around the block, a link around it, and a dash on either side.
-    /// </summary>
-    /// <remarks>The hyphens stay as typed: the erased block does not join them into a dash.</remarks>
+    // The hyphens stay as typed: the erased block does not join them into a dash.
     [Fact]
     public void ShowTheOwnersPostAsIfTheBlocksWereNotThere()
     {
@@ -117,9 +110,6 @@ public class BbErasedBlockShould
             "а-" + Opening + "x</span>-б");
     }
 
-    /// <summary>
-    /// Hidden text in the line, and who reads it after it, in the same line.
-    /// </summary>
     [Fact]
     public void ShowTheHiddenTextInTheLine()
     {
@@ -180,7 +170,6 @@ public class BbErasedBlockShould
         Post(bbCode, StrangerId).Should().Be(html);
     }
 
-    /// <summary>The author and the readers of the block keep every line, as they always did.</summary>
     [Fact]
     public void KeepTheLineForTheReadersOfTheBlock()
     {
@@ -188,7 +177,6 @@ public class BbErasedBlockShould
             "раз<br />" + Opening + "x</span><br />два");
     }
 
-    /// <summary>The plain text of the mail and the search drops the line the same way.</summary>
     [Fact]
     public void DropTheLineFromThePlainTextToo()
     {

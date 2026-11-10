@@ -5,10 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The moderation module of the model: the catalogue of tags the moderators keep,
-/// warnings and the conversations of tickets.
-/// </summary>
 internal static class ModerationModel
 {
     internal static void Configure(ModelBuilder modelBuilder, bool isPostgres)

@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useAuthStore } from "@/shared/stores";
-import type { User } from "@/shared/api/models/common";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import ChatSearchRow from "./ChatSearchRow.vue";
 
 vi.mock("@/features/message-search/api/messageSearchApi", () => ({
@@ -21,7 +21,7 @@ let observers = 0;
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  useAuthStore().user = { username: "kot" } as unknown as User;
+  useAuthStore().user = createMockUser("u-kot", "kot");
   observers = 0;
   vi.stubGlobal(
     "ResizeObserver",

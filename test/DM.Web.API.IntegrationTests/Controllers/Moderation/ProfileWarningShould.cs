@@ -10,33 +10,24 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// A warning on a profile: the profile as it stood when the warning was
-/// issued, in both logs.
-/// </summary>
 public class ProfileWarningShould : WarningControllerTestBase
 {
     public ProfileWarningShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// A warning on a profile shows the profile as it stood then, in both logs: the status, "О себе" rendered, and the
-    /// avatar since replaced.
-    /// </summary>
-    /// <remarks>The object is the warned user, so the row names no place and no address; the reason is rendered.</remarks>
+    // The object is the warned user, so the row names no place and no address; the reason is
+    // rendered.
     [Fact]
     public async Task ShowTheProfileAWarningWasIssuedForInBothLogs()
     {
         var warningId = LogId(0x71);
         var uploadId = Guid.NewGuid();
         var avatar = Avatar(uploadId, TestConstants.SecondUserId);
-        await SeedUpload(avatar);
-        await Seed(OnProfile(warningId, TestConstants.SecondUserId,
-            "Статус на момент выдачи", "[b]О себе[/b] на момент выдачи", uploadId,
-            text: "[b]Неприемлемый[/b] аватар"));
-
-        try
+        await WithPinnedPicture(avatar,
+            OnProfile(warningId, TestConstants.SecondUserId,
+                "Статус на момент выдачи", "[b]О себе[/b] на момент выдачи", uploadId,
+                text: "[b]Неприемлемый[/b] аватар"), async () =>
         {
             using var open = await ReadDocument(
                 await Client.GetAsync($"/v1/warnings?username={TestConstants.SecondUserLogin}"));
@@ -68,17 +59,10 @@ public class ProfileWarningShould : WarningControllerTestBase
             }
 
             RowOf(moderation, warningId).GetProperty("entityId").GetGuid().Should().Be(TestConstants.SecondUserId);
-        }
-        finally
-        {
-            await Unseed(warningId);
-            await UnseedUpload(uploadId);
-        }
+        });
     }
 
-    /// <summary>
-    /// The pinned avatar is kept from its owner, not from moderation.
-    /// </summary>
+    // The pinned avatar is kept from its owner, not from moderation.
     [Theory]
     [InlineData("still the avatar", true)]
     [InlineData("replaced by its owner", true)]
@@ -96,10 +80,8 @@ public class ProfileWarningShould : WarningControllerTestBase
                 deletedBy: TestConstants.SecondUserId),
             _ => Avatar(uploadId, TestConstants.SecondUserId, deletedBy: TestConstants.ModeratorUserId)
         };
-        await SeedUpload(avatar);
-        await Seed(OnProfile(warningId, TestConstants.SecondUserId, "Статус", null, uploadId));
-
-        try
+        await WithPinnedPicture(avatar,
+            OnProfile(warningId, TestConstants.SecondUserId, "Статус", null, uploadId), async () =>
         {
             using var document = await ReadDocument(
                 await Client.GetAsync($"/v1/warnings?username={TestConstants.SecondUserLogin}"));
@@ -109,18 +91,11 @@ public class ProfileWarningShould : WarningControllerTestBase
             profile.GetProperty("status").GetString().Should().Be("Статус",
                 "the status stays whatever became of the picture");
             profile.TryGetProperty("info", out _).Should().BeFalse("a profile without О себе gives none");
-        }
-        finally
-        {
-            await Unseed(warningId);
-            await UnseedUpload(uploadId);
-        }
+        });
     }
 
-    /// <summary>
-    /// Nothing of the profile of a removed account is given, in either log.
-    /// </summary>
-    /// <remarks>Today the read loses the row (RemovedAuthorRowsShould); the projection hides the profile on its own too.</remarks>
+    // Today the read loses the row (RemovedAuthorRowsShould); the projection hides the profile on
+    // its own too.
     [Fact]
     public async Task GiveNoProfileOfARemovedAccount()
     {
@@ -169,20 +144,14 @@ public class ProfileWarningShould : WarningControllerTestBase
         }
     }
 
-    /// <summary>
-    /// The upload row going away clears the column that pinned it, and the
-    /// warning stays.
-    /// </summary>
-    /// <remarks>The sweeper deletes the row once the grace period is over.</remarks>
+    // The sweeper deletes the row once the grace period is over.
     [Fact]
     public async Task ClearThePinWhenTheUploadIsGone()
     {
         var warningId = LogId(0x74);
         var uploadId = Guid.NewGuid();
-        await SeedUpload(Avatar(uploadId, TestConstants.SecondUserId, deletedBy: TestConstants.ModeratorUserId));
-        await Seed(OnProfile(warningId, TestConstants.SecondUserId, "Статус", null, uploadId));
-
-        try
+        await WithPinnedPicture(Avatar(uploadId, TestConstants.SecondUserId, deletedBy: TestConstants.ModeratorUserId),
+            OnProfile(warningId, TestConstants.SecondUserId, "Статус", null, uploadId), async () =>
         {
             await UnseedUpload(uploadId);
 
@@ -190,17 +159,11 @@ public class ProfileWarningShould : WarningControllerTestBase
             var stored = await db.Warnings.SingleAsync(w => w.WarningId == warningId);
             stored.ProfileAvatarUploadId.Should().BeNull();
             stored.ProfileStatusSnapshot.Should().Be("Статус", "the warning outlives its picture");
-        }
-        finally
-        {
-            await Unseed(warningId);
-            await UnseedUpload(uploadId);
-        }
+        });
     }
 
-    /// <summary>
-    /// A warning on a profile is on the warned user: the named identifier is not read, the profile copied at issue.
-    /// </summary>
+    // A warning on a profile is on the warned user: the named identifier is not read, the profile
+    // copied at issue.
     [Fact]
     public async Task CopyTheProfileOfTheWarnedUserWhicheverIdentifierTheRequestNamed()
     {

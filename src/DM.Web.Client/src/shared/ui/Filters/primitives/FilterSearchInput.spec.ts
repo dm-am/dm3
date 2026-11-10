@@ -7,14 +7,13 @@ import { mount } from "@vue/test-utils";
 import FilterSearchInput from "./FilterSearchInput.vue";
 
 describe("FilterSearchInput", () => {
-  const mountComponent = (props = {}) => {
-    return mount(FilterSearchInput, {
+  const mountComponent = (props = {}) =>
+    mount(FilterSearchInput, {
       props: {
         modelValue: "",
         ...props,
       },
     });
-  };
 
   describe("Basic Rendering", () => {
     it("renders input with placeholder", () => {

@@ -49,7 +49,7 @@ public static class PostAttachmentVisibility
         IPrivateBlockReading reading, IAuthorizationSubject? reader, Post post) =>
         HiddenFrom(reading, reader, post, post.Attachments.ToDictionary(a => a.Id, a => a.AddresseesJson));
 
-    /// <summary>Whether the mark of a file lets the reader see it; null is a file for everybody.</summary>
+    // Whether the mark of a file lets the reader see it; null is a file for everybody.
     private static bool ReadsMark(IAuthorizationSubject? reader, Post post, PrivateAddresseeList? addressees) =>
         addressees == null ||
         PrivateBlockReaders.Reads(

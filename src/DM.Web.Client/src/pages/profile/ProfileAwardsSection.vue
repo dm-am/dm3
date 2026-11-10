@@ -8,7 +8,7 @@ import { formatDate } from "@/shared/lib/utils/datetime";
 import { computed, onMounted, ref, watch } from "vue";
 import { achievementApi } from "@/entities/achievement";
 import { ContestType, type UserAward } from "@/shared/api/models/achievements";
-import { GameIcon } from "@/shared/ui/Icon";
+import GameIcon from "@/shared/ui/Icon/GameIcon.vue";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
@@ -19,12 +19,13 @@ import {
 } from "@/entities/achievement";
 import { toExternalHref, toInternalPath } from "@/shared/lib/utils/internalUrl";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import type { AchievementsBlockState } from "./achievementsTabState";
 
 const props = defineProps<{ username: string }>();
 
 /** Whether the section settled empty, for the tab's shared empty text. */
 const emit = defineEmits<{
-  state: [value: "loading" | "error" | "empty" | "content"];
+  state: [value: AchievementsBlockState];
 }>();
 
 const awards = ref<UserAward[]>([]);

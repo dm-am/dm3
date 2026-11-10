@@ -46,9 +46,7 @@ public class MessageIntentionResolverShould : UnitTestBase
         };
     }
 
-    /// <summary>
-    /// The window closes after its last minute: the minute itself still belongs to it.
-    /// </summary>
+    // The window closes after its last minute: the minute itself still belongs to it.
     [Theory]
     [InlineData(MessageIntention.Edit, EditTimeoutMinutes / 2, true)]
     [InlineData(MessageIntention.Edit, EditTimeoutMinutes, true)]
@@ -88,10 +86,8 @@ public class MessageIntentionResolverShould : UnitTestBase
         result.Should().BeTrue();
     }
 
-    /// <summary>
-    /// The global chat is the one chat moderated: a direct message, a group chat and the chat of a game room
-    /// are edited and deleted by their authors alone, whatever the rank of the reader.
-    /// </summary>
+    // The global chat is the one chat moderated: a direct message, a group chat and the chat of a
+    // game room are edited and deleted by their authors alone, whatever the rank of the reader.
     [Theory]
     [InlineData(ChatType.Direct, UserRole.Moderator, MessageIntention.Edit)]
     [InlineData(ChatType.Group, UserRole.SeniorModerator, MessageIntention.Delete)]

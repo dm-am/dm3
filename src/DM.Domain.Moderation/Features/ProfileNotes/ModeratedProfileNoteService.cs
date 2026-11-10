@@ -118,9 +118,6 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         await _noteRepository.Delete(noteId);
     }
 
-    /// <summary>
-    /// The note, refused as not found when it or the user it is about is gone.
-    /// </summary>
     private async Task<ModeratedProfileNote> GetExistingNote(Guid noteId)
     {
         var note = await _noteRepository.GetNote(noteId)
@@ -132,9 +129,6 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
         return note;
     }
 
-    /// <summary>
-    /// A note is changed by its author, or by a senior moderator.
-    /// </summary>
     private void ThrowIfNotOwn(ModeratedProfileNote note, string refusal)
     {
         var user = _identityProvider.Current.User;

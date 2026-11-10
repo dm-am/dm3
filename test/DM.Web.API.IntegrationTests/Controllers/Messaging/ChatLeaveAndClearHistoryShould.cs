@@ -11,27 +11,16 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 
-/// <summary>
-/// The "…" menu of a correspondence: a participant leaves a group, and clears the
-/// history of a conversation for himself while the others keep theirs.
-/// </summary>
-/// <remarks>
-/// Over HTTP: the cleared history is a filter in five queries. Each case makes its own people and conversations
-/// and takes the conversations back out.
-/// </remarks>
+// Over HTTP: the cleared history is a filter in five queries.
 public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
 {
-    /// <summary>A word only the messages of this suite carry, for the search.</summary>
+    // A word only the messages of this suite carry, for the search.
     private const string SearchWord = "забытоеслово";
 
     public ChatLeaveAndClearHistoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// A participant leaves a group: it goes out of his list and every read of
-    /// his, his unread count with it, and stays whole with the others.
-    /// </summary>
     [Fact]
     public async Task TakeAGroupOutOfTheLeaversReadsAndLeaveItWholeToTheOthers()
     {
@@ -77,10 +66,7 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A direct chat is not left: there would be nobody to stay in it. The flag
-    /// says so before the refusal does.
-    /// </summary>
+    // A direct chat is not left: there would be nobody to stay in it.
     [Fact]
     public async Task NotLeaveADirectChat()
     {
@@ -107,10 +93,8 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The global chat is read by everybody and belongs to nobody: there is no
-    /// participant to leave it or to keep a cleared history in it.
-    /// </summary>
+    // The global chat is read by everybody and belongs to nobody: there is no participant to leave
+    // it or to keep a cleared history in it.
     [Fact]
     public async Task NeitherLeaveNorClearTheGlobalChat()
     {
@@ -126,9 +110,6 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// Somebody else's conversation can be neither left nor cleared, by either address: not found. A guest is not let in.
-    /// </summary>
     [Fact]
     public async Task RefuseAStrangerToLeaveOrClearSomebodyElsesConversation()
     {
@@ -165,9 +146,6 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The history is cleared for the one who asked, on every read; the other keeps it, and later messages reach both.
-    /// </summary>
     [Fact]
     public async Task ClearTheHistoryForTheCallerAndKeepItForTheOther()
     {
@@ -293,7 +271,6 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         return (await db.Chats.Where(c => c.ChatId == chatId).Select(c => c.PublicId).SingleAsync())!;
     }
 
-    /// <summary>The conversations of the case, their messages, markers and links.</summary>
     private async Task DropAsync(IReadOnlyCollection<Guid> chats)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -305,7 +282,7 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         await db.Chats.Where(c => chats.Contains(c.ChatId)).ExecuteDeleteAsync();
     }
 
-    /// <summary>A request as the user; a guest sends none of the test headers.</summary>
+    // A request as the user; a guest sends none of the test headers.
     private Task<HttpResponseMessage> SendAsync(
         GeneralUser? user, HttpMethod method, string url, object? body = null)
     {
@@ -320,7 +297,6 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         return Client.SendAsync(request);
     }
 
-    /// <summary>A successful answer, read whole.</summary>
     private async Task<JsonElement> ReadAsync(
         GeneralUser user, HttpMethod method, string url, object? body = null)
     {

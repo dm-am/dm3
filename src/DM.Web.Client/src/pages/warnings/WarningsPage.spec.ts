@@ -5,9 +5,10 @@
 // The request is asserted with the markup: a page number nobody reads and a
 // page size from a literal look identical on screen.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ref, type Ref } from "vue";
-import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
-import * as vueRouter from "vue-router";
+import { ref } from "vue";
+import { flushPromises, enableAutoUnmount } from "@vue/test-utils";
+import type { Router } from "vue-router";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import WarningsPage from "./WarningsPage.vue";
 
 const getWarningLog = vi.hoisted(() => vi.fn());
@@ -23,24 +24,6 @@ vi.mock("@/entities/moderation", () => ({
     template: "<div class='skeleton-stub' />",
   },
 }));
-
-/** A ref, not a plain object: the page reads the query inside computeds. */
-vi.mock("vue-router", async () => {
-  const { shallowRef } = await import("vue");
-  const query = shallowRef<Record<string, string>>({});
-  return {
-    useRoute: () => ({
-      get query() {
-        return query.value;
-      },
-    }),
-    routeQuery: query,
-  };
-});
-
-const routeQuery = (
-  vueRouter as unknown as { routeQuery: Ref<Record<string, string>> }
-).routeQuery;
 
 // The reader's own page size, and a number no list on the site defaults to:
 // a page that reads a literal instead answers with the literal.
@@ -67,42 +50,35 @@ const page = (resources: unknown[], total = resources.length) => ({
   error: null,
 });
 
-// The address is shared by every mount in this file, so a page left standing
-// would refetch when the next test moves the query under it.
 enableAutoUnmount(afterEach);
 
-function render() {
-  return mount(WarningsPage, {
-    global: {
-      stubs: {
-        RouterLink: {
-          props: ["to"],
-          template:
-            "<a class='router-link' :data-to='JSON.stringify(to)'><slot /></a>",
-        },
-        Paging: {
-          props: ["paging"],
-          template: "<nav class='paging-stub' />",
-        },
-        ErrorState: {
-          props: ["message", "retry"],
-          template: "<div class='error-stub'>{{ message }}</div>",
-        },
+let router: Router;
+
+/** The log at `address`; the router of the last mount is `router`. */
+async function rendered(address = "/warnings") {
+  const page = await mountPage(WarningsPage, address, {
+    routes: [["warnings", "/warnings"]],
+    stubs: {
+      Paging: {
+        props: ["paging"],
+        template: "<nav class='paging-stub' />",
+      },
+      ErrorState: {
+        props: ["message", "retry"],
+        template: "<div class='error-stub'>{{ message }}</div>",
       },
     },
   });
+  router = page.router;
+  await flushPromises();
+  return page.wrapper;
 }
 
-async function rendered() {
-  const wrapper = render();
-  await flushPromises();
-  return wrapper;
-}
+const NARROWED = `/warnings?username=${encodeURIComponent("Нарушитель")}`;
 
 describe("the open warning log", () => {
   beforeEach(() => {
     getWarningLog.mockReset();
-    routeQuery.value = {};
   });
 
   it("draws a card per warning in force", async () => {
@@ -120,10 +96,9 @@ describe("the open warning log", () => {
   });
 
   it("asks for the page named in the address, sized by the reader", async () => {
-    routeQuery.value = { number: "3" };
     getWarningLog.mockResolvedValue(page([entry()]));
 
-    await rendered();
+    await rendered("/warnings?number=3");
 
     expect(getWarningLog).toHaveBeenCalledWith({
       username: undefined,
@@ -133,10 +108,9 @@ describe("the open warning log", () => {
   });
 
   it("narrows to one person, and says whose warnings these are", async () => {
-    routeQuery.value = { username: "Нарушитель" };
     getWarningLog.mockResolvedValue(page([entry()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(NARROWED);
 
     expect(getWarningLog).toHaveBeenCalledWith({
       username: "Нарушитель",
@@ -164,8 +138,7 @@ describe("the open warning log", () => {
       }),
     );
 
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await rendered();
     expect(wrapper.find(".skeleton-stub").exists()).toBe(true);
 
     release?.(page([entry()]));
@@ -187,27 +160,26 @@ describe("the open warning log", () => {
     getWarningLog.mockResolvedValue(page([]));
     expect((await rendered()).text()).toContain("Предупреждений пока нет");
 
-    routeQuery.value = { username: "Нарушитель" };
     getWarningLog.mockResolvedValue(page([]));
-    expect((await rendered()).text()).toContain(
+    expect((await rendered(NARROWED)).text()).toContain(
       "Предупреждений по заданным фильтрам не найдено",
     );
   });
 
   // The reader is told and offered the way back, filter kept.
   it("offers the first page when the number is past the end of a filled log", async () => {
-    routeQuery.value = { number: "9", username: "Нарушитель" };
     getWarningLog.mockResolvedValue(page([], 3));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${NARROWED}&number=9`);
 
     expect(wrapper.text()).toContain("На этой странице предупреждений нет");
     const back = wrapper.find(".warnings-empty a");
     expect(back.text()).toBe("Вернуться на первую страницу");
-    expect(JSON.parse(back.attributes("data-to") ?? "null")).toEqual({
-      name: "warnings",
-      query: { username: "Нарушитель" },
-    });
+    expect(back.attributes("href")).toBe(NARROWED);
+
+    await back.trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.fullPath).toBe(NARROWED);
   });
 
   // A second click of the paging control is enough to put two pages on the wire.
@@ -220,10 +192,9 @@ describe("the open warning log", () => {
         }),
     );
 
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await rendered();
 
-    routeQuery.value = { number: "2" };
+    await router.push("/warnings?number=2");
     await flushPromises();
 
     answers.get(PAGE_SIZE)?.(page([entry({ id: "w-2", reason: "Флуд" })]));

@@ -18,9 +18,6 @@ public class GlobalChatEventParticipant
     [Key]
     public Guid GlobalChatEventParticipantId { get; set; }
 
-    /// <summary>
-    /// Event identifier
-    /// </summary>
     public Guid GlobalChatEventId { get; set; }
 
     /// <summary>

@@ -8,11 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A domain assembly names no infrastructure: not the database driver, not the
-/// document store, not the broker client, not the logging library, not the web
-/// framework, not the persistence project.
-/// </summary>
 /// <remarks>
 /// Asserted against assembly references: a type reached through an alias leaves nothing in the file.
 /// The DI abstractions are left out: each module composes its own registrations.
@@ -84,17 +79,12 @@ public class DomainPurityShould
             "or ships them, see the class remarks for what this closes");
     }
 
-    /// <summary>
-    /// Operations of a store, which no contract of the domain declares.
-    /// </summary>
-    /// <remarks>A repository offering them spreads one unit of work across contracts the retry strategy does not wrap.</remarks>
+    // A repository offering them spreads one unit of work across contracts the retry strategy does
+    // not wrap.
     private static readonly string[] StoragePrimitives =
         ["SaveChanges", "BeginTransaction", "CommitTransaction", "RollbackTransaction", "Flush"];
 
-    /// <summary>
-    /// A repository is asked for an outcome, not for a step of a transaction.
-    /// </summary>
-    /// <remarks>A bare SaveChanges commits whatever another repository left tracked on the shared context.</remarks>
+    // A bare SaveChanges commits whatever another repository left tracked on the shared context.
     [Fact]
     public void AskForOutcomesRatherThanForStepsOfATransaction()
     {

@@ -28,9 +28,6 @@ public class Board
 
     public int CommentsCount { get; set; }
 
-    /// <summary>
-    /// Topics of the board that have unread comments
-    /// </summary>
     public int UnreadTopicsCount { get; set; }
 
     /// <summary>
@@ -40,9 +37,6 @@ public class Board
 
     public BoardLastComment? LastComment { get; set; }
 
-    /// <summary>
-    /// Last created topic in the board
-    /// </summary>
     public BoardLastTopic? LastTopic { get; set; }
 }
 

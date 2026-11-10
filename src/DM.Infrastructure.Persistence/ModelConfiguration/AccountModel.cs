@@ -8,10 +8,6 @@ using SystemUser = DM.Domain.Core.Identity.SystemUser;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The account module of the model: the user row and the system user, tokens,
-/// registration, signing in, settings, the second factor and the security log.
-/// </summary>
 internal static class AccountModel
 {
     internal static void Configure(ModelBuilder modelBuilder, bool isPostgres)

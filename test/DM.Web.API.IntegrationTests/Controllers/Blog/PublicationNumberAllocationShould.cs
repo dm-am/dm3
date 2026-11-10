@@ -10,10 +10,6 @@ using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 
-/// <summary>
-/// A publication gets its number within the blog when it is created, the way a
-/// topic gets its number within the board.
-/// </summary>
 /// <remarks>MAX+1 is an allocation only while the blog row is held; the unique index on (BlogId, PublicationNumber) holds whoever writes.</remarks>
 public class PublicationNumberAllocationShould : IntegrationTestBase
 {
@@ -41,9 +37,6 @@ public class PublicationNumberAllocationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A removed publication keeps its number, so the next one does not take it.
-    /// </summary>
     [Fact]
     public async Task NotHandOutTheNumberOfARemovedPublication()
     {

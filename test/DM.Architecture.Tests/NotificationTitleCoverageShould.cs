@@ -22,15 +22,12 @@ namespace DM.Architecture.Tests;
 public class NotificationTitleCoverageShould
 {
 
-    /// <summary>The generators, whose sources carry the renames.</summary>
     private const string NotifiersDirectory =
         "src/DM.Workers.NotificationDispatcher/Notifiers";
 
-    /// <summary>An outgoing event type assigned inside a CreateNotification.</summary>
     private static readonly Regex RenamesTheEvent = new(
         @"EventType\s*=\s*EventType\.(\w+)", RegexOptions.Compiled);
 
-    /// <summary>The event a generator declares it answers.</summary>
     private static readonly Regex AnswersTheEvent = new(
         @"EventType\s+EventType\s*=>\s*EventType\.(\w+)", RegexOptions.Compiled);
 
@@ -55,11 +52,8 @@ public class NotificationTitleCoverageShould
                 "that something happened, and the letter never says what");
     }
 
-    /// <summary>
-    /// Every event a generator can produce is either let out or deliberately
-    /// kept in.
-    /// </summary>
-    /// <remarks>An event absent from the table is refused by omission; staying in the application is decided below.</remarks>
+    // An event absent from the table is refused by omission; staying in the application is decided
+    // below.
     [Fact]
     public void SortEveryEventANotificationCanCarry()
     {
@@ -107,10 +101,6 @@ public class NotificationTitleCoverageShould
         return carried;
     }
 
-    /// <summary>
-    /// Events a generator answers and then renames away, so no notification ever
-    /// carries them.
-    /// </summary>
     private static IReadOnlyCollection<EventType> TriggersOnly()
     {
         var sources = Directory.GetFiles(
@@ -137,10 +127,6 @@ public class NotificationTitleCoverageShould
         return triggers;
     }
 
-    /// <summary>
-    /// Every event a notification can carry out: the ones a generator answers and
-    /// the ones a generator renames its notification to.
-    /// </summary>
     private static IReadOnlyCollection<EventType> SendableEvents()
     {
         var sendable = new SortedSet<EventType>(AnsweredEvents());

@@ -1,18 +1,13 @@
 <script setup lang="ts">
 // Drawn here, never by an image service: the value is a second factor's secret. uqr is a lazy chunk.
-import { computed, ref, watch } from "vue";
+import { ref, watch } from "vue";
 
-const props = withDefaults(
-  defineProps<{
-    /** What the square encodes. */
-    value: string;
-    /** Name of the picture for a screen reader. */
-    label: string;
-    /** Side of the drawn square, in pixels. */
-    size?: number;
-  }>(),
-  { size: 220 },
-);
+const props = defineProps<{
+  /** What the square encodes. */
+  value: string;
+  /** Name of the picture for a screen reader. */
+  label: string;
+}>();
 
 /** Level M rather than the default L: the margin buys back a bad camera and a glare. */
 const ERROR_CORRECTION = "M" as const;
@@ -26,10 +21,10 @@ const modules = ref(0);
 const path = ref("");
 const failed = ref(false);
 
-const boxStyle = computed(() => ({
-  width: `${props.size}px`,
-  height: `${props.size}px`,
-}));
+/** Side of the drawn square, in pixels. */
+const SIZE = 220;
+
+const boxStyle = { width: `${SIZE}px`, height: `${SIZE}px` };
 
 async function draw(value: string) {
   path.value = "";
@@ -48,13 +43,11 @@ async function draw(value: string) {
     // Raced by a later value: writing this one over it would show the old secret.
     if (value !== props.value) return;
 
-    const segments: string[] = [];
-    for (let row = 0; row < result.size; row++) {
-      for (let column = 0; column < result.size; column++) {
-        if (result.data[row][column])
-          segments.push(`M${column},${row}h1v1h-1z`);
-      }
-    }
+    const segments = result.data.flatMap((cells, row) =>
+      cells.flatMap((dark, column) =>
+        dark ? [`M${column},${row}h1v1h-1z`] : [],
+      ),
+    );
 
     modules.value = result.size;
     path.value = segments.join("");

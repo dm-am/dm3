@@ -11,10 +11,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The public id is encoded from a serial the database generates, and the rubric order is a batch of row updates,
-/// so this runs against the container Postgres.
-/// </summary>
+// The public id is encoded from a serial the database generates, and the rubric order is a batch of
+// row updates, so this runs against the container Postgres.
 public class BlogRepositoryShould : IntegrationTestBase
 {
     public BlogRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -93,10 +91,8 @@ public class BlogRepositoryShould : IntegrationTestBase
         order.Should().Equal(third, second, first);
     }
 
-    /// <summary>
-    /// A single-blog read knows whether the caller is subscribed to it.
-    /// </summary>
-    /// <remarks>IsViewerSubscriber is the reader role the ViewDraft rule is decided on, as on the single-game read.</remarks>
+    // IsViewerSubscriber is the reader role the ViewDraft rule is decided on, as on the single-game
+    // read.
     [Fact]
     public async Task KnowTheViewerIsSubscribedOnASingleBlogRead()
     {
@@ -138,10 +134,8 @@ public class BlogRepositoryShould : IntegrationTestBase
         byAddress!.IsViewerSubscriber.Should().BeTrue();
     }
 
-    /// <summary>
-    /// A fresh author per test: the fixture's database is shared, so a fixed id
-    /// would make two tests fight over the same row.
-    /// </summary>
+    // A fresh author per test: the fixture's database is shared, so a fixed id would make two tests
+    // fight over the same row.
     private static async Task<Guid> AddAuthorAsync(DmDbContext dbContext)
     {
         var authorId = Guid.NewGuid();

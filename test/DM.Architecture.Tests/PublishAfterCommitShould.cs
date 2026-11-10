@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Nothing is announced before the state it announces is durable.
-/// </summary>
 /// <remarks>
 /// Consumers send letters that cannot be taken back, and SendAsync saves the scoped context it shares
 /// with the caller, so it comes after the domain commit. Asserted on the text: the order of two awaits.
@@ -17,13 +14,8 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class PublishAfterCommitShould
 {
-    /// <summary>Commit of everything the change tracker holds.</summary>
     private const string Commit = "SaveChangesAsync(";
 
-    /// <summary>
-    /// Every way a repository here makes a write durable: the change tracker, the set-based operations and
-    /// raw SQL, as in DurableWritesShould.
-    /// </summary>
     private static readonly string[] DurableWrite =
     [
         Commit,
@@ -33,13 +25,8 @@ public class PublishAfterCommitShould
         "ExecuteSqlInterpolatedAsync(",
     ];
 
-    /// <summary>Publication of a domain event, as every call site spells it.</summary>
     private const string Publish = "SendAsync(EventType.";
 
-    /// <summary>
-    /// The pairs that split the write from the announcement: the processor that
-    /// publishes, and the repository call it has to get its answer from first.
-    /// </summary>
     /// <remarks>A list: which call is the claim cannot be derived from the text. The rule below holds it to the tree.</remarks>
     private static readonly (string Processor, string CommittingCall, string Repository)[] ClaimThenAnnounce =
     [
@@ -125,10 +112,7 @@ public class PublishAfterCommitShould
         }
     }
 
-    /// <summary>
-    /// Every processor that announces is under one of the two rules above.
-    /// </summary>
-    /// <remarks>The first rule's set is empty today, so coverage is asserted from the other end.</remarks>
+    // The first rule's set is empty today, so coverage is asserted from the other end.
     [Fact]
     public void CoverEveryProcessorThatAnnounces()
     {
@@ -154,7 +138,6 @@ public class PublishAfterCommitShould
                 "call handed it, and the order of those two is what the pair list checks");
     }
 
-    /// <summary>The same text with every catch block cut out of it.</summary>
     private static string WithoutCatchBlocks(string body)
     {
         while (true)
@@ -176,7 +159,6 @@ public class PublishAfterCommitShould
         }
     }
 
-    /// <summary>The body of the method whose signature holds <paramref name="at" />.</summary>
     private static string BodyAt(string text, int at)
     {
         var open = text.IndexOf('{', at);

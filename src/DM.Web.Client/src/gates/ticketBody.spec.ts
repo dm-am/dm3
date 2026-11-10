@@ -15,10 +15,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   enableAutoUnmount,
   flushPromises,
-  mount,
-  RouterLinkStub,
+  type VueWrapper,
 } from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import {
   ticketApi,
   type TicketComment,
@@ -32,22 +31,6 @@ import MyTicketPage from "@/pages/personal/MyTicketPage.vue";
 import TicketTrackPage from "@/pages/support/TicketTrackPage.vue";
 
 enableAutoUnmount(afterEach);
-
-const { route } = vi.hoisted(() => ({
-  route: {
-    query: {} as Record<string, string>,
-    params: {} as Record<string, string>,
-    hash: "",
-  },
-}));
-vi.mock("vue-router", () => ({
-  useRoute: () => route,
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    resolve: () => ({ href: "/support/track#token=T-1" }),
-  }),
-}));
 
 // A heavy tiptap component; the form under an open conversation holds one.
 vi.mock("@/shared/ui/BBCodeEditor", () => ({
@@ -109,29 +92,37 @@ const tracked: TrackedTicket = {
   canComment: true,
 };
 
-const global = {
-  plugins: [createPinia()],
-  stubs: { RouterLink: RouterLinkStub, PageTitle: true },
-};
+/** The pages that read a ticket and every address they link to. */
+const routes: Address[] = [
+  ["moderation-tickets", "/moderation/tickets"],
+  ["moderation-ticket", "/moderation/tickets/:ticketId"],
+  ["my-tickets", "/my-tickets"],
+  ["my-ticket", "/my-tickets/:ticketId"],
+  ["support", "/support"],
+  ["support-track", "/support/track"],
+  ["profile", "/users/:username"],
+  ["received-reviews", "/users/:username/received-reviews"],
+  ["account", "/account"],
+  ["rules", "/rules"],
+];
+
+const options = { routes, stubs: { PageTitle: true } };
 
 /** The body as a reader sees it: bold where it was made so, no brackets. */
-function expectBodyRendered(wrapper: ReturnType<typeof mount>) {
+function expectBodyRendered(wrapper: VueWrapper) {
   expect(wrapper.text()).toContain("Не открывается страница");
   expect(wrapper.text()).not.toContain("[b]");
   expect(wrapper.find(".ticket-body strong").text()).toBe("страница");
 }
 
 /** The answer of moderation, a comment of the conversation, rendered. */
-function expectConversationRendered(wrapper: ReturnType<typeof mount>) {
+function expectConversationRendered(wrapper: VueWrapper) {
   expect(wrapper.text()).toContain("Исправили загрузку");
   expect(wrapper.find(".comment-text em").text()).toBe("загрузку");
 }
 
 describe("a ticket read back", () => {
   beforeEach(() => {
-    route.query = {};
-    route.params = {};
-    route.hash = "";
     localStorage.clear();
   });
 
@@ -144,9 +135,9 @@ describe("a ticket read back", () => {
       data: { resources: [ticket] },
       error: null,
     } as never);
-    const wrapper = mount(TicketList, {
+    const { wrapper } = await mountPage(TicketList, "/moderation/tickets", {
+      ...options,
       props: { subtypes: ["Bug"], emptyText: "Обращений пока нет" },
-      global,
     });
     await flushPromises();
 
@@ -154,12 +145,15 @@ describe("a ticket read back", () => {
   });
 
   it("is rendered on a moderator's page of the ticket", async () => {
-    route.params = { ticketId: "t-1" };
     vi.spyOn(ticketApi, "getTicket").mockResolvedValue({
       data: { resource: ticket },
       error: null,
     } as never);
-    const wrapper = mount(ModerationTicketPage, { global });
+    const { wrapper } = await mountPage(
+      ModerationTicketPage,
+      "/moderation/tickets/t-1",
+      options,
+    );
     await flushPromises();
 
     expectBodyRendered(wrapper);
@@ -171,19 +165,22 @@ describe("a ticket read back", () => {
       data: { resources: [ticket] },
       error: null,
     } as never);
-    const wrapper = mount(MyTicketsPage, { global });
+    const { wrapper } = await mountPage(MyTicketsPage, "/my-tickets", options);
     await flushPromises();
 
     expectBodyRendered(wrapper);
   });
 
   it("is rendered on the author's page of the ticket", async () => {
-    route.params = { ticketId: "t-1" };
     vi.spyOn(ticketApi, "getTicket").mockResolvedValue({
       data: { resource: ticket },
       error: null,
     } as never);
-    const wrapper = mount(MyTicketPage, { global });
+    const { wrapper } = await mountPage(
+      MyTicketPage,
+      "/my-tickets/t-1",
+      options,
+    );
     await flushPromises();
 
     expectBodyRendered(wrapper);
@@ -191,12 +188,15 @@ describe("a ticket read back", () => {
   });
 
   it("is rendered on the guest's tracking page", async () => {
-    route.hash = "#token=T-1";
     vi.spyOn(ticketApi, "trackTicket").mockResolvedValue({
       data: { resource: tracked },
       error: null,
     } as never);
-    const wrapper = mount(TicketTrackPage, { global });
+    const { wrapper } = await mountPage(
+      TicketTrackPage,
+      "/support/track#token=T-1",
+      options,
+    );
     await flushPromises();
 
     expectBodyRendered(wrapper);

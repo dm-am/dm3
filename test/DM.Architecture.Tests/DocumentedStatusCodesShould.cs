@@ -9,36 +9,22 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// An action describes exactly the status codes its attributes declare.
-/// </summary>
 /// <remarks>
 /// Swashbuckle takes the code from ProducesResponseType and the sentence from the XML comment.
 /// Textual, line by line: an attribute split across lines fails this.
 /// </remarks>
 public class DocumentedStatusCodesShould
 {
-    /// <summary>A code the XML documentation of an action describes.</summary>
     private static readonly Regex Described = new(
         @"<response code=""(\d{3})"">", RegexOptions.Compiled);
 
-    /// <summary>A code the published schema will carry.</summary>
     private static readonly Regex Declared = new(
         @"ProducesResponseType.*?Status(\d{3})", RegexOptions.Compiled);
 
-    /// <summary>
-    /// The line that closes a block of documentation and attributes: the member
-    /// they belong to.
-    /// </summary>
     private static readonly Regex Member = new(
         @"^\s*(?:public|private|protected|internal)\s", RegexOptions.Compiled);
 
 
-    /// <summary>
-    /// Every block of documentation and attributes in a controller that names a
-    /// code, closed by its member: the line the block starts on, the codes it
-    /// describes and the codes it declares.
-    /// </summary>
     private static IEnumerable<(int Start, IReadOnlySet<string> Described, IReadOnlySet<string> Declared)>
         Actions(string[] lines)
     {

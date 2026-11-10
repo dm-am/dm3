@@ -8,23 +8,16 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A publisher does not depend on somebody else having consumed first.
-/// </summary>
 /// <remarks>
 /// Without a declaration the exchange exists only once a consumer declared it. Asserted on the
 /// sources: the parameters are built behind a live broker.
 /// </remarks>
 public class PublishedExchangeShould
 {
-    /// <summary>How every Rabbit producer in the solution names its exchange.</summary>
     private static readonly Regex Publishes = new(
         @"new DmProducerParameters\(\s*([\w.]+)", RegexOptions.Compiled);
 
-    /// <summary>
-    /// How a host declares what it publishes to. The leading dot is what tells a
-    /// call from the declaration of the extension method itself.
-    /// </summary>
+    // The leading dot is what tells a call from the declaration of the extension method itself.
     private static readonly Regex Declares = new(
         @"\.AddDmPublishedExchanges\(([^;]*?)\)\s*;", RegexOptions.Compiled | RegexOptions.Singleline);
 
@@ -54,10 +47,6 @@ public class PublishedExchangeShould
             "its producer, and the next reader takes the list for the answer");
     }
 
-    /// <summary>
-    /// Waiting for the broker to take the message is asked for in exactly two
-    /// places, each for its own reason, and nowhere else.
-    /// </summary>
     /// <remarks>
     /// The letter owes the reader a refusal, and the relay's mark must follow the confirm. A third producer
     /// in a request would put every write behind the broker.

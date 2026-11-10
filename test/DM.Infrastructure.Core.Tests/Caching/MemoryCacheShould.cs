@@ -8,10 +8,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Caching;
 
-/// <summary>
-/// The cache says how much of what it is asked for it already had.
-/// </summary>
-/// <remarks>A cache nothing hits answers every read like a working one, so its hit rate is measured.</remarks>
+// A cache nothing hits answers every read like a working one, so its hit rate is measured.
 public class MemoryCacheShould
 {
     [Fact]
@@ -45,7 +42,7 @@ public class MemoryCacheShould
             "a label carrying the backtick of a generic is a label nobody selects on by hand");
     }
 
-    /// <summary>The cache under test, over a real store rather than a stand-in.</summary>
+    // The cache under test, over a real store rather than a stand-in.
     private static DM.Infrastructure.Core.Caching.MemoryCache Cache() =>
         new(new Microsoft.Extensions.Caching.Memory.MemoryCache(new MemoryCacheOptions()));
 }

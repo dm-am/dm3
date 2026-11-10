@@ -15,11 +15,6 @@ using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAt
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// Who may open a game that is waiting on a premoderation verdict, end to end:
-/// the SQL scope, the read intention and the controller, which is the only place
-/// the three can be seen answering as one.
-/// </summary>
 /// <remarks>
 /// A game in AwaitingEdits has no curator recorded, so the rank arm opens exactly these games; a private draft
 /// and a removed game are asserted beside them.
@@ -79,10 +74,8 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// Playing somebody else's game is a role in that game and a claim about no
-    /// other: the reader is a stranger here and the premoderated game stays shut.
-    /// </summary>
+    // Playing somebody else's game is a role in that game and a claim about no other: the reader is
+    // a stranger here and the premoderated game stays shut.
     [Fact]
     public async Task HideAPremoderatedGameFromAPlayerOfAnotherGame()
     {
@@ -93,9 +86,7 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// The master is admitted by their own role: the arm adds to the scope.
-    /// </summary>
+    // The master is admitted by their own role: the arm adds to the scope.
     [Fact]
     public async Task KeepAPremoderatedGameOpenToItsOwnMaster()
     {
@@ -106,9 +97,8 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// A private draft is hidden by its author, and the rank keyed on the premoderation status does not reach it.
-    /// </summary>
+    // A private draft is hidden by its author, and the rank keyed on the premoderation status does
+    // not reach it.
     [Theory]
     [InlineData(UserRole.Mentor)]
     [InlineData(UserRole.Moderator)]
@@ -121,10 +111,8 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// A removed game is gone whatever verdict it was waiting on: the soft-delete
-    /// flag guards the whole scope and the rank does not reopen it.
-    /// </summary>
+    // A removed game is gone whatever verdict it was waiting on: the soft-delete flag guards the
+    // whole scope and the rank does not reopen it.
     [Theory]
     [InlineData(UserRole.Mentor)]
     [InlineData(UserRole.Admin)]
@@ -142,7 +130,6 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
     private Task<HttpResponseMessage> GetDetails(string publicId, GeneralUser reader) =>
         Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, Url(publicId), reader));
 
-    /// <summary>A reader holding the given site-wide role and no role in any game.</summary>
     private async Task<GeneralUser> UserAsync(UserRole role)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -160,9 +147,6 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
         string PrivateDraftPublicId,
         string RemovedPublicId);
 
-    /// <summary>
-    /// Four games of one master, differing in what hides them, plus a player of an unrelated game; fresh identifiers.
-    /// </summary>
     private async Task<SeededGames> SeedAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -219,21 +203,8 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
             removed.PublicId!);
     }
 
-    private static DbUser AddUser(DmDbContext dbContext, string prefix)
-    {
-        var userId = Guid.NewGuid();
-        var user = new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id pads the prefix.
-            Username = $"{prefix}{userId:N}"[..20],
-            Email = $"{userId:N}@premoderation.example",
-            PasswordHash = "hash",
-            Salt = "salt"
-        };
-        dbContext.Users.Add(user);
-        return user;
-    }
+    private static DbUser AddUser(DmDbContext dbContext, string prefix) =>
+        UserRows.Add(dbContext, prefix, "premoderation.example");
 
     private static DbGame AddGame(
         DmDbContext dbContext,

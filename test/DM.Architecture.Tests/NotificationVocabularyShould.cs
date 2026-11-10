@@ -10,10 +10,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// One event is called one thing, in the list and in the letter about it, and the
-/// client calls it nothing at all.
-/// </summary>
 /// <remarks>
 /// The server titles the list row from the table the letter is written from, and the client shows it.
 /// Held here: no client source gives a word to an event, and the client spells an event the way the
@@ -49,15 +45,13 @@ public class NotificationVocabularyShould
     private static readonly Regex WordedRow = new(
         @"^\s*[""']?(\w+)[""']?\s*:\s*[""'`]\s*[А-Яа-я]", RegexOptions.Compiled | RegexOptions.Multiline);
 
-    /// <summary>Any TypeScript enum: its name and its body.</summary>
     private static readonly Regex TypeScriptEnum = new(
         @"enum\s+(\w+)\s*\{([^}]*)\}", RegexOptions.Compiled);
 
-    /// <summary>One member of an enum body: the name and the value written for it.</summary>
     private static readonly Regex EnumMember = new(
         @"^\s*(\w+)\s*=\s*([^,\r\n]+?),?\s*$", RegexOptions.Compiled | RegexOptions.Multiline);
 
-    /// <summary>A line comment, dropped so a commented-out member is not read as one.</summary>
+    // A line comment, dropped so a commented-out member is not read as one.
     private static readonly Regex LineComment = new(@"//[^\r\n]*", RegexOptions.Compiled);
 
     [Fact]
@@ -91,11 +85,7 @@ public class NotificationVocabularyShould
             "how one event came to have two names and 35 events none");
     }
 
-    /// <summary>
-    /// The client enum carries names now, not numbers, and every name is one the
-    /// server answers to.
-    /// </summary>
-    /// <remarks>A name either exists on the server or it does not; numbers drifted.</remarks>
+    // A name either exists on the server or it does not; numbers drifted.
     [Fact]
     public void SpellAnEventTheWayTheServerSpellsIt()
     {
@@ -124,10 +114,7 @@ public class NotificationVocabularyShould
             "server never sends, matches nothing that ever arrives");
     }
 
-    /// <summary>
-    /// The vocabulary is written down once on the client.
-    /// </summary>
-    /// <remarks>By content, not by file name: an enum with three or more server events is the vocabulary.</remarks>
+    // By content, not by file name: an enum with three or more server events is the vocabulary.
     [Fact]
     public void SpellTheServerEventsInOnePlaceOnly()
     {
@@ -167,7 +154,6 @@ public class NotificationVocabularyShould
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-    /// <summary>Members of the named enum in the given source.</summary>
     private static List<(string Name, string Value)> MembersOf(string source, string name)
     {
         foreach (Match declaration in TypeScriptEnum.Matches(source))
@@ -181,7 +167,6 @@ public class NotificationVocabularyShould
         throw new InvalidOperationException($"the client declares no enum {name}");
     }
 
-    /// <summary>Members of one enum body: the name and the value written for it.</summary>
     private static List<(string Name, string Value)> Members(string body)
     {
         var members = new List<(string, string)>();

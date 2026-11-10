@@ -41,7 +41,6 @@ public readonly record struct UnreadMarker
         Readers = readers;
     }
 
-    /// <summary>Entity the marker counts unread entries of.</summary>
     public Guid EntityId { get; }
 
     /// <summary>Whatever answers "all of mine" for this entity.</summary>

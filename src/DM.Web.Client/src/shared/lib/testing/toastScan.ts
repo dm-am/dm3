@@ -143,7 +143,7 @@ export const sites = (source: string, kinds = TOAST_KINDS): Site[] => {
   for (const [name, kind] of callers(source, kinds)) {
     // Built by concatenation: a template literal cannot hold \w or \s.
     const call = new RegExp(
-      "(?:^|[^.\\w])" + name.replace(/[.()]/g, "\\$&") + "\\s*\\(\\s*",
+      `(?:^|[^.\\w])${name.replace(/[.()]/g, "\\$&")}\\s*\\(\\s*`,
       "gs",
     );
     for (const match of source.matchAll(call)) {
@@ -191,7 +191,7 @@ const CONSTANT = /^[A-Z][A-Z0-9_]*$/;
 
 /** A name as it reads in a template: loadErrorText as load-error-text. */
 const kebab = (name: string): string =>
-  name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()).replace(/^-/, "");
+  name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`).replace(/^-/, "");
 
 /**
  * An expression without the conditions of its choices (`on` in `on ? A : B`),
@@ -261,7 +261,7 @@ export const scanOf = (tree: Tree) => {
     const source = read(file);
 
     const own = new RegExp(
-      "(?:^|[^.\\w$])const\\s+" + name.replace(/\$/g, "\\$") + "\\b[^=]*=\\s*",
+      `(?:^|[^.\\w$])const\\s+${name.replace(/\$/g, "\\$")}\\b[^=]*=\\s*`,
     ).exec(source);
     if (own)
       return {

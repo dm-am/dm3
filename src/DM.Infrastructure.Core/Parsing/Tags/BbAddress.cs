@@ -5,9 +5,6 @@ using System.Net.Sockets;
 
 namespace DM.Infrastructure.Core.Parsing.Tags;
 
-/// <summary>
-/// The address an image or a link may point at.
-/// </summary>
 internal static class BbAddress
 {
     /// <summary>
@@ -15,7 +12,6 @@ internal static class BbAddress
     /// </summary>
     private static readonly string[] BlockedHostNames = ["localhost"];
 
-    /// <summary>Allowed URL schemes for links and images.</summary>
     private static readonly string[] AllowedSchemes = ["http://", "https://"];
 
     /// <summary>

@@ -8,10 +8,8 @@ using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 
 namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 
-/// <summary>
-/// The storage filter and ModuleVisibility.IsPubliclyVisible answer one question twice, because EF
-/// translates expression trees and not method calls; every combination is compared.
-/// </summary>
+// The storage filter and ModuleVisibility.IsPubliclyVisible answer one question twice, because EF
+// translates expression trees and not method calls; every combination is compared.
 public class BlogAccessibilityFiltersShould
 {
     [Theory]

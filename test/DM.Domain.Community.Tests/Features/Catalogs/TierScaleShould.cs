@@ -16,14 +16,8 @@ using SeededAwardType = DM.Infrastructure.Persistence.Entities.Community.AwardTy
 
 namespace DM.Domain.Community.Tests.Features.Catalogs;
 
-/// <summary>
-/// Awards and achievements read one tier scale: the validators accept every tier
-/// the seeded catalogs ship, and an achievement chain climbs the metals in order.
-/// </summary>
-/// <remarks>
-/// Read out of the seed, so a tier added to a catalog past the scale fails here,
-/// and so does a chain whose metals no longer follow its thresholds.
-/// </remarks>
+// Read out of the seed, so a tier added to a catalog past the scale fails here, and so does a chain
+// whose metals no longer follow its thresholds.
 public class TierScaleShould
 {
     private static IReadOnlyList<IDictionary<string, object?>> SeedRows<TEntity>()

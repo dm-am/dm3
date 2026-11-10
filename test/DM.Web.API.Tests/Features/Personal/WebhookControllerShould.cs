@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -27,18 +28,20 @@ namespace DM.Web.API.Tests.Features.Personal;
 
 /// <summary>
 /// The Discord branch checks an Ed25519 signature over timestamp and raw body: no key closes the endpoint,
-/// a bad signature answers 401, which Discord's validation requires. Telegram keeps its secret header and 403.
+/// a bad signature answers 401, which Discord's validation requires, and so does a signed timestamp far from
+/// the server's clock. Telegram keeps its secret header and 403.
 /// </summary>
 public class WebhookControllerShould : UnitTestBase
 {
-    /// <summary>
-    /// A key pair playing the Discord application: the test signs the way
-    /// Discord does and configures the controller with the public half.
-    /// </summary>
+    // A key pair playing the Discord application: the test signs the way Discord does and
+    // configures the controller with the public half.
     private static readonly Ed25519PrivateKeyParameters PrivateKey = new(new SecureRandom());
 
     private static readonly string PublicKeyHex =
         Convert.ToHexString(PrivateKey.GeneratePublicKey().GetEncoded());
+
+    // The moment the default timestamp of SignedHeaders names.
+    private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1700000000);
 
     private readonly IBotLinkService _botLinkService;
 
@@ -60,6 +63,7 @@ public class WebhookControllerShould : UnitTestBase
                 new TelegramWebhookHandler(_botLinkService, Mock<ILogger<TelegramWebhookHandler>>()),
             },
             Options.Create(config),
+            new DiscordSignatureVerifier(new FixedClock(Now), Mock<ILogger<DiscordSignatureVerifier>>()),
             Mock<ILogger<WebhookController>>());
 
         var httpContext = new DefaultHttpContext();
@@ -73,7 +77,7 @@ public class WebhookControllerShould : UnitTestBase
         return controller;
     }
 
-    /// <summary>Signs the way Discord does: Ed25519 over UTF-8 of timestamp + raw body.</summary>
+    // Signs the way Discord does: Ed25519 over UTF-8 of timestamp + raw body.
     private static string Sign(string timestamp, string body)
     {
         var signer = new Ed25519Signer();
@@ -88,6 +92,9 @@ public class WebhookControllerShould : UnitTestBase
         ("X-Signature-Ed25519", Sign(timestamp, body)),
         ("X-Signature-Timestamp", timestamp),
     ];
+
+    private static string SecondsFromNow(int seconds) =>
+        (Now.ToUnixTimeSeconds() + seconds).ToString(CultureInfo.InvariantCulture);
 
     private static BotConfiguration DiscordConfigured() => new() { DiscordPublicKey = PublicKeyHex };
 
@@ -156,6 +163,51 @@ public class WebhookControllerShould : UnitTestBase
             .Which.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    [Theory]
+    [InlineData(-301)]
+    [InlineData(301)]
+    [InlineData(-86400)]
+    public async Task RefuseACorrectlySignedInteractionFarFromTheClockWith401(int secondsFromNow)
+    {
+        var body = """{"type": 1}""";
+        var controller = Controller(DiscordConfigured(), body, SignedHeaders(body, SecondsFromNow(secondsFromNow)));
+
+        var call = () => controller.HandleWebhook("discord");
+
+        (await call.Should().ThrowAsync<HttpException>("a captured interaction stays validly signed for ever"))
+            .Which.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Theory]
+    [InlineData(-300)]
+    [InlineData(300)]
+    public async Task AcceptASignedInteractionAClockSkewAway(int secondsFromNow)
+    {
+        var body = """{"type": 1}""";
+        var controller = Controller(DiscordConfigured(), body, SignedHeaders(body, SecondsFromNow(secondsFromNow)));
+
+        var result = await controller.HandleWebhook("discord");
+
+        result.Should().BeOfType<OkObjectResult>("two clocks minutes apart still name the same moment");
+    }
+
+    [Theory]
+    [InlineData("yesterday")]
+    [InlineData("-1700000000")]
+    [InlineData("1700000000.5")]
+    [InlineData(" 1700000000")]
+    [InlineData("99999999999999999999999999")]
+    public async Task RefuseASignedTimestampThatIsNotUnixSecondsWith401(string timestamp)
+    {
+        var body = """{"type": 1}""";
+        var controller = Controller(DiscordConfigured(), body, SignedHeaders(body, timestamp));
+
+        var call = () => controller.HandleWebhook("discord");
+
+        (await call.Should().ThrowAsync<HttpException>("a moment that cannot be read cannot be shown to be recent"))
+            .Which.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
     [Fact]
     public async Task AnswerPongToACorrectlySignedPing()
     {
@@ -166,6 +218,31 @@ public class WebhookControllerShould : UnitTestBase
 
         var response = result.Should().BeOfType<OkObjectResult>().Which.Value;
         JsonSerializer.SerializeToElement(response!).GetProperty("type").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AnswerAnUnknownTypeAsAnUnconfiguredOne()
+    {
+        var controller = Controller(
+            new BotConfiguration { TelegramWebhookSecret = "the-secret", DiscordPublicKey = PublicKeyHex }, "{}",
+            ("X-Telegram-Bot-Api-Secret-Token", "the-secret"));
+
+        var result = await controller.HandleWebhook("slack");
+
+        result.Should().BeOfType<NotFoundResult>("a probe of the path learns nothing from the answer");
+    }
+
+    [Fact]
+    public async Task RefuseAWrongSecretBeforeTheBodyIsParsed()
+    {
+        var controller = Controller(
+            new BotConfiguration { TelegramWebhookSecret = "the-secret" }, "not json",
+            ("X-Telegram-Bot-Api-Secret-Token", "not-the-secret"));
+
+        var call = () => controller.HandleWebhook("telegram");
+
+        (await call.Should().ThrowAsync<HttpException>("a caller who failed the check is told nothing about the body"))
+            .Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]

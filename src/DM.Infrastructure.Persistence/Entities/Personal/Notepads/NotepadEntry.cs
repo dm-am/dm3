@@ -13,9 +13,6 @@ namespace DM.Infrastructure.Persistence.Entities.Personal.Notepads;
 [Table("NotepadEntries")]
 public class NotepadEntry : ISoftDeletable
 {
-    /// <summary>
-    /// Entry identifier
-    /// </summary>
     [Key]
     public Guid EntryId { get; set; }
 
@@ -71,14 +68,8 @@ public class NotepadEntry : ISoftDeletable
     /// </summary>
     public bool IsRemoved { get; set; }
 
-    /// <summary>
-    /// User who deleted this entry
-    /// </summary>
     public Guid? DeletedByUserId { get; set; }
 
-    /// <summary>
-    /// When the entry was deleted
-    /// </summary>
     public DateTimeOffset? DeletedUtc { get; set; }
 
     #region Navigation properties

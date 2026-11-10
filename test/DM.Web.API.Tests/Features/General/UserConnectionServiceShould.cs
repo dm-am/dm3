@@ -11,13 +11,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// Guards the lifetime of the SignalR connection map.
-/// </summary>
-/// <remarks>
-/// The map is a singleton activated in the root scope, so a dependency of it lives for the process. It takes
-/// none: authentication is the hub's, per invocation.
-/// </remarks>
+// The map is a singleton activated in the root scope, so a dependency of it lives for the process.
 public class UserConnectionServiceShould : UnitTestBase
 {
     private readonly UserConnectionService _service = new();
@@ -43,14 +37,8 @@ public class UserConnectionServiceShould : UnitTestBase
             "an anonymous connection must never become a per-user target");
     }
 
-    /// <summary>
-    /// A connection that arrives while the last one of the same user leaves has
-    /// to end up in the map.
-    /// </summary>
-    /// <remarks>
-    /// An Add that read the set before the last connection's removal dropped it would write into an orphan.
-    /// The window is a lock acquisition wide, so the assertion runs over rounds.
-    /// </remarks>
+    // An Add that read the set before the last connection's removal dropped it would write into an
+    // orphan.
     [Fact]
     public void KeepAConnectionThatArrivesWhileTheLastOneLeaves()
     {

@@ -24,13 +24,7 @@ public class BbParserResilienceShould
 
     private static readonly Guid ReaderId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
-    /// <summary>
-    /// A tree nested deeper than the runtime stack can carry still renders.
-    /// </summary>
-    /// <remarks>
-    /// Built by hand: the parser refuses this depth, and the walk is the point. A StackOverflowException in
-    /// .NET kills the process.
-    /// </remarks>
+    // Built by hand: the parser refuses this depth, and the walk is the point.
     [Fact]
     public void RenderTreeDeeperThanTheCallStack()
     {
@@ -53,10 +47,6 @@ public class BbParserResilienceShould
         tree.ToBb().Should().HaveLength(depth * "[b][/b]".Length + 1);
     }
 
-    /// <summary>
-    /// 18 KB of nested [b] is refused by the parser with an exception a caller can catch.
-    /// </summary>
-    /// <remarks>Opening tags alone build the tree.</remarks>
     [Fact]
     public void RefuseTextNestedDeeperThanTheDepthGuard()
     {
@@ -70,10 +60,7 @@ public class BbParserResilienceShould
         refuse.Should().Throw<BbParserException>();
     }
 
-    /// <summary>
-    /// The save path is told the same thing the render path would decide.
-    /// </summary>
-    /// <remarks>The check asks the renderer rather than counting brackets, so it cannot drift from it.</remarks>
+    // The check asks the renderer rather than counting brackets, so it cannot drift from it.
     [Theory]
     [InlineData("[b]bold[/b] обычный текст", true)]
     [InlineData("", true)]
@@ -84,7 +71,6 @@ public class BbParserResilienceShould
         new BbCodeNestingLimit(_parserProvider).IsWithinLimit(source).Should().Be(expected);
     }
 
-    /// <summary>18 KB of nested [b] does not get saved.</summary>
     [Fact]
     public void RefuseTheDeepInputOnTheSavePath()
     {
@@ -92,11 +78,7 @@ public class BbParserResilienceShould
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// Both render paths, not just the HTML one, survive the deepest tree the
-    /// parser will build.
-    /// </summary>
-    /// <remarks>Closed tags: a tag nobody closed renders as text.</remarks>
+    // Closed tags: a tag nobody closed renders as text.
     [Fact]
     public void RenderBothOutputsAtTheDeepestAcceptedNesting()
     {
@@ -109,9 +91,6 @@ public class BbParserResilienceShould
         wrapper.RenderText(input, ctx).Should().Be("x");
     }
 
-    /// <summary>
-    /// The same depth left unclosed is printed as it was typed, in both outputs.
-    /// </summary>
     [Fact]
     public void PrintTheDeepestAcceptedNestingWhenNothingClosesIt()
     {
@@ -124,11 +103,8 @@ public class BbParserResilienceShould
         wrapper.RenderText(input, ctx).Should().Be(input);
     }
 
-    /// <summary>
-    /// A private block whose addressee carries a line break is not shown to a
-    /// reader it was not addressed to.
-    /// </summary>
-    /// <remarks>The whole chain: the balance check, the normaliser and the parser pattern each said yes on its own.</remarks>
+    // The whole chain: the balance check, the normaliser and the parser pattern each said yes on
+    // its own.
     [Theory]
     [InlineData("[private=\"Гэн\nдальф\"]тайна[/private]")]
     [InlineData("[private=Гэн\nдальф]тайна[/private]")]
@@ -168,11 +144,8 @@ public class BbParserResilienceShould
         PrivateBlockMarkup.IsBalanced(input).Should().Be(accepted);
     }
 
-    /// <summary>
-    /// A [code] or a [noparse] nobody closed is the text it is, and what follows
-    /// its opening is read like any other text.
-    /// </summary>
-    /// <remarks>A [noparse] is an example only when its own closing tag ends it; [code] only changes the font.</remarks>
+    // A [noparse] is an example only when its own closing tag ends it; [code] only changes the
+    // font.
     [Theory]
     [InlineData("[code]a -- b", "[code]a &ndash; b")]
     [InlineData("раз [noparse]a -- [b]b[/b]", "раз [noparse]a &ndash; <strong>b</strong>")]
@@ -200,10 +173,8 @@ public class BbParserResilienceShould
             .Should().EndWith("записан неверно, скрытый блок пишется [private=\"Имя\"] или [private].");
     }
 
-    /// <summary>
-    /// The ordinary spelling still reaches the reader it names, so the guard
-    /// above is not simply hiding everything.
-    /// </summary>
+    // The ordinary spelling still reaches the reader it names, so the guard above is not simply
+    // hiding everything.
     [Fact]
     public void ShowPrivateTextToTheAddressee()
     {
@@ -238,7 +209,6 @@ public class BbParserResilienceShould
         RenderWithAttributeTag("[note=Вася]привет[/note]").Should().Be("[note=Вася]привет[/note]");
     }
 
-    /// <summary>The quoted attribute is read, and encoded where the tag writes it.</summary>
     [Fact]
     public void EncodeTheQuotedAttribute()
     {
@@ -248,9 +218,6 @@ public class BbParserResilienceShould
         html.Should().Contain("note-head\">&lt;img src=x onerror=alert(1)&gt;</div>");
     }
 
-    /// <summary>
-    /// A value shown as text is encoded like any other text.
-    /// </summary>
     [Fact]
     public void EncodeTheUnquotedAttribute()
     {
@@ -260,11 +227,7 @@ public class BbParserResilienceShould
         html.Should().Contain("&lt;img src=x onerror=alert(1)&gt;");
     }
 
-    /// <summary>
-    /// A value ends at an opening bracket, and a tag whose value reached one is
-    /// a broken tag whose opening is only its name.
-    /// </summary>
-    /// <remarks>There is one reading of the text, so the value is not read and the tag inside it is a tag.</remarks>
+    // There is one reading of the text, so the value is not read and the tag inside it is a tag.
     [Theory]
     [InlineData("[note=<img src=x onerror=alert(1)>[img]https://example.com/a.png[/img]]hi[/note]")]
     [InlineData("[note=\"<img src=x onerror=alert(1)>[img]https://example.com/a.png[/img]\"]hi[/note]")]
@@ -292,11 +255,8 @@ public class BbParserResilienceShould
         html.Should().NotContain("note-head");
     }
 
-    /// <summary>
-    /// An image or link spelling the grammar does not accept is text, not an
-    /// element.
-    /// </summary>
-    /// <remarks>The address guards run where an image or a link renders, and these forms never render as either.</remarks>
+    // The address guards run where an image or a link renders, and these forms never render as
+    // either.
     [Theory]
     [InlineData("[link=vbscript:msgbox(1)]click")]
     [InlineData("[link=\"vbscript:msgbox(1)\"]click")]
@@ -313,10 +273,8 @@ public class BbParserResilienceShould
         html.Should().Contain(input[..(input.IndexOf(']') + 1)]);
     }
 
-    /// <summary>
-    /// A tag that has no attribute does not acquire one, so text already stored
-    /// renders the way it always did.
-    /// </summary>
+    // A tag that has no attribute does not acquire one, so text already stored renders the way it
+    // always did.
     [Theory]
     [InlineData("[b=1]жирный[/b]")]
     [InlineData("[spoiler=Заголовок]текст[/spoiler]")]
@@ -325,11 +283,8 @@ public class BbParserResilienceShould
         RenderComment(input).Should().Be(input);
     }
 
-    /// <summary>
-    /// Control characters do not survive the parse, so no consumer downstream
-    /// has to decide what to do about them.
-    /// </summary>
-    /// <remarks>The search preview marks a match with two control characters.</remarks>
+    // Control characters do not survive the parse, so no consumer downstream has to decide what to
+    // do about them.
     [Theory]
     [InlineData(0x00)]
     [InlineData(0x08)]
@@ -343,9 +298,6 @@ public class BbParserResilienceShould
         html.Should().Be("ab");
     }
 
-    /// <summary>
-    /// The three control characters a body is written with are not touched.
-    /// </summary>
     [Fact]
     public void KeepTheControlCharactersThatMeanSomethingInText()
     {
@@ -354,10 +306,8 @@ public class BbParserResilienceShould
         html.Should().Be("a\tb<br />c");
     }
 
-    /// <summary>
-    /// A surrogate with no partner is not a character; it becomes the one that
-    /// says so, once, here, instead of once per layer below.
-    /// </summary>
+    // A surrogate with no partner is not a character; it becomes the one that says so, once, here,
+    // instead of once per layer below.
     [Theory]
     [InlineData(0xD800)]
     [InlineData(0xDC00)]
@@ -368,9 +318,6 @@ public class BbParserResilienceShould
         html.Should().Be("a" + Character(0xFFFD) + "b");
     }
 
-    /// <summary>
-    /// A surrogate pair is one character and passes through as it was written.
-    /// </summary>
     [Fact]
     public void KeepAPairedSurrogate()
     {
@@ -379,11 +326,7 @@ public class BbParserResilienceShould
         html.Should().Be("a\U0001F600b");
     }
 
-    /// <summary>
-    /// The characters that reverse the order text is drawn in do not survive the
-    /// parse either.
-    /// </summary>
-    /// <remarks>Marks that only nudge a neighbour's direction reorder nothing and stay.</remarks>
+    // Marks that only nudge a neighbour's direction reorder nothing and stay.
     [Theory]
     [InlineData(0x202A)]
     [InlineData(0x202B)]
@@ -403,10 +346,6 @@ public class BbParserResilienceShould
         RenderComment(Character(code) + marks).Should().Be(marks);
     }
 
-    /// <summary>
-    /// A tag still renders when the same text carries a control character.
-    /// </summary>
-    /// <remarks>Cheap, and it holds the tags next to a control character.</remarks>
     [Fact]
     public void RenderATagInTextCarryingAControlCharacter()
     {
@@ -416,9 +355,7 @@ public class BbParserResilienceShould
         html.Should().Contain("https://example.com/a.png");
     }
 
-    /// <summary>
-    /// The character with this code point, written by number: the ones under test read as nothing.
-    /// </summary>
+    // The character with this code point, written by number: the ones under test read as nothing.
     private static string Character(int code) => ((char)code).ToString();
 
 

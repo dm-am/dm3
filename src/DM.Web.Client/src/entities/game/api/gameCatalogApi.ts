@@ -1,4 +1,4 @@
-import type { ListEnvelope } from "@/shared/api/models/common";
+import type { ClosedReason, ListEnvelope } from "@/shared/api/models/common";
 import type { Game, GameRef } from "../model/gameTypes";
 import { SIDEBAR_GAME_ROWS } from "../model/sidebarRows";
 import { Api } from "@/shared/api";
@@ -10,7 +10,7 @@ export interface GamesSearchParams {
   /** Narrows the Active games. */
   recruitmentFilter?: "open" | "initial" | "subsequent" | "closed";
   /** Narrows the Closed games. */
-  closedReasonFilter?: "None" | "Finished" | "Frozen";
+  closedReasonFilter?: ClosedReason;
   /** The game has all of them. */
   requiredTags?: number[];
   /** The game has none of them. */

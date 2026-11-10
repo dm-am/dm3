@@ -5,9 +5,6 @@ namespace DM.Domain.Core.Dto;
 /// </summary>
 public class ModuleStatusCounts
 {
-    /// <summary>
-    /// Number of items in Draft status
-    /// </summary>
     public int Draft { get; set; }
 
     /// <summary>

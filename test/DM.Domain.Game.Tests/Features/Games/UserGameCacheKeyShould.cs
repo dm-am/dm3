@@ -16,12 +16,7 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
-/// <summary>
-/// One signed-in viewer's listings, one cache entry each.
-/// </summary>
-/// <remarks>
-/// Asked through the listing, so what is held is the key the cache is actually handed.
-/// </remarks>
+// Asked through the listing, so what is held is the key the cache is actually handed.
 public class UserGameCacheKeyShould : GameServiceTestBase
 {
     private readonly List<string> askedKeys = [];
@@ -42,9 +37,6 @@ public class UserGameCacheKeyShould : GameServiceTestBase
             });
     }
 
-    /// <summary>
-    /// Every field the viewer can set moves the key.
-    /// </summary>
     /// <remarks>
     /// On any other listing the service fills <see cref="GamesQuery.ExcludedMasterIds"/> itself.
     /// </remarks>
@@ -95,7 +87,6 @@ public class UserGameCacheKeyShould : GameServiceTestBase
             "him are two pages");
     }
 
-    /// <summary>A listing of the games the viewer takes part in, with one field set.</summary>
     private static GamesQuery Own(PropertyInfo? property = null, object? value = null)
     {
         var query = new GamesQuery { Participating = true };

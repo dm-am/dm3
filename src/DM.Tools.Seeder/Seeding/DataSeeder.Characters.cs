@@ -15,12 +15,8 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// Gives every seeded game its own copy of the default sheet.
-    /// </summary>
-    /// <remarks>
-    /// Only for the games that hold none, so a second run leaves an edited sheet and its version alone.
-    /// </remarks>
+    // Only for the games that hold none, so a second run leaves an edited sheet and its version
+    // alone.
     private async Task SeedGameAttributeSchemasAsync(ComprehensiveSeedResult result)
     {
         var gamesWithoutSheet = await _dbContext.Set<DbGame>()
@@ -49,10 +45,7 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Attribute sheets written for {gamesWithoutSheet.Count} games");
     }
 
-    /// <summary>
-    /// Writes <see cref="DbCharacterAttribute"/> rows for the per-field character values against the
-    /// default sheet. Empty values are skipped, and so are race and class, which the sheet does not draw.
-    /// </summary>
+    // Empty values are skipped, and so are race and class, which the sheet does not draw.
     private void AddCharacterSheetValues(
         Guid characterId,
         int? alignmentIndex = null,
@@ -86,10 +79,8 @@ internal sealed partial class DataSeeder
         Add(DefaultAttributeSchema.InventoryId, inventory);
     }
 
-    /// <summary>
-    /// The nameless figure every seeded game carries: an authorless character,
-    /// which is how a master speaks into a room without a character of their own.
-    /// </summary>
+    // The nameless figure every seeded game carries: an authorless character, which is how a master
+    // speaks into a room without a character of their own.
     private Character AddMysteriousStranger(DbGame game, ComprehensiveSeedResult result)
     {
         var npc = new Character
@@ -109,21 +100,12 @@ internal sealed partial class DataSeeder
         return npc;
     }
 
-    /// <summary>
-    /// The characters of a catalog game: the players drawn for it, every
-    /// character written into it with the nameless figure last, the ones
-    /// granted the closed rooms, and that figure.
-    /// </summary>
     private sealed record GameCast(
         List<DbUser> Players, List<Character> Characters, List<Character> RoomMembers, Character Npc);
 
     private static readonly string[] GameCharacterNames =
         ["Арагорн Следопыт", "Эльвира Чародейка", "Горим Железный Кулак", "Лиара Тенебраум", "Кассандра Видящая", "Торин Дубощит", "Леголас Зеленый Лист", "Гимли сын Глоина"];
 
-    /// <summary>
-    /// The characters of a catalog game: active ones by its variation, a few
-    /// non-active ones for variety, and the nameless figure.
-    /// </summary>
     private async Task<GameCast> SeedGameCharacters(
         SeedingGame seeding, GameRooms rooms, List<DbUser> users, GameShowcase showcase,
         ComprehensiveSeedResult result)
@@ -145,10 +127,6 @@ internal sealed partial class DataSeeder
         return new GameCast(playersForGame, createdCharacters, restrictedRoomMembers, npc);
     }
 
-    /// <summary>
-    /// The active characters of a catalog game, each granted the rooms of the
-    /// game; the first one of the first finished game is Diopside.
-    /// </summary>
     private async Task SeedActiveCharacters(
         SeedingGame seeding, GameRooms rooms, List<DbUser> playersForGame, List<Character> createdCharacters,
         List<Character> restrictedRoomMembers, GameShowcase showcase, ComprehensiveSeedResult result)
@@ -211,10 +189,8 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// The portrait of the Diopside character — the real pipeline: EXIF strip +
-    /// downscale, one source object lands in object storage.
-    /// </summary>
+    // The portrait of the Diopside character — the real pipeline: EXIF strip + downscale, one
+    // source object lands in object storage.
     private async Task SeedDiopsidePortrait(Character character, DbUser player)
     {
         var bytes = ReadEmbeddedSeedBytes(DiopsideImage);
@@ -230,16 +206,10 @@ internal sealed partial class DataSeeder
         _dbContext.Uploads.Add(upload);
     }
 
-    /// <summary>
-    /// The declined application of the UI test data game. Fixed, because no list shows a declined
-    /// character: the frames open its address by this identifier.
-    /// </summary>
+    // Fixed, because no list shows a declined character: the frames open its address by this
+    // identifier.
     private static readonly Guid UiTestDeclinedCharacterId = FixedGuid(0xc1, 1);
 
-    /// <summary>
-    /// A few non-active characters for variety, from the players left over after
-    /// the active ones.
-    /// </summary>
     private void SeedInactiveCharacters(
         SeedingGame seeding, List<DbUser> playersForGame, List<Character> createdCharacters,
         ComprehensiveSeedResult result)

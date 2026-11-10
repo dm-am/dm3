@@ -20,26 +20,26 @@ const props = withDefaults(
     tabs: readonly TabItem<V>[];
     /** Optional aria-label for the tablist. */
     ariaLabel?: string;
-    /** Builds the tab and panel ids; a random instance id by default, so two strips never collide. */
-    idPrefix?: string;
     /** "headings": the strip doubles as the section heading of the profile, in PageTitle's style. */
     variant?: "links" | "headings";
   }>(),
   {
     ariaLabel: "Разделы",
-    idPrefix: () => `tabs-${useId()}`,
     variant: "links",
   },
 );
 
+/** Builds the tab and panel ids: an instance id, so two strips never collide. */
+const idPrefix = `tabs-${useId()}`;
+
 /** For the caller's tabpanel aria-labelledby. */
 function tabId(value: V): string {
-  return `${props.idPrefix}-tab-${value}`;
+  return `${idPrefix}-tab-${value}`;
 }
 
 /** For the caller's tabpanel id. */
 function panelId(value: V): string {
-  return `${props.idPrefix}-panel-${value}`;
+  return `${idPrefix}-panel-${value}`;
 }
 
 defineExpose({ tabId, panelId });

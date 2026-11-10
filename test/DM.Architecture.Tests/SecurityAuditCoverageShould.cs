@@ -14,9 +14,8 @@ namespace DM.Architecture.Tests;
 /// <remarks>A type nobody writes answers "nothing happened" on the journal screen. Source text: the writes are call sites.</remarks>
 public class SecurityAuditCoverageShould
 {
-    /// <summary>
-    /// A call naming the type at the argument the journal stores: the read filters name the same types.
-    /// </summary>
+    // A call naming the type at the argument the journal stores: the read filters name the same
+    // types.
     private static readonly Regex WriteSite = new(
         @"LogAsync\(\s*[^,;()]+,\s*SecurityEventType\.(\w+)",
         RegexOptions.Compiled);

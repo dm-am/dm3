@@ -8,10 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every domain module the tree contains is named by the host that composes them,
-/// and every module it names is in the list it actually scans.
-/// </summary>
 /// <remarks>
 /// A module left out of the hand-written array of markers compiles and answers 500 on its first
 /// request. Both halves are read: the marker is named and its variable reaches the array.
@@ -54,9 +50,6 @@ public class ModuleCompositionShould
             "code anybody wrote");
     }
 
-    /// <summary>
-    /// The marker of every module reaches the array the host scans.
-    /// </summary>
     [Fact]
     public void ScanTheMarkerOfEveryModuleItNames()
     {

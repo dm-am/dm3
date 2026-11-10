@@ -7,17 +7,14 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The two validators, the request contract and both forms stop a topic title
-/// at the same character.
-/// </summary>
-/// <remarks>Read out of the sources: a data annotation is a compile-time constant, and the client cannot be asked.</remarks>
+// Read out of the sources: a data annotation is a compile-time constant, and the client cannot be
+// asked.
 public class TopicTitleLimitShould
 {
     private static readonly Regex ClientLimit =
         new(@"TOPIC_TITLE_MAX_LENGTH\s*=\s*(\d+)", RegexOptions.Compiled);
 
-    /// <summary>A maxlength typed as a number: the forms bind the constant instead.</summary>
+    // A maxlength typed as a number: the forms bind the constant instead.
     private static readonly Regex LiteralMaxLength =
         new("maxlength=\"\\d", RegexOptions.Compiled);
 

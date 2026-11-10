@@ -5,10 +5,6 @@ using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Statistics;
 
-/// <summary>
-/// A period the boards cannot be counted over is refused field by field, in
-/// the words of the refusal list.
-/// </summary>
 public class LeaderboardPeriodShould
 {
     [Theory]

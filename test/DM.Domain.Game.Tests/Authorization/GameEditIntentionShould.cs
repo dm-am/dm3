@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Authorization;
 
-/// <summary>
-/// Who may edit a game, open its settings page and delete it.
-/// </summary>
 public class GameEditIntentionShould
 {
     private readonly GameIntentionResolver resolver = new();
@@ -44,9 +41,7 @@ public class GameEditIntentionShould
         resolver.IsAllowed(user, GameIntention.Edit, game).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The curator helps set the game up, so the settings page is open to them.
-    /// </summary>
+    // The curator helps set the game up, so the settings page is open to them.
     [Fact]
     public void AllowEditSettingsForTheMentorCuratingTheGame()
     {
@@ -59,13 +54,8 @@ public class GameEditIntentionShould
         resolver.IsAllowed(user, GameIntention.EditSettings, game).Should().BeTrue();
     }
 
-    /// <summary>
-    /// The other half of the settings page stays shut for the curator. Rooms and
-    /// the blacklist ask for <see cref="GameIntention.Edit" />, the roster asks
-    /// for its own invite and removal intentions, and none of them widened when
-    /// the information form did. A settings page that offered these controls to
-    /// a mentor would be promising what this theory refuses.
-    /// </summary>
+    // A settings page that offered these controls to a mentor would be promising what this theory
+    // refuses.
     [Theory]
     [InlineData(GameIntention.Edit)]
     [InlineData(GameIntention.InvitePlayer)]
@@ -85,10 +75,8 @@ public class GameEditIntentionShould
         resolver.IsAllowed(user, intention, game).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The site rank staffs the review queue, it does not open every game's
-    /// settings: what admits a mentor here is the assignment, same as Read.
-    /// </summary>
+    // The site rank staffs the review queue, it does not open every game's settings: what admits a
+    // mentor here is the assignment, same as Read.
     [Fact]
     public void ForbidEditSettingsForAMentorWhoDoesNotCurateTheGame()
     {
@@ -100,10 +88,8 @@ public class GameEditIntentionShould
         resolver.IsAllowed(user, GameIntention.EditSettings, game).Should().BeFalse();
     }
 
-    /// <summary>
-    /// A senior moderator already edits the game, so the page cannot be narrower
-    /// for them than the operations behind it.
-    /// </summary>
+    // A senior moderator already edits the game, so the page cannot be narrower for them than the
+    // operations behind it.
     [Fact]
     public void AllowEditSettingsForSeniorModerator()
     {

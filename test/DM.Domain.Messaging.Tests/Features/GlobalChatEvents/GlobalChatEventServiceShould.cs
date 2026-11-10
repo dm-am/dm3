@@ -155,12 +155,7 @@ public class GlobalChatEventServiceShould : UnitTestBase
             null, now, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The start that moved nothing announces nothing.
-    /// </summary>
-    /// <remarks>
-    /// Two clicks on "start" reach the conditional write together, and only one moves a row.
-    /// </remarks>
+    // Two clicks on "start" reach the conditional write together, and only one moves a row.
     [Fact]
     public async Task StaySilentWhenTheEventWasStartedBesideThisStart()
     {
@@ -194,7 +189,6 @@ public class GlobalChatEventServiceShould : UnitTestBase
         await eventProducer.DidNotReceive().SendAsync(EventType.GlobalChatEventStarted, eventId);
     }
 
-    /// <summary>The end that moved nothing announces nothing, for the same reason.</summary>
     [Fact]
     public async Task StaySilentWhenTheEventWasEndedBesideThisEnd()
     {
@@ -209,12 +203,7 @@ public class GlobalChatEventServiceShould : UnitTestBase
         await eventProducer.DidNotReceive().SendAsync(EventType.GlobalChatEventEnded, eventId);
     }
 
-    /// <summary>
-    /// The join that wrote no row is refused and announces nothing.
-    /// </summary>
-    /// <remarks>
-    /// The insert is ON CONFLICT DO NOTHING, so of two clicks only one writes.
-    /// </remarks>
+    // The insert is ON CONFLICT DO NOTHING, so of two clicks only one writes.
     [Fact]
     public async Task RefuseTheJoinWhoseRowWasTakenBesideIt()
     {
@@ -270,12 +259,8 @@ public class GlobalChatEventServiceShould : UnitTestBase
         await eventProducer.Received(1).SendAsync(EventType.GlobalChatEventParticipantJoined, eventId);
     }
 
-    /// <summary>
-    /// The second press of "Участвовать" is answered about the reader himself.
-    /// </summary>
-    /// <remarks>
-    /// A join and an organizer's add are one write behind two doors, and the sentence keeps their readers apart.
-    /// </remarks>
+    // A join and an organizer's add are one write behind two doors, and the sentence keeps their
+    // readers apart.
     [Fact]
     public async Task AnswerTheSecondJoinInTheSecondPerson()
     {
@@ -342,7 +327,6 @@ public class GlobalChatEventServiceShould : UnitTestBase
             .SendAsync(EventType.GlobalChatEventParticipantJoined, eventId);
     }
 
-    /// <summary>An event in the given status, read back by the status write that moves it.</summary>
     private GlobalChatEvent EventIn(Guid eventId, GlobalChatEventStatus status)
     {
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = status };
@@ -351,7 +335,6 @@ public class GlobalChatEventServiceShould : UnitTestBase
         return chatEvent;
     }
 
-    /// <summary>The conditional status write answers whatever it is asked with the function given.</summary>
     private void StatusWriteAnswers(Func<CallInfo, GlobalChatEvent?> answer) =>
         repository.UpdateStatus(
                 Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(),

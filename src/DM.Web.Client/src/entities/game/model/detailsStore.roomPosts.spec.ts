@@ -19,7 +19,7 @@ import {
   mockGetFirstUnreadRoomPost,
   mockGetPost,
 } from "./store.doubles";
-import { freshPinia } from "./store.fixtures";
+import { createMockPost, freshPinia } from "./store.fixtures";
 import { useGameDetailsStore } from "./detailsStore";
 import { useAuthStore } from "@/shared/stores";
 import { deferred } from "@/shared/lib/testing/tasks";
@@ -168,13 +168,7 @@ describe("useGameDetailsStore", () => {
       { id: "room-2", title: "За ширмой", roomNumber: 2 },
     ] as unknown as Room[];
 
-    const POSTS = [
-      {
-        id: "post-1",
-        gameText: "Первый пост",
-        createdUtc: "2024-01-01T00:00:00Z",
-      },
-    ] as unknown as Post[];
+    const POSTS = [createMockPost("post-1", "Первый пост")];
 
     beforeEach(() => {
       mockGetRooms.mockResolvedValue({

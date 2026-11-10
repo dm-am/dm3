@@ -16,10 +16,8 @@ using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
 
-/// <summary>
-/// The people of a blog, read through a real blog service: the reader's own moves
-/// ask the one rule of who may open a blog, and it lives there.
-/// </summary>
+// The people of a blog, read through a real blog service: the reader's own moves ask the one rule
+// of who may open a blog, and it lives there.
 public class BlogUserServiceShould : BlogServiceTestBase
 {
     private readonly IBlogSubscriptionService subscriptionService = Mock<IBlogSubscriptionService>();
@@ -52,12 +50,9 @@ public class BlogUserServiceShould : BlogServiceTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("собственный блог"));
     }
 
-    /// <summary>
-    /// Subscribing, unsubscribing and leaving act on a blog the caller sees. On one
-    /// he may not open they answer as on a blog that is not there, word for word,
-    /// and change nothing: a refusal of its own would say the blog exists, and a
-    /// subscription would be a write into a module hidden from its writer.
-    /// </summary>
+    // On one he may not open they answer as on a blog that is not there, word for word, and change
+    // nothing: a refusal of its own would say the blog exists, and a subscription would be a write
+    // into a module hidden from its writer.
     [Theory]
     [InlineData("subscribe", ModuleStatus.Draft, PremoderationStatus.Approved)]
     [InlineData("subscribe", ModuleStatus.Active, PremoderationStatus.AwaitingEdits)]

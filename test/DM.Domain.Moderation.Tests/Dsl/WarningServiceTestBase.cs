@@ -16,11 +16,6 @@ using NSubstitute;
 
 namespace DM.Domain.Moderation.Tests.Dsl;
 
-/// <summary>
-/// The warning service with its own validators over substitutes of everything
-/// else it asks: a signed-in moderator, a clock that stands still, and a
-/// resolver that knows nothing about any offending object.
-/// </summary>
 public abstract class WarningServiceTestBase : UnitTestBase
 {
     protected readonly IWarningRepository warningRepository;
@@ -33,9 +28,8 @@ public abstract class WarningServiceTestBase : UnitTestBase
     protected readonly IDateTimeProvider dateTimeProvider;
     protected readonly IEventProducer eventProducer;
 
-    /// <summary>
-    /// The game reading the open log asks about a game closed to a guest: it reads none, unless a test says so.
-    /// </summary>
+    // The game reading the open log asks about a game closed to a guest: it reads none, unless a
+    // test says so.
     protected readonly IPlaceReading gameReading;
     private protected readonly WarningService service;
     protected readonly Guid moderatorUserId = Guid.NewGuid();

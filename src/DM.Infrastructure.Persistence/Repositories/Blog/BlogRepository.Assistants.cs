@@ -12,9 +12,6 @@ using DbBlogAssistant = DM.Infrastructure.Persistence.Entities.Blog.BlogAssistan
 
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
 
-/// <summary>
-/// The assistants of a blog: the roster with join dates, and adding and removing one
-/// </summary>
 internal partial class BlogRepository
 {
     /// <inheritdoc />

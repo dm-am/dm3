@@ -20,10 +20,7 @@ public class UpdatePostValidatorShould : UnitTestBase
         validator = new UpdatePostValidator(nestingLimit);
     }
 
-    /// <summary>
-    /// An edit is how most unrenderable text would arrive, so the edit path
-    /// refuses it too.
-    /// </summary>
+    // An edit is how most unrenderable text would arrive, so the edit path refuses it too.
     [Fact]
     public void RefuseTextTheRendererWillNotRender()
     {
@@ -40,10 +37,8 @@ public class UpdatePostValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// The edit path enforces the same length limit as creation, or the limit
-    /// is one save away from being void.
-    /// </summary>
+    // The edit path enforces the same length limit as creation, or the limit is one save away from
+    // being void.
     [Fact]
     public void RefuseTextLongerThanTheLimit()
     {

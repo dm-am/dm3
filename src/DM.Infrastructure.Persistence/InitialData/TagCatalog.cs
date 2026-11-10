@@ -28,7 +28,6 @@ internal static class TagCatalog
     // nullable and null is the absence of a limit, not a value forgotten. The
     // groups that carry one are the ones where a game answering "both" says
     // less than a game answering one thing.
-    /// <summary>The groups, in the order the filter shows them.</summary>
     internal static TagGroup[] Groups() =>
     [
         new TagGroup
@@ -94,7 +93,6 @@ internal static class TagCatalog
         }
     ];
 
-    /// <summary>The tags, group by group.</summary>
     internal static Tag[] Tags() =>
     [
         Tag(0x42, 66, SystemGroup, "2d20", "Движок Modiphius: пул из двух d20 против характеристики", 0),

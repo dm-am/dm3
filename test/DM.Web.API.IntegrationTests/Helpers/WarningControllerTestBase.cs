@@ -8,10 +8,6 @@ using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;
 
 namespace DM.Web.API.IntegrationTests.Helpers;
 
-/// <summary>
-/// The warning endpoints over rows written straight into the tables: warnings,
-/// avatars, and the reads of the answers.
-/// </summary>
 public abstract class WarningControllerTestBase : IntegrationTestBase
 {
     protected WarningControllerTestBase(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -28,8 +24,7 @@ public abstract class WarningControllerTestBase : IntegrationTestBase
     protected static Guid LogId(int lastByte) =>
         Guid.Parse($"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb{lastByte:x2}");
 
-    /// <summary>One warning, written straight into the table.</summary>
-    /// <remarks>The create endpoint needs a moderator and raises an event; the log is read anonymously.</remarks>
+    // The create endpoint needs a moderator and raises an event; the log is read anonymously.
     protected static DbWarning Row(
         Guid warningId,
         DateTimeOffset createdUtc,
@@ -86,10 +81,8 @@ public abstract class WarningControllerTestBase : IntegrationTestBase
         .Select(row => row.GetProperty("id").GetGuid())
         .ToList();
 
-    /// <summary>
-    /// An avatar of a user, written straight into the table: replaced by its
-    /// owner (deleted with no author) unless the test says otherwise.
-    /// </summary>
+    // An avatar of a user, written straight into the table: replaced by its owner (deleted with no
+    // author) unless the test says otherwise.
     protected static DbUpload Avatar(Guid uploadId, Guid ownerId, bool removed = true, Guid? deletedBy = null) => new()
     {
         UploadId = uploadId,
@@ -111,7 +104,6 @@ public abstract class WarningControllerTestBase : IntegrationTestBase
         DeletedUtc = removed ? DateTimeOffset.UtcNow.AddDays(-10) : null
     };
 
-    /// <summary>A warning on the profile of the user, the way the server writes one.</summary>
     protected static DbWarning OnProfile(
         Guid warningId, Guid targetUserId, string? status, string? info, Guid? avatarUploadId,
         string text = "Неприемлемый аватар")
@@ -134,6 +126,22 @@ public abstract class WarningControllerTestBase : IntegrationTestBase
     {
         await using var db = DatabaseFixture.CreateDbContext();
         await db.Uploads.IgnoreQueryFilters().Where(u => u.UploadId == uploadId).ExecuteDeleteAsync();
+    }
+
+    protected async Task WithPinnedPicture(DbUpload avatar, DbWarning warning, Func<Task> test)
+    {
+        await SeedUpload(avatar);
+        await Seed(warning);
+
+        try
+        {
+            await test();
+        }
+        finally
+        {
+            await Unseed(warning.WarningId);
+            await UnseedUpload(avatar.UploadId);
+        }
     }
 
     protected static JsonElement RowOf(JsonDocument document, Guid warningId) => document.RootElement

@@ -122,10 +122,6 @@ internal class GameAttributeSchemaRepository : IGameAttributeSchemaRepository
                 : _guidFactory.Create());
     }
 
-    /// <summary>
-    /// Writes the new set over the sheet the caller read, and answers whether
-    /// the sheet was still at that version.
-    /// </summary>
     private async Task<bool> WriteIfVersion(
         ReplaceGameAttributeSchema replace, int? seenVersion, List<DbSpecification> document,
         CancellationToken cancellation)

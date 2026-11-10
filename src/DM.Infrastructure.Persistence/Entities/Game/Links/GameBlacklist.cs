@@ -11,15 +11,9 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Links;
 [Table("GameBlacklists")]
 public class GameBlacklist
 {
-    /// <summary>
-    /// Entry identifier
-    /// </summary>
     [Key]
     public Guid EntryId { get; set; }
 
-    /// <summary>
-    /// Game identifier
-    /// </summary>
     public Guid GameId { get; set; }
 
     /// <summary>
@@ -45,9 +39,6 @@ public class GameBlacklist
     [ForeignKey(nameof(BlockedUserId))]
     public virtual User BlockedUser { get; set; } = null!;
 
-    /// <summary>
-    /// User who blocked
-    /// </summary>
     [ForeignKey(nameof(BlockedByUserId))]
     public virtual User BlockedBy { get; set; } = null!;
 

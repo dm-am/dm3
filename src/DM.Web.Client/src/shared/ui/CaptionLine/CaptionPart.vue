@@ -12,6 +12,7 @@
  * CaptionLine reads the props off the vnode, so the component itself only
  * renders its slot.
  */
+/* eslint-disable vue/no-unused-properties -- CaptionLine reads them off the vnode */
 withDefaults(
   defineProps<{
     /** A bar follows this part. False joins it to the next with a space. */

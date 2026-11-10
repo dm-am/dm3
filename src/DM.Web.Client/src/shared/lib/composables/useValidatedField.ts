@@ -45,7 +45,7 @@ export function useValidatedField(
   const syncError = computed((): string | null => {
     if (!syncValidate) return null;
     const result = syncValidate(value.value.trim());
-    return result === null || result === undefined ? null : result;
+    return result ?? null;
   });
 
   // An empty message is still an error.
@@ -76,13 +76,8 @@ export function useValidatedField(
       const result = await asyncValidate(trimmed);
       lastCheckedValue.value = trimmed;
 
-      if (result) {
-        asyncPassed.value = false;
-        return result;
-      } else {
-        asyncPassed.value = true;
-        return null;
-      }
+      asyncPassed.value = !result;
+      return result || null;
     } catch {
       // Silent fail on network errors
       return null;
@@ -100,7 +95,8 @@ export function useValidatedField(
     const asyncError = await runAsyncValidation();
     if (asyncError) {
       error.value = asyncError;
-    } else if (error.value && !syncError.value) {
+    } else if (!syncError.value) {
+      // The value may have changed while the check ran.
       error.value = "";
     }
   };
@@ -115,9 +111,7 @@ export function useValidatedField(
       lastCheckedValue.value = null;
     }
 
-    if (error.value) {
-      error.value = "";
-    }
+    error.value = "";
   };
 
   const reset = (newValue?: string) => {

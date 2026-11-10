@@ -14,10 +14,8 @@ using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Forum search runs on generated tsvector columns: Russian morphology, a title that outranks a body, and
-/// visibility that is a join rather than a copy of the access rules.
-/// </summary>
+// Forum search runs on generated tsvector columns: Russian morphology, a title that outranks a
+// body, and visibility that is a join rather than a copy of the access rules.
 public class ForumSearchShould : IntegrationTestBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -234,9 +232,7 @@ public class ForumSearchShould : IntegrationTestBase
         public Guid TopicId { get; set; }
         public string TopicTitle { get; set; } = "";
 
-        /// <summary>
-        /// Runs of the preview, not a marked-up string: the marks are the database's.
-        /// </summary>
+        // Runs of the preview, not a marked-up string: the marks are the database's.
         public IReadOnlyList<SnippetSegment> Snippet { get; set; } = [];
     }
 

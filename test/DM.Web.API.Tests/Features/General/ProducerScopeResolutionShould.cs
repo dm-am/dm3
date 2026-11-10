@@ -11,14 +11,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// Guards the lifetimes of the two producers a request resolves.
-/// </summary>
-/// <remarks>
-/// The mail sender owns an AMQP channel, so it is disposable and scoped, not transient and not a singleton
-/// (a channel is not thread-safe). The event producer writes with the one DmDbContext of the scope.
-/// Inspected rather than resolved: activating either would dial a dependency.
-/// </remarks>
+// The mail sender owns an AMQP channel, so it is disposable and scoped, not transient and not a
+// singleton (a channel is not thread-safe).
 public class ProducerScopeResolutionShould
 {
     private readonly IServiceCollection _services;
@@ -32,9 +26,8 @@ public class ProducerScopeResolutionShould
         _services = services;
     }
 
-    /// <summary>
-    /// The registration a resolution answers with: MS.DI resolves the last descriptor of the service type.
-    /// </summary>
+    // The registration a resolution answers with: MS.DI resolves the last descriptor of the service
+    // type.
     private ServiceDescriptor EffectiveRegistration(Type service)
     {
         var descriptor = _services.LastOrDefault(d => d.ServiceType == service);
@@ -53,9 +46,6 @@ public class ProducerScopeResolutionShould
             "one context, across every concurrent request");
     }
 
-    /// <summary>
-    /// The channel half of the rule, which only the mail sender carries.
-    /// </summary>
     [Fact]
     public void KeepTheMailSenderDisposable()
     {

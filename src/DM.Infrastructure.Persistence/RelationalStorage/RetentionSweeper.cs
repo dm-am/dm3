@@ -31,10 +31,6 @@ public sealed record RetentionPolicy(string Table, string TimestampColumn, TimeS
 /// </remarks>
 internal static class RetentionRegistry
 {
-    /// <summary>
-    /// Every table that is a stream, with its term.
-    /// </summary>
-    /// <param name="authentication">Source of the login-attempt term.</param>
     public static IReadOnlyList<RetentionPolicy> Policies(AuthenticationConfiguration authentication) =>
     [
         new("LoginAttempts", "LastAttemptUtc", TimeSpan.FromHours(authentication.LoginAttemptExpirationHours)),

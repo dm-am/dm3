@@ -9,13 +9,9 @@
  * control render of an ordinary profile shows the absences come from the name.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import {
-  flushPromises,
-  RouterLinkStub,
-  shallowMount,
-  type VueWrapper,
-} from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import {
   accountApi,
   blacklistApi,
@@ -30,19 +26,13 @@ import { useSubscriptionsStore } from "@/entities/subscription";
 import { UserSubscribeButton } from "@/features/user-subscribe";
 import { StatLine } from "@/shared/ui/StatLine";
 import { Api } from "@/shared/api";
-import ProfilePage from "./ProfilePage.vue";
 import ProfileAbout from "./ProfileAbout.vue";
 import ProfileRemovedAccountAbout from "./ProfileRemovedAccountAbout.vue";
 import ProfilePersonalInfo from "./ProfilePersonalInfo.vue";
 import ProfileViolations from "./ProfileViolations.vue";
 import ProfileAchievements from "./ProfileAchievements.vue";
 import ProfileModerationTab from "./moderation/ProfileModerationTab.vue";
-import { route } from "./ProfilePage.doubles";
-import { askedForNote, ok } from "./ProfilePage.fixtures";
-
-vi.mock("vue-router", async (importOriginal) =>
-  (await import("./ProfilePage.doubles")).vueRouter(importOriginal),
-);
+import { askedForNote, mountProfile, ok } from "./ProfilePage.fixtures";
 
 /**
  * The summary the server answers the name with (RemovedAccountProfileShould):
@@ -109,8 +99,9 @@ async function render(
   moderated: object | null = null,
   /** The moderated profile's answer, held back to arrive when the test says. */
   moderationAnswer?: Promise<unknown>,
+  /** The query of the address, with its question mark. */
+  query = "",
 ) {
-  route.params.username = username;
   const pinia = createPinia();
   setActivePinia(pinia);
 
@@ -138,34 +129,30 @@ async function render(
     .spyOn(useSubscriptionsStore(), "fetchSubscriptions")
     .mockResolvedValue(null as never);
 
-  const wrapper = shallowMount(ProfilePage, {
-    global: {
-      plugins: [pinia],
-      // The tab strip, the buttons and the row of actions are real: what they say is read.
-      stubs: {
-        Tabs: false,
-        // The parts the drawn page is read from.
-        ProfileStats: false,
-        ProfileActions: false,
-        ProfileTabs: false,
-        ProfilePersonalNote: false,
-        ProfileUsername: false,
-        ProfileEditBar: false,
-        ButtonRow: false,
-        Button: false,
-        RouterLink: RouterLinkStub,
-      },
-    },
+  // The tab strip, the buttons and the row of actions are real: what they say is read.
+  const { wrapper, address } = await mountProfile(pinia, username, {
+    query,
+    real: [
+      "Tabs",
+      // The parts the drawn page is read from.
+      "ProfileStats",
+      "ProfileActions",
+      "ProfileTabs",
+      "ProfilePersonalNote",
+      "ProfileUsername",
+      "ProfileEditBar",
+      "ButtonRow",
+      "Button",
+    ],
   });
-  await flushPromises();
-  return { wrapper, requests: { ...requests, subscriptions } };
+  return { wrapper, address, requests: { ...requests, subscriptions } };
 }
 
 const tabs = (wrapper: VueWrapper) =>
   wrapper.findAll('[role="tab"]').map((tab) => tab.text());
 
 const links = (wrapper: VueWrapper) =>
-  wrapper.findAllComponents(RouterLinkStub).map((link) => link.text());
+  wrapper.findAll("a").map((link) => link.text());
 
 const buttons = (wrapper: VueWrapper) =>
   wrapper.findAll("button").map((button) => button.text());
@@ -179,7 +166,6 @@ const statLines = (wrapper: VueWrapper) =>
 
 afterEach(() => {
   vi.restoreAllMocks();
-  route.query = {};
 });
 
 describe("the profile of an ordinary user, in front of an administrator", () => {
@@ -234,9 +220,14 @@ describe("the moderation tab of an ordinary profile", () => {
 
   // The tab waits for the answer that decides whether it exists, the profile on screen first.
   it("opens on the tab when asked to, waiting for the moderated profile", async () => {
-    route.query = { tab: "moderation" };
     const { answer, give } = heldAnswer();
-    const { wrapper } = await render("Other", {}, null, answer);
+    const { wrapper } = await render(
+      "Other",
+      {},
+      null,
+      answer,
+      "?tab=moderation",
+    );
 
     give(ok({ username: "Other", permissions: {}, violations: {} }));
     await flushPromises();
@@ -247,12 +238,20 @@ describe("the moderation tab of an ordinary profile", () => {
 
   // It leaves the tab once the answer is none, though no tab changes then.
   it("falls back to О себе once the server serves nothing", async () => {
-    route.query = { tab: "moderation" };
     const { answer, give } = heldAnswer();
-    const { wrapper } = await render("Other", {}, null, answer);
+    const { wrapper, address } = await render(
+      "Other",
+      {},
+      null,
+      answer,
+      "?tab=moderation",
+    );
 
     give(ok());
     await flushPromises();
+
+    // The tab leaves the address with it.
+    expect(address()).toBe("/users/Other");
 
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe(
       "О себе",
@@ -307,12 +306,13 @@ describe("the profile of Аккаунт удален", () => {
 
   // With no games and no blogs the strip never changes, so only the page's first choice keeps it off the tab.
   it("does not open on Зал славы when asked to", async () => {
-    route.query = { tab: "achievements" };
-    const { wrapper } = await render("Аккаунт удален", {
-      gamesHosting: 0,
-      gamesPlaying: 0,
-      blogsHosting: 0,
-    });
+    const { wrapper } = await render(
+      "Аккаунт удален",
+      { gamesHosting: 0, gamesPlaying: 0, blogsHosting: 0 },
+      null,
+      undefined,
+      "?tab=achievements",
+    );
 
     expect(tabs(wrapper)).toEqual(["О себе", "Топики"]);
     expect(wrapper.findComponent(ProfileAchievements).exists()).toBe(false);
@@ -340,14 +340,16 @@ describe("the profile of Аккаунт удален", () => {
     expect(wrapper.findComponent(ProfileAbout).exists()).toBe(false);
     expect(wrapper.find(".profile-note").exists()).toBe(false);
 
-    const about = shallowMount(ProfileRemovedAccountAbout, {
-      global: { stubs: { RouterLink: RouterLinkStub } },
-    });
+    const { wrapper: about } = await mountPage(
+      ProfileRemovedAccountAbout,
+      "/",
+      { routes: [["support", "/support"]] },
+    );
     expect(about.text()).toContain(
       "Здесь собрано все, что оставили удаленные аккаунты",
     );
-    const support = about.getComponent(RouterLinkStub);
+    const support = about.get("a");
     expect(support.text()).toBe("поддержку");
-    expect(support.props("to")).toEqual(supportFor("AccountRestoration"));
+    expect(support.attributes("href")).toBe(supportFor("AccountRestoration"));
   });
 });

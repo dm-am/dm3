@@ -12,7 +12,6 @@ namespace DM.Testing.Markup;
 /// </remarks>
 public static class MarkupSurfaces
 {
-    /// <summary>The five surfaces of content, in the order of the enumeration.</summary>
     public static readonly BbSurface[] Content =
     [
         BbSurface.GamePost,

@@ -118,11 +118,7 @@ public class UpdateTagValidatorShould
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// The description is the hint of a tag, where a hidden block is erased for
-    /// every reader: refused, with the place and the way to show it as an
-    /// example, as on every surface that has none.
-    /// </summary>
+    // The description is the hint of a tag, where a hidden block is erased for every reader
     [Fact]
     public void FailWhenDescriptionHidesText()
     {

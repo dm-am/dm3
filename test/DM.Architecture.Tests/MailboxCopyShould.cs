@@ -9,16 +9,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The mailbox field is called "Почта" in every text a person reads.
-/// </summary>
 /// <remarks>
 /// The word stays legal as a channel name and as the prefix of Email* types, so only what a person
 /// sees is scanned: Russian string literals and template text.
 /// </remarks>
 public class MailboxCopyShould
 {
-    /// <summary>The word standing alone, not the Email* of an identifier.</summary>
     private static readonly Regex EmailWord = new(
         @"(?<![A-Za-z0-9_@.\-])email(?![A-Za-z0-9_@.\-])",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -33,7 +29,6 @@ public class MailboxCopyShould
         @"""{3,}[\s\S]*?""{3,}|@""(?:[^""]|"""")*""|""(?:[^""\\\n]|\\.)*""",
         RegexOptions.Compiled);
 
-    /// <summary>The three delimiters the client writes strings with.</summary>
     private static readonly Regex ClientLiterals = new(
         @"""(?:[^""\\\n]|\\.)*""|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`",
         RegexOptions.Compiled);

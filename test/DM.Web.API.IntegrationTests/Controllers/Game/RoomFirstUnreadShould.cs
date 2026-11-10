@@ -7,15 +7,8 @@ using static DM.Web.API.IntegrationTests.Helpers.RoomPostsTestHelper;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// Where a room opens when no page is named: on the first unread post, or on the
-/// last page when everything is read.
-/// </summary>
-/// <remarks>
-/// Asked over HTTP and checked against the room's own list: the number and the
-/// page are only right if the list, read at that page, shows that post at that
-/// number.
-/// </remarks>
+// Asked over HTTP and checked against the room's own list: the number and the page are only right
+// if the list, read at that page, shows that post at that number.
 public class RoomFirstUnreadShould : IntegrationTestBase
 {
     private static readonly DateTimeOffset Start = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
@@ -24,10 +17,6 @@ public class RoomFirstUnreadShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Five live posts and a removed one, read up to the third: the fourth is the first unread, and the removed
-    /// post after the mark is not.
-    /// </summary>
     [Fact]
     public async Task OpenTheRoomOnTheFirstUnreadPost()
     {
@@ -60,9 +49,8 @@ public class RoomFirstUnreadShould : IntegrationTestBase
         byDefault.Page.Should().Be(1);
     }
 
-    /// <summary>
-    /// The room is marked read when opened, so the reader's own post and what they answered are not news.
-    /// </summary>
+    // The room is marked read when opened, so the reader's own post and what they answered are not
+    // news.
     [Fact]
     public async Task NotOpenTheRoomOnTheReadersOwnPost()
     {
@@ -131,10 +119,8 @@ public class RoomFirstUnreadShould : IntegrationTestBase
         guest.HasUnread.Should().BeTrue();
     }
 
-    /// <summary>
-    /// Posts written in one instant are read or unread together, and the first of
-    /// them is the one the page shows first, which is decided by the identifier.
-    /// </summary>
+    // Posts written in one instant are read or unread together, and the first of them is the one
+    // the page shows first, which is decided by the identifier.
     [Fact]
     public async Task NameThePostThePageShowsFirstAmongPostsOfOneInstant()
     {

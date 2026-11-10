@@ -28,9 +28,6 @@ public class PostsQuery : PagingQuery
     /// </summary>
     public string? SortOrder { get; set; }
 
-    /// <summary>
-    /// Search by post text (case-insensitive contains)
-    /// </summary>
     /// <remarks>
     /// The text a reader sees: neither the markup nor anything hidden from him is matched.
     /// </remarks>

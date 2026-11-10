@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests.Authorization;
 
-/// <summary>
-/// The ban rules, one clause at a time.
-/// </summary>
 public class AccessRestrictionsShould
 {
     private sealed record Subject(AccessPolicy AccessPolicy) : IAuthorizationSubject
@@ -59,10 +56,7 @@ public class AccessRestrictionsShould
         both.MaySpeak(inOwnSpace: true).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The refusal names what this ban forbids, and the two scopes forbid
-    /// different things.
-    /// </summary>
+    // The refusal names what this ban forbids, and the two scopes forbid different things.
     [Fact]
     public void RefuseTheOrdinaryBanWithoutClosingOwnSpace()
     {

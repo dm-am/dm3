@@ -5,18 +5,11 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests;
 
-/// <summary>
-/// The identifier that carries a title in it and still decodes back to a Guid.
-/// </summary>
-/// <remarks>
-/// Base64 is not URL-safe, so the encoder swaps three characters and the decoder swaps them back.
-/// </remarks>
+// Base64 is not URL-safe, so the encoder swaps three characters and the decoder swaps them back.
 public class ReadableGuidHelperShould
 {
-    /// <summary>
-    /// Guids chosen so their Base64 spells all three characters that have to be
-    /// swapped: the pair a URL would take differently, and the padding.
-    /// </summary>
+    // Guids chosen so their Base64 spells all three characters that have to be swapped: the pair a
+    // URL would take differently, and the padding.
     public static TheoryData<string> Identifiers => new()
     {
         "00000000-0000-0000-0000-000000000000",
@@ -44,10 +37,6 @@ public class ReadableGuidHelperShould
         guid.EncodeToReadable("Приключение в Тени").DecodeFromReadableGuid().Should().Be(guid);
     }
 
-    /// <summary>
-    /// Nothing that has to survive a URL: the three characters Base64 produces
-    /// and an address does not want are the ones the encoder replaces.
-    /// </summary>
     [Theory]
     [MemberData(nameof(Identifiers))]
     public void ProduceNothingAUrlWouldTakeDifferently(string value) =>
@@ -90,6 +79,29 @@ public class ReadableGuidHelperShould
     [InlineData("~")]
     public void RefuseWhatIsNotAnIdentifierAtAll(string value)
     {
+        value.TryDecodeFromReadableGuid(out var result).Should().BeFalse();
+        result.Should().Be(Guid.Empty);
+    }
+
+    // One row per kind of malformed input, with what the strict form throws for it: the try-form
+    // has to answer false for every one, or a bad address becomes a 500.
+    public static TheoryData<string, Type> Malformed => new()
+    {
+        { "not*base64", typeof(FormatException) },
+        { "abc", typeof(FormatException) },
+        { "AAAAAA", typeof(ArgumentException) },
+        { "title~AAAAAA", typeof(ArgumentException) },
+        { "", typeof(FormatException) },
+        { "title~", typeof(FormatException) },
+    };
+
+    [Theory]
+    [MemberData(nameof(Malformed))]
+    public void RefuseEveryKindOfMalformedIdentifier(string value, Type thrown)
+    {
+        FluentActions.Invoking(() => value.DecodeFromReadableGuid()).Should().Throw<Exception>()
+            .Which.Should().BeOfType(thrown);
+
         value.TryDecodeFromReadableGuid(out var result).Should().BeFalse();
         result.Should().Be(Guid.Empty);
     }

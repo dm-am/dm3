@@ -4,9 +4,6 @@ using FluentValidation;
 
 namespace DM.Infrastructure.Persistence.Shared.Comments;
 
-/// <summary>
-/// Validator for comment creation DTO model
-/// </summary>
 internal class CreateCommentValidator : AbstractValidator<CreateComment>
 {
     public CreateCommentValidator(IBbCodeNestingLimit nestingLimit)

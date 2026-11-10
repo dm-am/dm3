@@ -31,6 +31,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   updateField: [field: string, value: string];
+  updateContacts: [contacts: Contact[]];
 }>();
 
 const genderLabels: Record<Gender, string> = {
@@ -169,11 +170,7 @@ watch(
 );
 
 function commitContacts() {
-  emit(
-    "updateField",
-    "contacts",
-    JSON.stringify(asContacts(contactsDraft.value)),
-  );
+  emit("updateContacts", asContacts(contactsDraft.value));
 }
 
 function addContact() {

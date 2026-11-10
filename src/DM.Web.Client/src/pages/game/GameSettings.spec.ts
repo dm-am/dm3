@@ -9,33 +9,19 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
-import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import {
-  GameParticipation,
-  useGameDetailsStore,
-  type Game,
-} from "@/entities/game";
+import { GameParticipation, useGameDetailsStore } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { useAuthStore, UserRole, type User } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
 import GameSettings from "./GameSettings.vue";
 
-const { push, replace, session } = vi.hoisted(() => ({
-  push: vi.fn(),
-  replace: vi.fn(),
+const { session } = vi.hoisted(() => ({
   session: { settled: Promise.resolve() as Promise<void> },
-}));
-
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({
-    params: { id: "the-game" },
-    path: "/game/the-game/settings",
-    query: {},
-    hash: "",
-  }),
-  useRouter: () => ({ push, replace }),
 }));
 
 // Settled at once unless a test holds it.
@@ -82,12 +68,14 @@ const stubs = {
   BlacklistSection: marker("blacklist-section-stub"),
   InvitationsSection: invitationsStub,
   Teleport: true,
-  RouterLink: { template: "<a><slot /></a>" },
 };
+
+const SETTINGS = "/game/the-game/settings";
 
 const THE_VIEWER = "the-viewer";
 
-function render(participation: GameParticipation[], viewer?: UserRole) {
+/** The page, and the parts of the address it is at that NOT_FOUND names. */
+async function render(participation: GameParticipation[], viewer?: UserRole) {
   const pinia = createPinia();
   setActivePinia(pinia);
   // No site role at all is a guest.
@@ -96,12 +84,37 @@ function render(participation: GameParticipation[], viewer?: UserRole) {
     : null;
   const store = useGameDetailsStore();
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    participation,
-  } as unknown as Game;
-  return mount(GameSettings, { global: { plugins: [pinia], stubs } });
+    ...createMockGame("the-game-guid", "Игра"),
+    publicId: asServed("the-game"),
+    participation: asServed(participation),
+  };
+  const { wrapper, router } = await mountPage(GameSettings, SETTINGS, {
+    routes: [
+      ["game-settings", "/game/:id/settings"],
+      ["games", "/games"],
+      ["not-found", "/:pathMatch(.*)*"],
+    ],
+    pinia,
+    stubs,
+  });
+  const landed = () => {
+    const { name, params, query, hash } = router.currentRoute.value;
+    return { name, params, query, hash };
+  };
+  // Not found keeps the full address, so a stay is told by the route's name too.
+  const stayed = () => {
+    const { name, fullPath } = router.currentRoute.value;
+    return { name, fullPath };
+  };
+  return {
+    wrapper,
+    landed,
+    stayed,
+    address: () => router.currentRoute.value.fullPath,
+  };
 }
+
+const STAYED = { name: "game-settings", fullPath: SETTINGS };
 
 const sectionsOf = (wrapper: VueWrapper) => {
   const invitations = wrapper.find(".invitations-section-stub");
@@ -122,10 +135,10 @@ const sectionsOf = (wrapper: VueWrapper) => {
   };
 };
 
-const seenBy = (
+const seenBy = async (
   participation: GameParticipation[],
   viewer: UserRole = UserRole.RegularUser,
-) => sectionsOf(render(participation, viewer));
+) => sectionsOf((await render(participation, viewer)).wrapper);
 
 describe("GameSettings admission", () => {
   beforeEach(() => {
@@ -140,81 +153,87 @@ describe("GameSettings admission", () => {
     ["a junior moderator", [], UserRole.Moderator],
     // The curator of some other game is a stranger here.
     ["a site mentor who does not curate this game", [], UserRole.Mentor],
-  ])("keeps the page away from %s", (_, participation, viewer) => {
-    expect(seenBy(participation, viewer).info).toBe(false);
+  ])("keeps the page away from %s", async (_, participation, viewer) => {
+    expect((await seenBy(participation, viewer)).info).toBe(false);
   });
 
   it("opens the site's not found for a viewer it refuses, with no refusal drawn", async () => {
-    const wrapper = render([GameParticipation.Player], UserRole.RegularUser);
+    const { wrapper, landed } = await render(
+      [GameParticipation.Player],
+      UserRole.RegularUser,
+    );
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(landed()).toEqual(NOT_FOUND);
     expect(wrapper.text()).toBe("");
   });
 
   it("opens it for a guest too, with no invitation to sign in", async () => {
-    const wrapper = render([]);
+    const { wrapper, landed } = await render([]);
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(landed()).toEqual(NOT_FOUND);
     expect(wrapper.find(".login-prompt").exists()).toBe(false);
     expect(wrapper.text()).toBe("");
   });
 
   it("opens it for a guest whatever role his read of the game carries", async () => {
-    const wrapper = render([GameParticipation.Moderator]);
+    const { wrapper, landed } = await render([GameParticipation.Moderator]);
     await flushPromises();
 
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(landed()).toEqual(NOT_FOUND);
     expect(sectionsOf(wrapper).info).toBe(false);
   });
 
   it("keeps the master on his page", async () => {
-    render([GameParticipation.Owner], UserRole.RegularUser);
+    const { stayed } = await render(
+      [GameParticipation.Owner],
+      UserRole.RegularUser,
+    );
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(stayed()).toEqual(STAYED);
   });
 
   it("waits for the answer about the session before sending anybody away", async () => {
     let answer = () => {};
     session.settled = new Promise((resolve) => (answer = resolve));
-    render([]);
+    const { landed } = await render([]);
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(landed().name).toBe("game-settings");
 
     answer();
     await flushPromises();
-    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(landed()).toEqual(NOT_FOUND);
   });
 
   it("waits for the game read again for a new viewer", async () => {
     // Read for a guest, the game is read again for the master the server named.
     let answer = () => {};
     session.settled = new Promise((resolve) => (answer = resolve));
-    render([]);
+    const { stayed } = await render([]);
     useAuthStore().user = { username: THE_VIEWER } as User;
     const store = useGameDetailsStore();
     store.gameLoading = true;
     answer();
     await flushPromises();
 
-    expect(replace).not.toHaveBeenCalled();
+    expect(stayed()).toEqual(STAYED);
 
     store.game = {
-      ...store.game,
-      participation: [GameParticipation.Owner],
-    } as Game;
+      ...store.game!,
+      participation: asServed([GameParticipation.Owner]),
+    };
     store.gameLoading = false;
     await flushPromises();
-    expect(replace).not.toHaveBeenCalled();
+    expect(stayed()).toEqual(STAYED);
   });
 });
 
 describe("GameSettings sections", () => {
-  it("gives the master every section", () => {
-    expect(seenBy([GameParticipation.Owner])).toEqual({
+  it("gives the master every section", async () => {
+    expect(await seenBy([GameParticipation.Owner])).toEqual({
       info: true,
       schema: true,
       rooms: true,
@@ -227,8 +246,8 @@ describe("GameSettings sections", () => {
     });
   });
 
-  it("gives the assistant the roster to read but not its controls", () => {
-    expect(seenBy([GameParticipation.Authority])).toEqual({
+  it("gives the assistant the roster to read but not its controls", async () => {
+    expect(await seenBy([GameParticipation.Authority])).toEqual({
       info: true,
       schema: true,
       rooms: true,
@@ -241,8 +260,8 @@ describe("GameSettings sections", () => {
     });
   });
 
-  it("gives the curating mentor the settings the server lets him save", () => {
-    expect(seenBy([GameParticipation.Moderator])).toEqual({
+  it("gives the curating mentor the settings the server lets him save", async () => {
+    expect(await seenBy([GameParticipation.Moderator])).toEqual({
       info: true,
       schema: false,
       rooms: false,
@@ -255,8 +274,8 @@ describe("GameSettings sections", () => {
     });
   });
 
-  it("gives a senior moderator the Edit sections but no roster or invitation writes", () => {
-    expect(seenBy([], UserRole.SeniorModerator)).toEqual({
+  it("gives a senior moderator the Edit sections but no roster or invitation writes", async () => {
+    expect(await seenBy([], UserRole.SeniorModerator)).toEqual({
       info: true,
       schema: true,
       rooms: true,
@@ -281,34 +300,37 @@ describe("GameSettings — deleting the game", () => {
   });
 
   async function deleteGame(answer: GeneralError | null) {
-    const wrapper = render([GameParticipation.Owner], UserRole.RegularUser);
+    const { wrapper, address } = await render(
+      [GameParticipation.Owner],
+      UserRole.RegularUser,
+    );
     const remove = vi
       .spyOn(useGameDetailsStore(), "deleteGame")
       .mockResolvedValue(answer);
     await wrapper.find(".delete-game").trigger("click");
     await wrapper.find(".dialog-btn-submit").trigger("click");
     await flushPromises();
-    return { wrapper, remove };
+    return { wrapper, remove, address };
   }
 
   it("leaves for the list of games once the server agreed", async () => {
-    const { wrapper, remove } = await deleteGame(null);
+    const { wrapper, remove, address } = await deleteGame(null);
 
     expect(remove).toHaveBeenCalledWith({
       ownsRefusal: true,
       ownsRateLimit: true,
     });
-    expect(push).toHaveBeenCalledWith({ name: "games" });
+    expect(address()).toBe("/games");
     expect(wrapper.find(".dialog-container").exists()).toBe(false);
   });
 
   it("keeps the master on the settings and names the refusal in the window", async () => {
-    const { wrapper } = await deleteGame({
+    const { wrapper, address } = await deleteGame({
       status: 400,
       title: "",
     } as GeneralError);
 
-    expect(push).not.toHaveBeenCalled();
+    expect(address()).toBe(SETTINGS);
     expect(wrapper.get(".dialog-refusal").text()).toBe(
       "Не удалось удалить игру",
     );

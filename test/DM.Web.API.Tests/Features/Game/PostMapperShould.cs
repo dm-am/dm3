@@ -19,12 +19,9 @@ using DomainPostAttachment = DM.Domain.Game.Features.Posts.PostAttachment;
 
 namespace DM.Web.API.Tests.Features.Game;
 
-/// <summary>
-/// A post carries the render context of its texts, its dice and its attachments to the client.
-/// </summary>
 public class PostMapperShould : UnitTestBase
 {
-    /// <remarks>The rule of hidden blocks is the real one, read for a guest.</remarks>
+    // The rule of hidden blocks is the real one, read for a guest.
     private static PostMapper CreateMapper()
     {
         var readers = Mock<IAuthorizationContextProvider>();
@@ -44,11 +41,6 @@ public class PostMapperShould : UnitTestBase
     private static readonly Guid AssistantId = Guid.Parse("00000000-0000-0000-0000-00000000000d");
     private static readonly Guid AddresseeId = Guid.Parse("00000000-0000-0000-0000-00000000000e");
 
-    /// <summary>
-    /// A domain post carrying everything the render-context envelope reads:
-    /// the frozen addressee snapshot, the lead ids and both [private]
-    /// overrides.
-    /// </summary>
     private static DomainPost CreateDomainPost() => new()
     {
         Id = Guid.NewGuid(),
@@ -72,9 +64,8 @@ public class PostMapperShould : UnitTestBase
         }
     };
 
-    /// <summary>
-    /// The game text is the surface [private] lives on: its envelope carries the full privacy context.
-    /// </summary>
+    // The game text is the surface [private] lives on: its envelope carries the full privacy
+    // context.
     [Fact]
     public void WrapGameTextInAGamePostEnvelope()
     {
@@ -93,11 +84,8 @@ public class PostMapperShould : UnitTestBase
         context.RoomViewPrivateText.Should().BeTrue();
     }
 
-    /// <summary>
-    /// The frozen snapshot is what the render path resolves [private] blocks
-    /// against - the envelope must carry it parsed, keyed by the raw tag
-    /// attribute.
-    /// </summary>
+    // The frozen snapshot is what the render path resolves [private] blocks against - the envelope
+    // must carry it parsed, keyed by the raw tag attribute.
     [Fact]
     public void CarryTheFrozenAddresseeMapIntoTheEnvelope()
     {
@@ -111,12 +99,9 @@ public class PostMapperShould : UnitTestBase
             .WhoseValue.Should().BeEquivalentTo([AddresseeId]);
     }
 
-    /// <summary>
-    /// The metagame text is OOC commentary: Comment surface ([mod] for
-    /// moderators, never [private]), so its envelope carries the author and
-    /// the game but no block addressees and no leads: the files the post keeps
-    /// from the viewer come to it decided.
-    /// </summary>
+    // The metagame text is OOC commentary: Comment surface ([mod] for moderators, never [private]),
+    // so its envelope carries the author and the game but no block addressees and no leads: the
+    // files the post keeps from the viewer come to it decided.
     [Fact]
     public void WrapMetagameTextInACommentEnvelope()
     {
@@ -133,10 +118,9 @@ public class PostMapperShould : UnitTestBase
         context.GameLeadUserIds.Should().BeEmpty();
     }
 
-    /// <summary>
-    /// A file the post keeps from the viewer is answered once, by PostAttachmentVisibility: the strip
-    /// under the post goes without it, and both texts carry it to be cut from their pictures and links.
-    /// </summary>
+    // A file the post keeps from the viewer is answered once, by PostAttachmentVisibility: the
+    // strip under the post goes without it, and both texts carry it to be cut from their pictures
+    // and links.
     [Fact]
     public void WithholdAFileFromTheStripAndTheTextsByOneAnswer()
     {
@@ -155,7 +139,6 @@ public class PostMapperShould : UnitTestBase
         result.MetagameText.Context!.WithheldUploadIds.Should().Equal(marked.Id);
     }
 
-    /// <summary>A file every reader of the post reads is cut from nothing.</summary>
     [Fact]
     public void WithholdNothingOfAFileForEverybody()
     {
@@ -207,10 +190,8 @@ public class PostMapperShould : UnitTestBase
         spec.Comment.Should().Be("hit");
     }
 
-    /// <summary>
-    /// The measured box of an attachment reaches the payload, because the page
-    /// cannot reserve room for a picture whose shape it is not told.
-    /// </summary>
+    // The measured box of an attachment reaches the payload, because the page cannot reserve room
+    // for a picture whose shape it is not told.
     [Fact]
     public void CarryTheMeasuredBoxOfAnAttachment()
     {
@@ -224,11 +205,7 @@ public class PostMapperShould : UnitTestBase
         attachment.FileName.Should().Be("karta.png");
     }
 
-    /// <summary>
-    /// An attachment stored before the pipeline measured anything comes back
-    /// without a pair rather than with an invented one.
-    /// </summary>
-    /// <remarks>Nulls, not zeroes: a zero would read as a measurement of nothing.</remarks>
+    // Nulls, not zeroes: a zero would read as a measurement of nothing.
     [Fact]
     public void SayNothingAboutAnAttachmentNobodyMeasured()
     {

@@ -12,10 +12,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// A write to a game answers with the details of the game, sheet included, the
-/// way the details read answers, end to end.
-/// </summary>
 /// <remarks>
 /// The repository hands back the row without the sheet and every write answers through the details mapping,
 /// so each write that answers with the game is asked.
@@ -86,9 +82,6 @@ public class GameWriteAnswerShould : IntegrationTestBase
         return document.RootElement.GetProperty("resource").Clone();
     }
 
-    /// <summary>
-    /// A draft of a fresh master, open to everybody unless it waits for a verdict; fresh identifiers.
-    /// </summary>
     private async Task<(GeneralUser Master, Guid GameId)> SeedAsync(
         PremoderationStatus premoderation = PremoderationStatus.Approved)
     {

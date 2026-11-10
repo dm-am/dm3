@@ -17,10 +17,6 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// The thumbnails of an avatar go into the store beside it when it is uploaded, leave with it when its
-/// row does not go in, and are handed out from beside its address.
-/// </summary>
 public class AvatarThumbnailsShould : UnitTestBase
 {
     private static readonly byte[] Original = [1, 2, 3];

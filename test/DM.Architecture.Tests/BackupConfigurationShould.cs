@@ -8,17 +8,10 @@ using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The backups the installer schedules are verified, run with the environment
-/// they need, and kept out of anything that goes with the stack.
-/// </summary>
-/// <remarks>Cron runs these with almost nothing and nobody watches them fail. DEPLOYMENT.md names the scripts.</remarks>
+// Cron runs these with almost nothing and nobody watches them fail.
 public class BackupConfigurationShould
 {
-    /// <summary>
-    /// Whatever the installer schedules, the verifier looks at.
-    /// </summary>
-    /// <remarks>A verifier that skips one backup says "All backups OK" out loud.</remarks>
+    // A verifier that skips one backup says "All backups OK" out loud.
     [Fact]
     public void VerifyEveryBackupTheInstallerSchedules()
     {
@@ -73,10 +66,7 @@ public class BackupConfigurationShould
             "cron gives the job no environment, and these scripts need credentials");
     }
 
-    /// <summary>
-    /// The backups live on the host, out of reach of "docker compose down -v".
-    /// </summary>
-    /// <remarks>Named volumes are what "down -v" removes, and the developer reset runs it.</remarks>
+    // Named volumes are what "down -v" removes, and the developer reset runs it.
     [Fact]
     public void KeepTheBackupsOutOfAVolumeThatGoesWithTheStack()
     {

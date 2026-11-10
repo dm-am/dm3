@@ -14,10 +14,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests;
 
-/// <summary>
-/// Shared fixture managing PostgreSQL and RabbitMQ containers.
-/// Provides consistent test data seeding with a data-driven approach.
-/// </summary>
 public partial class DatabaseFixture : IAsyncLifetime
 {
     // The stand's image and locale (postgres:16, en_US.utf8): Alpine has no locales and orders names by byte.
@@ -29,10 +25,10 @@ public partial class DatabaseFixture : IAsyncLifetime
         .WithPassword("test")
         .Build();
 
-    /// <summary>The broker container's user, handed to the host as a setting: the endpoint's userinfo is not read.</summary>
+    // The broker container's user, handed to the host as a setting: the endpoint's userinfo is not
+    // read.
     public const string BrokerUsername = "guest";
 
-    /// <summary>The broker container's password, handed to the host the same way.</summary>
     public const string BrokerPassword = "guest";
 
     // The AMQP port is pinned: Docker reassigns a random port on restart, which the broker-restart tests do.
@@ -79,17 +75,11 @@ public partial class DatabaseFixture : IAsyncLifetime
         .EnableDetailedErrors()
         .Options);
 
-    /// <summary>
-    /// Stops the broker container without removing it: queues and persisted messages survive.
-    /// </summary>
+    // Stops the broker container without removing it: queues and persisted messages survive.
     public Task StopBrokerAsync() => _rabbitMqContainer.StopAsync();
 
-    /// <summary>Starts the stopped broker container back up, same ports.</summary>
     public Task StartBrokerAsync() => _rabbitMqContainer.StartAsync();
 
-    /// <summary>
-    /// Context for another database on the same container, built by MigrateAsync and dropped by the caller.
-    /// </summary>
     public DmDbContext CreateDbContextFor(string databaseName)
     {
         var connection = new NpgsqlConnectionStringBuilder(ConnectionString)

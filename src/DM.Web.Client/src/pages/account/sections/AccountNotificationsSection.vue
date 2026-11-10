@@ -151,7 +151,7 @@
 
 <script setup lang="ts">
 import { nextTick, ref, reactive, onMounted, onUnmounted, useId } from "vue";
-import { accountApi } from "@/entities/user";
+import { accountApi, type BotType } from "@/entities/user";
 import type {
   NotificationSettings,
   NotificationCategory,
@@ -165,15 +165,13 @@ import { OWNED_BY_CARD } from "./loadFailure";
 
 const LOAD_FAILED = "Не удалось загрузить настройки уведомлений";
 
-type ChannelId = "telegram" | "discord";
-
 /**
  * The two channels, in the order of the rows; a row is drawn from one of
  * these. The bots are named as the server is configured. `startsWithCode`: the
  * bot takes the code in its start link, which Telegram hands it as "/start <code>".
  */
 const CHANNELS: readonly {
-  id: ChannelId;
+  id: BotType;
   name: string;
   bot: { href: string; label: string };
   startsWithCode?: boolean;
@@ -204,8 +202,8 @@ function startLabel(botHref: string, code: string | undefined): string {
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const saving = ref(false);
-const disconnecting = ref<ChannelId | null>(null);
-const generating = ref<ChannelId | null>(null);
+const disconnecting = ref<BotType | null>(null);
+const generating = ref<BotType | null>(null);
 
 const preferences = reactive<NotificationSettings>({
   telegram: undefined,
@@ -222,27 +220,27 @@ const allCategories: { value: NotificationCategory; label: string }[] = [
   { value: "Blog", label: "Блоги" },
 ];
 
-const enabled = reactive<Record<ChannelId, boolean>>({
+const enabled = reactive<Record<BotType, boolean>>({
   telegram: false,
   discord: false,
 });
-const categories = reactive<Record<ChannelId, NotificationCategory[]>>({
+const categories = reactive<Record<BotType, NotificationCategory[]>>({
   telegram: [],
   discord: [],
 });
 
-const connected = (id: ChannelId) => preferences[id]?.connected === true;
+const connected = (id: BotType) => preferences[id]?.connected === true;
 
 // The ids of the captions over the channels' categories.
 const baseId = useId();
-const categoriesId = (id: ChannelId) => `${baseId}-${id}-categories`;
+const categoriesId = (id: BotType) => `${baseId}-${id}-categories`;
 
 onMounted(async () => {
   await loadPreferences();
 });
 
 /** Takes one channel's preferences as the server holds them, boxes included. */
-function takeChannel(id: ChannelId, data: NotificationSettings) {
+function takeChannel(id: BotType, data: NotificationSettings) {
   preferences[id] = data[id];
   enabled[id] = data[id]?.enabled ?? false;
   categories[id] = [...(data[id]?.enabledCategories ?? [])];
@@ -267,12 +265,12 @@ function holdWhileSaving(event: Event) {
 }
 
 // A refused press, at the foot of its row: the box goes back and the line says why.
-const results: Record<ChannelId, ReturnType<typeof useActionResult>> = {
+const results: Record<BotType, ReturnType<typeof useActionResult>> = {
   telegram: useActionResult(),
   discord: useActionResult(),
 };
 
-async function updateEnabled(id: ChannelId) {
+async function updateEnabled(id: BotType) {
   saving.value = true;
   results[id].clear();
   const { error } = await accountApi.updateNotificationPreferences({
@@ -286,7 +284,7 @@ async function updateEnabled(id: ChannelId) {
   }
 }
 
-async function toggleCategory(id: ChannelId, category: NotificationCategory) {
+async function toggleCategory(id: BotType, category: NotificationCategory) {
   const list = categories[id];
   const idx = list.indexOf(category);
   if (idx >= 0) {
@@ -312,7 +310,7 @@ async function toggleCategory(id: ChannelId, category: NotificationCategory) {
   }
 }
 
-async function disconnect(id: ChannelId) {
+async function disconnect(id: BotType) {
   disconnecting.value = id;
   results[id].clear();
   const { error } = await accountApi.disconnectBot(id);
@@ -334,13 +332,13 @@ interface Linking {
   secondsLeft: number;
 }
 
-const linking = reactive<Record<ChannelId, Linking | null>>({
+const linking = reactive<Record<BotType, Linking | null>>({
   telegram: null,
   discord: null,
 });
-const timers: Partial<Record<ChannelId, ReturnType<typeof setInterval>>> = {};
+const timers: Partial<Record<BotType, ReturnType<typeof setInterval>>> = {};
 
-async function startLinking(id: ChannelId) {
+async function startLinking(id: BotType) {
   generating.value = id;
   results[id].clear();
   const { data, error } = await accountApi.generateBotCode(id);
@@ -369,7 +367,7 @@ async function startLinking(id: ChannelId) {
   }, 1000);
 }
 
-function stopTimer(id: ChannelId) {
+function stopTimer(id: BotType) {
   const timer = timers[id];
   if (timer) clearInterval(timer);
   delete timers[id];
@@ -378,7 +376,7 @@ function stopTimer(id: ChannelId) {
 /** Where focus goes when a press takes away the control it was on. */
 const root = ref<HTMLElement | null>(null);
 
-async function focusIn(id: ChannelId, selector: string) {
+async function focusIn(id: BotType, selector: string) {
   await nextTick();
   root.value
     ?.querySelector<HTMLElement>(`[data-channel="${id}"] ${selector}`)
@@ -386,18 +384,18 @@ async function focusIn(id: ChannelId, selector: string) {
 }
 
 /** "Отмена": the steps go, and the press that opens them again takes focus. */
-function cancelLinking(id: ChannelId) {
+function cancelLinking(id: BotType) {
   stopLinking(id);
   void focusIn(id, ".connect-btn");
 }
 
-function stopLinking(id: ChannelId) {
+function stopLinking(id: BotType) {
   linking[id] = null;
   stopTimer(id);
 }
 
 /** The time a code has left, as "13:58". */
-function timeLeft(id: ChannelId): string {
+function timeLeft(id: BotType): string {
   const seconds = linking[id]?.secondsLeft ?? 0;
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;

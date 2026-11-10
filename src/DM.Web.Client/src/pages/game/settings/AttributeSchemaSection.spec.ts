@@ -23,6 +23,11 @@ import {
   type Character,
   type Game,
 } from "@/entities/game";
+import {
+  createMockCharacter,
+  createMockGame,
+} from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { attributeSchemaTemplateApi } from "@/entities/attribute-schema-template";
 import { useToast } from "@/shared/lib/composables/useToast";
 import AttributeSchemaSection from "./AttributeSchemaSection.vue";
@@ -105,12 +110,10 @@ const editorStub = defineComponent({
   },
 });
 
-const character = (status: Character["status"]): Character =>
-  ({
-    id: `character-${status}`,
-    name: "Кто-то",
-    status,
-  }) as unknown as Character;
+const character = (status: Character["status"]): Character => ({
+  ...createMockCharacter(`character-${status}`, "Кто-то"),
+  status,
+});
 
 type RosterAnswer = Awaited<ReturnType<typeof characterApi.getCharacters>>;
 
@@ -133,10 +136,10 @@ function mountSection(
   setActivePinia(pinia);
   const store = useGameDetailsStore();
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
+    ...createMockGame("the-game-guid", "Игра"),
+    publicId: asServed("the-game"),
     schema: { specifications: [STORED_SPEC], version: THE_VERSION },
-  } as unknown as Game;
+  };
   store.characters = characters;
   if (!options.rereadForReal) {
     vi.spyOn(store, "loadGame").mockResolvedValue({ ok: true });
@@ -211,7 +214,7 @@ describe("saving the sheet", () => {
         specifications: [STORED_SPEC],
         version: THE_VERSION + 1,
       },
-    } as unknown as Game;
+    };
     await flushPromises();
 
     await wrapper.find(".stub-save").trigger("click");
@@ -264,7 +267,7 @@ describe("a sheet somebody else has already changed", () => {
           specifications: [STORED_SPEC],
           version: THE_VERSION + 1,
         },
-      } as unknown as Game;
+      };
       return { ok: true };
     });
 

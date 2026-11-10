@@ -8,10 +8,19 @@ import {
   isValidDate,
 } from "@/shared/lib/filters/values";
 import type { RoomPostsFilter } from "@/entities/game";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 const SORT_FIELDS = ["created", "rating", "reviewcount", "lastreview"] as const;
 export type RoomPostSortBy = (typeof SORT_FIELDS)[number];
 export type RoomPostReviews = "with" | "without";
+
+/** The filters the menu of the bar offers. */
+export type RoomPostFilterKey =
+  | "author"
+  | "character"
+  | "rating"
+  | "reviews"
+  | "date";
 
 // Never a character id: ids are GUIDs, so the word cannot collide with one.
 export const WITHOUT_CHARACTER = "none";
@@ -19,7 +28,7 @@ export const WITHOUT_CHARACTER = "none";
 export interface RoomPostFilterState {
   search: string;
   sortBy: RoomPostSortBy;
-  sortOrder: "asc" | "desc";
+  sortOrder: SortDirection;
   authorUsernames: Set<string>;
   characters: Set<string>;
   minRating: number | null;
@@ -39,7 +48,7 @@ export interface RoomPostFilterComposable {
   isFilteredView: ComputedRef<boolean>;
 
   setSearch: (search: string) => void;
-  setSort: (sortBy: RoomPostSortBy, sortOrder?: "asc" | "desc") => void;
+  setSort: (sortBy: RoomPostSortBy, sortOrder?: SortDirection) => void;
   addAuthor: (username: string) => void;
   removeAuthor: (username: string) => void;
   addCharacter: (id: string) => void;
@@ -52,7 +61,7 @@ export interface RoomPostFilterComposable {
 
 type Action =
   | { type: "SET_SEARCH"; search: string }
-  | { type: "SET_SORT"; sortBy: RoomPostSortBy; sortOrder?: "asc" | "desc" }
+  | { type: "SET_SORT"; sortBy: RoomPostSortBy; sortOrder?: SortDirection }
   | { type: "ADD_AUTHOR"; username: string }
   | { type: "REMOVE_AUTHOR"; username: string }
   | { type: "ADD_CHARACTER"; id: string }
@@ -66,7 +75,7 @@ const DEFAULT_SORT_BY: RoomPostSortBy = "created";
 const DEFAULT_SORT_ORDER = "asc";
 
 // The room reads forward; every other order puts the most first.
-function defaultSortOrder(sortBy: RoomPostSortBy): "asc" | "desc" {
+function defaultSortOrder(sortBy: RoomPostSortBy): SortDirection {
   return sortBy === "created" ? "asc" : "desc";
 }
 

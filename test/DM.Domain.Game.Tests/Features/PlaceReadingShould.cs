@@ -9,9 +9,8 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features;
 
-/// <summary>
-/// A game or a post is read for the warning log by its own read, on the token the log was asked with.
-/// </summary>
+// A game or a post is read for the warning log by its own read, on the token the log was asked
+// with.
 public class PlaceReadingShould : UnitTestBase
 {
     [Fact]

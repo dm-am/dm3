@@ -17,10 +17,7 @@ using ServiceActivationRequest = DM.Domain.Account.Features.Registration.Activat
 
 namespace DM.Web.API.Tests.Features.Account;
 
-/// <summary>
-/// Activation hands back a reader who is actually signed in, or nothing at all.
-/// </summary>
-/// <remarks>The passwordless sign-in refuses an account with a second factor, and that refusal must be read.</remarks>
+// The passwordless sign-in refuses an account with a second factor, and that refusal must be read.
 public class ActivationSessionShould : UnitTestBase
 {
     private static readonly Guid Token = Guid.NewGuid();

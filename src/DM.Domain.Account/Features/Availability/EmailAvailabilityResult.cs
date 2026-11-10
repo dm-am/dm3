@@ -12,14 +12,8 @@ public class EmailAvailabilityResult
     /// </summary>
     public EmailUnavailableReason? Reason { get; init; }
 
-    /// <summary>
-    /// Create available result
-    /// </summary>
     public static EmailAvailabilityResult Available() => new();
 
-    /// <summary>
-    /// Create unavailable result
-    /// </summary>
     public static EmailAvailabilityResult Unavailable(EmailUnavailableReason reason) =>
         new() { Reason = reason };
 }

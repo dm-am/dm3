@@ -9,8 +9,6 @@ import { FilterApplyButton } from "../primitives";
 import type { DateRangePickerProps } from "../types";
 
 const props = withDefaults(defineProps<DateRangePickerProps>(), {
-  fromLabel: "От",
-  toLabel: "До",
   showClearButton: true,
   allowFuture: false,
 });
@@ -54,11 +52,9 @@ const today = computed(() => siteTime().format(DAY));
 /** The latest day a field or the calendar takes. */
 const maxDay = computed(() => (props.allowFuture ? undefined : today.value));
 
-const isInvalidRange = computed(() => {
-  return (
-    !!fromInput.value && !!toInput.value && fromInput.value > toInput.value
-  );
-});
+const isInvalidRange = computed(
+  () => !!fromInput.value && !!toInput.value && fromInput.value > toInput.value,
+);
 
 // The only source of the button's disabled state: an inverted range keeps it locked, with its reason.
 const canApply = computed(() => {
@@ -68,9 +64,9 @@ const canApply = computed(() => {
   return fromChanged || toChanged;
 });
 
-const showClear = computed(() => {
-  return props.showClearButton && (props.fromValue || props.toValue);
-});
+const showClear = computed(
+  () => props.showClearButton && (props.fromValue || props.toValue),
+);
 
 function setFrom(value: string | null) {
   fromInput.value = value || "";
@@ -138,25 +134,25 @@ function handleClear() {
       </button>
     </div>
     <div class="date-range-row">
-      <span class="date-label">{{ fromLabel }}</span>
+      <span class="date-label">От</span>
       <DateInput
         class="date-input"
         bare
         :model-value="fromInput || null"
         :max="maxDay"
-        :aria-label="`Дата: ${fromLabel}`"
+        aria-label="Дата: От"
         @update:model-value="setFrom"
         @focus-calendar="calendarRef?.focusGrid()"
       />
     </div>
     <div class="date-range-row">
-      <span class="date-label">{{ toLabel }}</span>
+      <span class="date-label">До</span>
       <DateInput
         class="date-input"
         bare
         :model-value="toInput || null"
         :max="maxDay"
-        :aria-label="`Дата: ${toLabel}`"
+        aria-label="Дата: До"
         @update:model-value="setTo"
         @focus-calendar="calendarRef?.focusGrid()"
       />

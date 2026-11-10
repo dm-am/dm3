@@ -5,22 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import { completeSecondFactor } from "@/entities/user";
 import { atSecondFactor, resetLoginForm, typeCode } from "./LoginForm.fixtures";
+import LoginForm from "./LoginForm.vue";
 import { problem } from "./authForms.fixtures";
 
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
 );
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
-);
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
 );
 
-// Mocked, not stubbed: AuthDialog imports Dialog.vue directly.
-vi.mock("vue-final-modal", async () =>
-  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
-);
+// Mocked, not stubbed: AuthDialog imports Dialog.vue directly; the page keeps the real container.
+vi.mock("vue-final-modal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("vue-final-modal")>()),
+  ...(await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -60,7 +59,9 @@ describe("LoginForm", () => {
     it("asks for the code instead of reporting a session", async () => {
       const wrapper = await atSecondFactor();
 
-      expect(wrapper.emitted("success")).toBeUndefined();
+      expect(
+        wrapper.findComponent(LoginForm).emitted("success"),
+      ).toBeUndefined();
       expect(wrapper.text()).toContain("Подтверждение входа");
       expect(wrapper.find("#two-factor-code").exists()).toBe(true);
       expect(wrapper.find("#password").exists()).toBe(false);
@@ -93,7 +94,9 @@ describe("LoginForm", () => {
       await typeCode(wrapper, "123456");
 
       expect(completeSecondFactor).toHaveBeenCalledWith("123456");
-      expect(wrapper.emitted("success")).toHaveLength(1);
+      expect(wrapper.findComponent(LoginForm).emitted("success")).toHaveLength(
+        1,
+      );
     });
 
     it("takes the button out while the check is running, and keeps its caption", async () => {
@@ -115,7 +118,9 @@ describe("LoginForm", () => {
       answer(null);
       await flushPromises();
 
-      expect(wrapper.emitted("success")).toHaveLength(1);
+      expect(wrapper.findComponent(LoginForm).emitted("success")).toHaveLength(
+        1,
+      );
     });
 
     it("keeps the whole code out of a paste longer than the field", async () => {
@@ -191,7 +196,9 @@ describe("LoginForm", () => {
       const wrapper = await atSecondFactor();
       await typeCode(wrapper, "123456");
 
-      expect(wrapper.emitted("success")).toBeUndefined();
+      expect(
+        wrapper.findComponent(LoginForm).emitted("success"),
+      ).toBeUndefined();
       const message = wrapper.find("#two-factor-code-message");
       expect(message.text()).toBe("Неверный код");
       expect(message.classes()).toContain("auth-message--error");
@@ -339,7 +346,9 @@ describe("LoginForm", () => {
 
       await away.trigger("click");
 
-      expect(wrapper.emitted("cantPassSecondFactor")).toHaveLength(1);
+      expect(
+        wrapper.findComponent(LoginForm).emitted("cantPassSecondFactor"),
+      ).toHaveLength(1);
     });
   });
 });

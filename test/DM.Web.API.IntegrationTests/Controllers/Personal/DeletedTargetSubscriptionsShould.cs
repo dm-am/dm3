@@ -13,10 +13,8 @@ using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 
-/// <summary>
-/// A deleted blog, game or topic takes the subscriptions to it along.
-/// </summary>
-/// <remarks>Nothing brings a deleted target back, so its subscriptions go in the deletion's transaction; over HTTP, as the page deletes.</remarks>
+// Nothing brings a deleted target back, so its subscriptions go in the deletion's transaction; over
+// HTTP, as the page deletes.
 public class DeletedTargetSubscriptionsShould : IntegrationTestBase
 {
     public DeletedTargetSubscriptionsShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -57,9 +55,6 @@ public class DeletedTargetSubscriptionsShould : IntegrationTestBase
             "every reader's subscription to it goes, not only this reader's view of it");
     }
 
-    /// <summary>
-    /// A live target of the type and the address its deletion is asked at; topic numbers from this class's range.
-    /// </summary>
     private async Task<(Guid Id, string Address)> AddTargetAsync(SubscriptionTargetType type, int index)
     {
         var id = Guid.NewGuid();
@@ -129,7 +124,6 @@ public class DeletedTargetSubscriptionsShould : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
-    /// <summary>The targets on the reader's subscriptions page.</summary>
     private async Task<Guid[]> ListedAsync()
     {
         var response = await Client.SendAsync(

@@ -14,9 +14,6 @@ namespace DM.Infrastructure.Persistence.Entities.Shared;
 [Table("Comments")]
 public class Comment : ISoftDeletable
 {
-    /// <summary>
-    /// comment identifier
-    /// </summary>
     [Key]
     public Guid CommentId { get; set; }
 

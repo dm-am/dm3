@@ -1,6 +1,6 @@
 /** The stand-ins of the ChatView specs, handed to vi.mock; the editor is bbcodeEditorStub's composer. */
 import { vi } from "vitest";
-import { reactive, ref } from "vue";
+import { ref } from "vue";
 
 /** The messaging client, one vi.fn per call the page and its store make. */
 export const api = {
@@ -75,23 +75,4 @@ export const virtualScroll = (
       },
     };
   },
-});
-
-/** A route the test can move; the page moves it too, and the watchers see the query change. */
-export const nav = {
-  route: reactive({
-    params: { id: "c1" } as Record<string, string>,
-    query: {} as Record<string, string>,
-  }),
-  push: vi.fn(),
-  replace: vi.fn(),
-};
-
-export const vueRouter = () => ({
-  useRoute: () => nav.route,
-  useRouter: () => ({
-    push: nav.push,
-    replace: nav.replace,
-    resolve: () => ({ href: "/messenger/c/c1" }),
-  }),
 });

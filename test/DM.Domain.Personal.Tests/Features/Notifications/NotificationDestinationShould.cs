@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using AwesomeAssertions;
@@ -5,13 +7,7 @@ using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.Notifications;
 
-/// <summary>
-/// A notification about something that has a page leads to that page, and one
-/// about the account itself leads nowhere.
-/// </summary>
-/// <remarks>
-/// The list marks a line read by the click on it, so a line with no path stays unread.
-/// </remarks>
+// The list marks a line read by the click on it, so a line with no path stays unread.
 public class NotificationDestinationShould
 {
     [Fact]
@@ -63,4 +59,77 @@ public class NotificationDestinationShould
     public void LeadAnAccountEventNowhere(EventType eventType) =>
         NotificationDestination.GetPath(eventType, new { Username = "Player-Two", EventTime = "2026-10-14" })
             .Should().BeNull();
+
+    private static readonly Dictionary<string, string> EveryIdentifier = new()
+    {
+        ["PublicationId"] = "p",
+        ["BlogId"] = "b",
+        ["TopicId"] = "t",
+        ["GameId"] = "g",
+        ["Username"] = "u",
+        ["TicketId"] = "k"
+    };
+
+    private static readonly Dictionary<EventType, string> Paths = new()
+    {
+        [EventType.NewPublication] = "/publication/p",
+        [EventType.ChangedPublication] = "/publication/p",
+        [EventType.LikedPublication] = "/publication/p",
+        [EventType.LikedPublicationComment] = "/publication/p",
+        [EventType.NewPublicationComment] = "/publication/p",
+        [EventType.NewBlogComment] = "/blogs/b",
+        [EventType.LikedBlogComment] = "/blogs/b",
+        [EventType.BlogInvitationCreated] = "/blogs/b",
+        [EventType.StatusBlogActive] = "/blogs/b",
+        [EventType.StatusBlogClosed] = "/blogs/b",
+        [EventType.StatusBlogFrozen] = "/blogs/b",
+        [EventType.StatusBlogFinished] = "/blogs/b",
+        [EventType.NewBlogFromSubscribedAuthor] = "/blogs/b",
+        [EventType.ChangedTopic] = "/forum-topic/t",
+        [EventType.LikedTopic] = "/forum-topic/t",
+        [EventType.LikedTopicComment] = "/forum-topic/t",
+        [EventType.NewCommentInSubscribedTopic] = "/forum-topic/t",
+        [EventType.NewTopicFromSubscribedAuthor] = "/forum-topic/t",
+        [EventType.NewCharacter] = "/game/g/characters",
+        [EventType.WarningIssued] = "/warnings?username=u",
+        [EventType.WarningPointsChanged] = "/warnings?username=u",
+        [EventType.BanIssued] = "/users/u",
+        [EventType.TicketAnswered] = "/my-tickets/k",
+        [EventType.TicketResolved] = "/my-tickets/k",
+        [EventType.TicketReplied] = "/moderation/tickets/k",
+        [EventType.TicketCreated] = "/moderation/tickets/k",
+        [EventType.AwardGranted] = "/users/u?tab=achievements",
+        [EventType.StatusGameActive] = "/game/g",
+        [EventType.StatusGameClosed] = "/game/g",
+        [EventType.StatusGameFrozen] = "/game/g",
+        [EventType.StatusGameFinished] = "/game/g",
+        [EventType.GameClosureWarning] = "/game/g",
+        [EventType.GameInactivityWarning] = "/game/g",
+        [EventType.GameRecruitmentOpened] = "/game/g",
+        [EventType.LikedGameComment] = "/game/g",
+        [EventType.AssignmentRequestCreated] = "/game/g",
+        [EventType.PlayerInvitationCreated] = "/game/g",
+        [EventType.ReaderInvitationCreated] = "/game/g",
+        [EventType.RoomPendencyCreated] = "/game/g",
+        [EventType.RoomPendencyFulfilled] = "/game/g",
+        [EventType.RoomPendencyReminder] = "/game/g",
+        [EventType.StatusCharacterAccepted] = "/game/g",
+        [EventType.StatusCharacterDeclined] = "/game/g",
+        [EventType.StatusCharacterDied] = "/game/g",
+        [EventType.StatusCharacterResurrected] = "/game/g",
+        [EventType.StatusCharacterReadmitted] = "/game/g",
+        [EventType.StatusCharacterLeft] = "/game/g",
+        [EventType.StatusCharacterExiled] = "/game/g",
+        [EventType.NewGameFromSubscribedAuthor] = "/game/g",
+    };
+
+    [Fact]
+    public void LeadEveryEventWhereTheTableSays()
+    {
+        foreach (var eventType in Enum.GetValues<EventType>())
+        {
+            NotificationDestination.GetPath(eventType, EveryIdentifier)
+                .Should().Be(Paths.GetValueOrDefault(eventType), "the path of {0}", eventType);
+        }
+    }
 }

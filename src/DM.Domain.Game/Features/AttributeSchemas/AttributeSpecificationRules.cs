@@ -9,14 +9,9 @@ using FluentValidation;
 
 namespace DM.Domain.Game.Features.AttributeSchemas;
 
-/// <summary>
-/// Schema rules shared by every validator that saves specifications, so all paths agree.
-/// </summary>
+// Schema rules shared by every validator that saves specifications, so all paths agree.
 internal static class AttributeSpecificationRules
 {
-    /// <summary>
-    /// The per-specification rules, whichever DTO carries the specification.
-    /// </summary>
     public static void Apply<TSpecification>(InlineValidator<TSpecification> specification)
         where TSpecification : CreateAttributeSpecification
     {
@@ -36,9 +31,6 @@ internal static class AttributeSpecificationRules
             .When(s => s.MaxLength.HasValue);
     }
 
-    /// <summary>
-    /// The per-specification rules and the schema-level ones, for whichever DTO carries the set.
-    /// </summary>
     public static void RuleForSpecifications<TSchema, TSpecification>(
         this AbstractValidator<TSchema> validator,
         Expression<Func<TSchema, IEnumerable<TSpecification>>> specifications)
@@ -48,10 +40,6 @@ internal static class AttributeSpecificationRules
         validator.RuleFor(specifications).Custom(AddFailures);
     }
 
-    /// <summary>
-    /// Report every schema-level violation of <see cref="Collect" /> to the
-    /// validation context of whichever DTO is being checked.
-    /// </summary>
     private static void AddFailures<TSchema>(
         IEnumerable<CreateAttributeSpecification>? specifications,
         ValidationContext<TSchema> context)
@@ -62,10 +50,6 @@ internal static class AttributeSpecificationRules
         }
     }
 
-    /// <summary>
-    /// Report every repeated identifier of <see cref="CollectRepeatedIdentifiers" />
-    /// to the validation context of whichever DTO is being checked.
-    /// </summary>
     public static void AddRepeatedIdentifierFailures<TSchema>(
         IEnumerable<Guid?>? identifiers,
         ValidationContext<TSchema> context)
@@ -76,9 +60,6 @@ internal static class AttributeSpecificationRules
         }
     }
 
-    /// <summary>
-    /// Identifiers submitted twice in one set.
-    /// </summary>
     /// <remarks>
     /// Two specifications under one identifier would both own the values written against it.
     /// An absent or empty identifier is not a repeat: it spells "new specification".

@@ -7,15 +7,8 @@ using DbWebsiteTestimonial = DM.Infrastructure.Persistence.Entities.Community.We
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 
-/// <summary>
-/// Projection formula for website testimonials: the author renders through
-/// the shared <see cref="GeneralUserProjections"/> formula.
-/// </summary>
 internal static class WebsiteTestimonialMapper
 {
-    /// <summary>
-    /// EF projection to the domain DTO
-    /// </summary>
     public static IQueryable<WebsiteTestimonial> ProjectToWebsiteTestimonial(
         this IQueryable<DbWebsiteTestimonial> query) =>
         query.Select(ExpressionSplicer.Expand<Func<DbWebsiteTestimonial, WebsiteTestimonial>>(

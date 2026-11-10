@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
-/// <summary>
-/// Who changed a topic, taken off the whole PATCH chain rather than off a mock.
-/// </summary>
 /// <remarks>
 /// TopicEdits is the only answer to who changed a topic, and the ChangedTopic notification takes its actor
 /// there. Over HTTP: the service sets the field, the repository writes it.
@@ -50,10 +47,8 @@ public class TopicEditHistoryShould : IntegrationTestBase
             .ToListAsync();
     }
 
-    /// <summary>
-    /// The editor is the person sending the request, not the person who opened
-    /// the topic — the two are different here on purpose.
-    /// </summary>
+    // The editor is the person sending the request, not the person who opened the topic — the two
+    // are different here on purpose.
     [Fact]
     public async Task RecordTheEditorOfAChangedTopic()
     {
@@ -74,11 +69,7 @@ public class TopicEditHistoryShould : IntegrationTestBase
         edits[0].EditedUtc.Should().BeAfter(DateTimeOffset.UtcNow.AddMinutes(-5));
     }
 
-    /// <summary>
-    /// A request that round-trips the values the topic already holds leaves no
-    /// edit behind.
-    /// </summary>
-    /// <remarks>The client PATCHes the fields it has on every save, cancelled ones included.</remarks>
+    // The client PATCHes the fields it has on every save, cancelled ones included.
     [Fact]
     public async Task LeaveNoEditBehindWhenNothingChanges()
     {

@@ -2,20 +2,17 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { accountApi } from "@/entities/user";
 import RegistrationForm from "./RegistrationForm.vue";
 import { register, toast } from "./authForms.doubles";
-import {
-  AuthDialogStub,
-  expectWaitRunsDown,
-  problem,
-} from "./authForms.fixtures";
+import { address, expectWaitRunsDown, problem } from "./authForms.fixtures";
 import {
   acceptRules,
   clock,
+  control,
   fieldProblem,
   mountForm,
   resetRegistrationForm,
@@ -25,9 +22,6 @@ import {
 
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
-);
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
 );
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
@@ -41,7 +35,9 @@ describe("RegistrationForm", () => {
 
     const wrapper = await submitRegistration();
 
-    expect(wrapper.emitted("success")).toBeUndefined();
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("success"),
+    ).toBeUndefined();
   });
 
   describe("a rate limit", () => {
@@ -60,7 +56,7 @@ describe("RegistrationForm", () => {
         error: problem(429, "Слишком много запросов", 3),
       });
 
-      const wrapper = mountForm();
+      const wrapper = await mountForm();
       await wrapper.find("#registration-email").setValue("reader@dm.am");
       await wrapper.find("form").trigger("submit");
       await flushPromises();
@@ -78,7 +74,9 @@ describe("RegistrationForm", () => {
 
       const wrapper = await submitRegistration();
 
-      expect(wrapper.emitted("success")).toBeUndefined();
+      expect(
+        wrapper.findComponent(RegistrationForm).emitted("success"),
+      ).toBeUndefined();
       const refusal = wrapper.find(".password-strength .warning-text");
       expect(refusal.text()).toBe(
         "Слишком много попыток, попробуйте через 3 секунды",
@@ -138,7 +136,9 @@ describe("RegistrationForm", () => {
 
     const wrapper = await submitRegistration();
 
-    expect(wrapper.emitted("success")).toBeUndefined();
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("success"),
+    ).toBeUndefined();
     expect(wrapper.text()).toContain("Почта уже зарегистрирована");
   });
 
@@ -147,11 +147,13 @@ describe("RegistrationForm", () => {
 
     const wrapper = await submitRegistration();
 
-    expect(wrapper.emitted("success")?.[0]).toEqual(["reader@dm.am", 30]);
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("success")?.[0],
+    ).toEqual(["reader@dm.am", 30]);
   });
 
   it("states the length rule before it can be broken", async () => {
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await toPasswordStep(wrapper);
 
     expect(wrapper.find(".password-strength").exists()).toBe(true);
@@ -159,7 +161,7 @@ describe("RegistrationForm", () => {
   });
 
   it("keeps the rules box shut until the rules were opened", async () => {
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await toPasswordStep(wrapper);
 
     const box = wrapper.find("#registration-rules");
@@ -180,7 +182,7 @@ describe("RegistrationForm", () => {
   it("does not register anybody who has not accepted the rules", async () => {
     vi.mocked(register).mockResolvedValue(null);
 
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await toPasswordStep(wrapper);
     await wrapper.find("#registration-password").setValue("correct horse");
     await wrapper.find("form").trigger("submit");
@@ -217,7 +219,7 @@ describe("RegistrationForm", () => {
   });
 
   it("takes the agreement and the policy by the act, not by a second box", async () => {
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await toPasswordStep(wrapper);
 
     expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(1);
@@ -229,7 +231,7 @@ describe("RegistrationForm", () => {
   it("registers once when the submit is repeated", async () => {
     vi.mocked(register).mockResolvedValue(null);
 
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await toPasswordStep(wrapper);
     await wrapper.find("#registration-password").setValue("correct horse");
     await acceptRules(wrapper);
@@ -249,7 +251,7 @@ describe("RegistrationForm", () => {
       error: null,
     });
 
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     const email = wrapper.find("#registration-email");
     expect(email.attributes("aria-describedby")).toBe(
       "registration-email-message",
@@ -271,7 +273,7 @@ describe("RegistrationForm", () => {
       fieldProblem("password", "Пароль найден в утечке, выберите другой"),
     );
 
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await toPasswordStep(wrapper);
 
     const password = wrapper.find("#registration-password");
@@ -298,10 +300,7 @@ describe("RegistrationForm", () => {
 
   it("puts the caret in the first field the moment the card opens", async () => {
     // Focus is only real for an element in the document.
-    const wrapper = mount(RegistrationForm, {
-      global: { stubs: { AuthDialog: AuthDialogStub } },
-      attachTo: document.body,
-    });
+    const wrapper = await mountForm(document.body);
     await flushPromises();
 
     expect(document.activeElement).toBe(
@@ -311,10 +310,22 @@ describe("RegistrationForm", () => {
     wrapper.unmount();
   });
 
+  it("closes the dialog and opens support on the recovery category", async () => {
+    const wrapper = await mountForm();
+
+    await control(wrapper, "поддержку")?.trigger("click");
+    await flushPromises();
+
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("cancel"),
+    ).toHaveLength(1);
+    expect(address()).toBe("/support?subtype=AccessRecovery");
+  });
+
   it("sits out the minimum fill time instead of refusing the submit", async () => {
     vi.mocked(register).mockResolvedValue(null);
 
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await wrapper.find("#registration-email").setValue("reader@dm.am");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -337,7 +348,9 @@ describe("RegistrationForm", () => {
     await flushPromises();
 
     expect(register).toHaveBeenCalledTimes(1);
-    expect(wrapper.emitted("success")?.[0]).toEqual(["reader@dm.am", 30]);
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("success")?.[0],
+    ).toEqual(["reader@dm.am", 30]);
   });
 
   it("says the one general sentence when the server named no reason", async () => {
@@ -345,7 +358,9 @@ describe("RegistrationForm", () => {
 
     const wrapper = await submitRegistration();
 
-    expect(wrapper.emitted("success")).toBeUndefined();
+    expect(
+      wrapper.findComponent(RegistrationForm).emitted("success"),
+    ).toBeUndefined();
     expect(wrapper.find(".password-strength .warning-text").text()).toBe(
       "Не удалось выполнить запрос, попробуйте позже",
     );

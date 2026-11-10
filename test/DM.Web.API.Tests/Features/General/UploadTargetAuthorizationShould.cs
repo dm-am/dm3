@@ -43,9 +43,6 @@ public class UploadTargetAuthorizationShould : UnitTestBase
         _repository.AddAsync(Arg.Any<NewUpload>()).Returns(ci => Uploads.Stored(ci.ArgAt<NewUpload>(0)));
     }
 
-    /// <summary>
-    /// Every value of the enum has a rule, asserted over the shipped assemblies.
-    /// </summary>
     [Fact]
     public void CoverEveryUploadTypeWithAnAuthorizer()
     {
@@ -71,9 +68,6 @@ public class UploadTargetAuthorizationShould : UnitTestBase
         covered.Should().OnlyHaveUniqueItems("two rules for one type is ambiguous");
     }
 
-    /// <summary>
-    /// The refusal lands before the image pipeline and before the bucket.
-    /// </summary>
     [Fact]
     public async Task RefuseATargetTheCallerHasNoRightTo()
     {

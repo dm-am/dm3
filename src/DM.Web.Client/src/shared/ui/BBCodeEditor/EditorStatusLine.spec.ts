@@ -25,23 +25,16 @@ describe("EditorStatusLine", () => {
   afterEach(reset);
 
   describe("Character & Word Count", () => {
-    it("shows status bar when showCharCount is true", () => {
+    it("shows status bar", () => {
       const wrapper = mount(BBCodeEditor, {
-        props: { modelValue: "", showCharCount: true },
+        props: { modelValue: "" },
       });
       expect(wrapper.find(".status-bar").exists()).toBe(true);
     });
 
-    it("hides status bar when showCharCount is false", () => {
-      const wrapper = mount(BBCodeEditor, {
-        props: { modelValue: "", showCharCount: false },
-      });
-      expect(wrapper.find(".status-bar").exists()).toBe(false);
-    });
-
     it("shows character count in BBCode mode", async () => {
       const wrapper = mount(BBCodeEditor, {
-        props: { modelValue: "hello world", showCharCount: true },
+        props: { modelValue: "hello world" },
       });
       await nextTick();
 
@@ -51,7 +44,7 @@ describe("EditorStatusLine", () => {
 
     it("shows word count", async () => {
       const wrapper = mount(BBCodeEditor, {
-        props: { modelValue: "hello world", showCharCount: true },
+        props: { modelValue: "hello world" },
       });
       await nextTick();
 
@@ -61,7 +54,7 @@ describe("EditorStatusLine", () => {
 
     it("shows over-limit warning when maxLength exceeded", async () => {
       const wrapper = mount(BBCodeEditor, {
-        props: { modelValue: "hello world", maxLength: 5, showCharCount: true },
+        props: { modelValue: "hello world", maxLength: 5 },
       });
       await nextTick();
 
@@ -70,7 +63,7 @@ describe("EditorStatusLine", () => {
 
     it("does not show over-limit when within limit", async () => {
       const wrapper = mount(BBCodeEditor, {
-        props: { modelValue: "hi", maxLength: 100, showCharCount: true },
+        props: { modelValue: "hi", maxLength: 100 },
       });
       await nextTick();
 

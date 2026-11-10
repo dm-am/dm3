@@ -6,7 +6,7 @@ import { computed, type ComputedRef } from "vue";
 import { useRoute, useRouter, type LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
-import { applySortAction } from "./applySortAction";
+import { reduceSortOrClear, sortOrClearDispatchers } from "./applySortAction";
 import type {
   BaseFilterState,
   BaseSearchParams,
@@ -133,18 +133,10 @@ function reducer<TSortBy extends string>(
       newState.createdToUtc = action.to;
       return newState;
 
-    case "SET_SORT":
-    case "TOGGLE_SORT_ORDER":
-      applySortAction(newState, action, config.sortOptions);
-      return newState;
-
-    case "CLEAR_FILTERS":
-      return createDefaultState(config);
-
-    default: {
-      const _exhaustive: never = action;
-      return _exhaustive;
-    }
+    default:
+      return reduceSortOrClear(newState, action, config.sortOptions, () =>
+        createDefaultState(config),
+      );
   }
 }
 
@@ -290,10 +282,8 @@ export function createAuthorDateFilter<TSortBy extends string = string>(
     const clearAuthors = () => dispatch({ type: "CLEAR_AUTHORS" });
     const setDateRange = (from: string | null, to: string | null) =>
       dispatch({ type: "SET_DATE_RANGE", from, to });
-    const setSort = (sortBy: TSortBy, sortOrder?: SortDirection) =>
-      dispatch({ type: "SET_SORT", sortBy, sortOrder });
-    const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-    const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
+    const { setSort, toggleSortOrder, clearFilters } =
+      sortOrClearDispatchers(dispatch);
 
     return {
       filterState,

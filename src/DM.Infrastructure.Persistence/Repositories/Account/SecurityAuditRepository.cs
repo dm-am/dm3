@@ -70,9 +70,8 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
     public async Task<IReadOnlyList<SecurityAuditEntry>> GetByTypesAsync(
         Guid userId, IReadOnlyList<SecurityEventType> eventTypes, int limit = 20)
     {
-        // The set arrives from the domain rather than being built here: which
-        // types make up a category is a statement about the product, and four
-        // copies of this query differing only in that array is what it used to be.
+        // The set arrives from the domain rather than being built here: which types make up a
+        // category is a statement about the product
         var entries = await _dbContext.SecurityAuditEntries
             .TagWith("DM.Security.EventsByTypes")
             .Where(e => e.UserId == userId && eventTypes.Contains(e.EventType))

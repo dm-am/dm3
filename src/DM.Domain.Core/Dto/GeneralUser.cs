@@ -76,9 +76,6 @@ public class GeneralUser : IUser
     // Aggregates from here down are filled only by the user repository's batch of
     // COUNTs: null means not counted, which a nested user always is.
 
-    /// <summary>
-    /// Number of post reviews given by this user
-    /// </summary>
     public int? PostReviewsGivenCount { get; set; }
 
     /// <summary>
@@ -92,9 +89,6 @@ public class GeneralUser : IUser
     /// </summary>
     public int? EndorsementsReceivedCount { get; set; }
 
-    /// <summary>
-    /// Number of endorsements written by this user (about other users).
-    /// </summary>
     public int? EndorsementsGivenCount { get; set; }
 
     /// <summary>
@@ -182,9 +176,6 @@ public class GeneralUser : IUser
     /// </summary>
     public int? GamesPlaying { get; set; }
 
-    /// <summary>
-    /// Games playing breakdown by status (for tooltips)
-    /// </summary>
     public ModuleStatusCounts? GamesPlayingByStatus { get; set; }
 
     /// <summary>

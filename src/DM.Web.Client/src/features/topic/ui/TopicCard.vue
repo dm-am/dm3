@@ -19,6 +19,7 @@ import { trimHtmlWhitespace } from "@/shared/lib/utils/trimHtmlWhitespace";
 import { isUserOnline } from "@/shared/lib/utils/chat";
 import { RemovedAccountLink, UserRoleBadge } from "@/entities/user";
 import { useUiStore } from "@/shared/stores/ui";
+import type { HeadingLevel } from "./headingLevel";
 
 type CardAuthor = {
   username: Username;
@@ -53,7 +54,7 @@ const props = withDefaults(
     canDelete?: boolean;
     truncatable?: boolean;
     maxHeight?: number;
-    headingLevel?: "h1" | "h2" | "h3";
+    headingLevel?: HeadingLevel;
     /** Read-only preview of the home news: no actions and no like. */
     previewOnly?: boolean;
   }>(),

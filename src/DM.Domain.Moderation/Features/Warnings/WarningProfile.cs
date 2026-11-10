@@ -13,9 +13,6 @@ namespace DM.Domain.Moderation.Features.Warnings;
 /// </remarks>
 public class WarningProfile
 {
-    /// <summary>
-    /// The status, null when the profile had none
-    /// </summary>
     public string? Status { get; set; }
 
     /// <summary>

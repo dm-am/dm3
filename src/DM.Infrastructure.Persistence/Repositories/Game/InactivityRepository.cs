@@ -24,24 +24,20 @@ internal class InactivityRepository : IInactivityRepository
     // Each condition is read by the selection and repeated by its write, so a game that
     // posted or restarted in between is left alone. Removed games are out by the global filter.
 
-    /// <summary>Active, unwarned, and no post (or no activation) since the threshold</summary>
     private static Expression<Func<DbGame, bool>> SilentAndUnwarned(DateTimeOffset threshold) => g =>
         g.Status == ModuleStatus.Active &&
         g.InactivityWarningUtc == null &&
         ((g.LastPostCreatedUtc == null && g.ActivatedUtc < threshold) ||
          (g.LastPostCreatedUtc != null && g.LastPostCreatedUtc < threshold));
 
-    /// <summary>Active, warned, and no post since the warning</summary>
     private static readonly Expression<Func<DbGame, bool>> WarnedAndSilent = g =>
         g.Status == ModuleStatus.Active &&
         g.InactivityWarningUtc != null &&
         (g.LastPostCreatedUtc == null || g.LastPostCreatedUtc < g.InactivityWarningUtc);
 
-    /// <summary>Frozen and not yet warned of closure</summary>
     private static readonly Expression<Func<DbGame, bool>> FrozenUnwarned = g =>
         g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Frozen && g.ClosureWarningUtc == null;
 
-    /// <summary>Frozen and warned of closure</summary>
     private static readonly Expression<Func<DbGame, bool>> FrozenWarned = g =>
         g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Frozen && g.ClosureWarningUtc != null;
 

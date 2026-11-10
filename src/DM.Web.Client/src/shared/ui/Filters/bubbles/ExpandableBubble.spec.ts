@@ -7,15 +7,14 @@ import { mount } from "@vue/test-utils";
 import ExpandableBubble from "./ExpandableBubble.vue";
 
 describe("ExpandableBubble", () => {
-  const mountComponent = (props = {}) => {
-    return mount(ExpandableBubble, {
+  const mountComponent = (props = {}) =>
+    mount(ExpandableBubble, {
       props: {
         prefix: "Авторы:",
         values: [],
         ...props,
       },
     });
-  };
 
   describe("Single Value", () => {
     it("renders simple bubble for single value", () => {

@@ -22,9 +22,6 @@ internal class GamesQueryValidator : AbstractValidator<GamesQuery>
 
     private static readonly string[] AllowedSortOrders = ["asc", "desc"];
 
-    /// <summary>
-    /// The three lists of tags a query filters by, each held to the same rule.
-    /// </summary>
     /// <remarks>An absent list has nothing to check.</remarks>
     private static readonly Expression<Func<GamesQuery, IEnumerable<int>>>[] TagFilters =
     [

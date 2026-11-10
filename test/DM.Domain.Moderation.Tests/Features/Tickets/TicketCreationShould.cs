@@ -14,10 +14,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
-/// <summary>
-/// A complaint about a user filed with CreateTicket: the violator a line of its
-/// text, [mod] kept for a moderator only, and the moderators told.
-/// </summary>
 public class TicketCreationShould : TicketServiceTestBase
 {
     [Fact]

@@ -14,10 +14,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Logging;
 
-/// <summary>
-/// The level of the log is a deployment decision, and a deployment can make it.
-/// </summary>
-/// <remarks>Development is not a logging switch: it mounts Swagger and drops HSTS. Asserted through AddDmLogging.</remarks>
+// Development is not a logging switch: it mounts Swagger and drops HSTS.
 [Collection(StaticLoggerCollection.Name)]
 public class MinimumLogLevelShould
 {
@@ -52,7 +49,6 @@ public class MinimumLogLevelShould
             .WithMessage("*chatty*");
     }
 
-    /// <summary>Lowest level the installed logger lets through.</summary>
     private static async Task<LogEventLevel> LowestEnabled(string environmentName, string? configured)
     {
         var previous = Log.Logger;

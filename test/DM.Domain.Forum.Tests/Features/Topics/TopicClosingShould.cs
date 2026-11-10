@@ -10,15 +10,8 @@ using Xunit;
 
 namespace DM.Domain.Forum.Tests.Features.Topics;
 
-/// <summary>
-/// Closing and reopening a topic, open to its author as well as to the moderators
-/// of the board.
-/// </summary>
 public class TopicClosingShould : TopicServiceTestBase
 {
-    /// <summary>
-    /// Reopening a closed topic is not refused for the topic being closed.
-    /// </summary>
     /// <remarks>
     /// A closed topic is shut to its author's edits, and the edit form is how a
     /// topic is closed and reopened: judged against the closed topic, the author's
@@ -48,10 +41,8 @@ public class TopicClosingShould : TopicServiceTestBase
             Arg.Any<Guid?>());
     }
 
-    /// <summary>
-    /// Closing asks both rules: the right to close, and the right to edit the topic
-    /// as it stands, since the same request carries the form's text.
-    /// </summary>
+    // Closing asks both rules: the right to close, and the right to edit the topic as it stands,
+    // since the same request carries the form's text.
     [Fact]
     public async Task AskBothTheCloseAndTheEditRuleOfAClosingRequest()
     {
@@ -70,12 +61,10 @@ public class TopicClosingShould : TopicServiceTestBase
             Arg.Is<UpdateTopicEntity>(e => e.IsClosed == true && e.ClosedByAuthor == true), Arg.Any<Guid?>());
     }
 
-    /// <summary>
-    /// Who closed the topic is written with every change of its closed state and
-    /// only then: it is what keeps a moderator's closing from being undone by the
-    /// author (TopicIntention.Close), so a close by anybody but the author records
-    /// false, and an edit that leaves the state alone leaves the record alone.
-    /// </summary>
+    // Who closed the topic is written with every change of its closed state and only then: it is
+    // what keeps a moderator's closing from being undone by the author (TopicIntention.Close), so a
+    // close by anybody but the author records false, and an edit that leaves the state alone leaves
+    // the record alone.
     [Theory]
     [InlineData(false, true, false)]
     [InlineData(true, false, false)]

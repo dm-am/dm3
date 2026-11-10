@@ -12,29 +12,20 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 
-/// <summary>
-/// Two comments posted in the same second give the board one answer, not whichever
-/// the plan happened to return first.
-/// </summary>
-/// <remarks>
-/// A per-group "top 1" does not translate, so the second statement can return several rows for a board;
-/// equal timestamps are common after the DM2 import. The same comments seeded both ways must name one.
-/// </remarks>
+// A per-group "top 1" does not translate, so the second statement can return several rows for a
+// board; equal timestamps are common after the DM2 import.
 public class BoardLastCommentTieShould
 {
     private static readonly Guid BoardId = Guid.Parse("2d7b6e30-0000-4000-8000-000000000001");
     private static readonly Guid TopicId = Guid.Parse("2d7b6e30-0000-4000-8000-000000000002");
     private static readonly Guid AuthorId = Guid.Parse("2d7b6e30-0000-4000-8000-000000000003");
 
-    /// <summary>
-    /// Differ in the last byte only, so the order between them is the same in .NET and
-    /// in Postgres, and Later is the greater of the two.
-    /// </summary>
+    // Differ in the last byte only, so the order between them is the same in .NET and in Postgres,
+    // and Later is the greater of the two.
     private static readonly Guid EarlierId = Guid.Parse("2d7b6e30-0000-4000-8000-000000000011");
 
     private static readonly Guid LaterId = Guid.Parse("2d7b6e30-0000-4000-8000-000000000012");
 
-    /// <summary>The one second both comments were posted in.</summary>
     private static readonly DateTimeOffset Tie = new(2026, 5, 1, 18, 30, 0, TimeSpan.Zero);
 
     private static DbComment NewComment(Guid id) => new()
@@ -46,10 +37,6 @@ public class BoardLastCommentTieShould
         CreatedUtc = Tie,
     };
 
-    /// <summary>
-    /// One board, one topic, two comments sharing a timestamp — seeded in the order
-    /// the caller asks for.
-    /// </summary>
     private static DmDbContext Seeded(params Guid[] commentIds)
     {
         var context = InMemoryStore.Open();
@@ -109,10 +96,6 @@ public class BoardLastCommentTieShould
             "column flips between two renders of a board nobody touched");
     }
 
-    /// <summary>
-    /// And the key is the identifier, descending: of two comments the board cannot tell
-    /// apart by time, the greater identifier is the later one.
-    /// </summary>
     [Fact]
     public async Task SettleTheTieOnTheGreaterIdentifier()
     {
@@ -120,10 +103,6 @@ public class BoardLastCommentTieShould
         (await LastCommentIdAsync(LaterId, EarlierId)).Should().Be(LaterId);
     }
 
-    /// <summary>
-    /// The tie-break is a tie-break and not the whole ordering: a genuinely newer
-    /// comment wins even when its identifier is the smaller one.
-    /// </summary>
     [Fact]
     public async Task StillPreferTheNewerCommentWhenTheTimestampsDiffer()
     {

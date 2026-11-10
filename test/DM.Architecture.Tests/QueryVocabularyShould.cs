@@ -9,22 +9,15 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// One filter is called by one name on every endpoint that takes it.
-/// </summary>
 /// <remarks>
 /// An unknown query parameter is ignored, not refused, so a filter carried from a neighbour answers the
 /// unfiltered set. Read from the assembly, as the binder derives the wire name.
 /// </remarks>
 public class QueryVocabularyShould
 {
-    /// <summary>A query parameter as it appears on the wire, and where it came from.</summary>
     private sealed record WireParameter(string Name, Type Type, bool IsCollection, string Origin);
 
-    /// <summary>
-    /// A name the API retired, and the name it kept. Matching is exact and
-    /// case-insensitive: the binder is case-insensitive too.
-    /// </summary>
+    // Matching is exact and case-insensitive: the binder is case-insensitive too.
     private static readonly (string Retired, string Instead)[] RetiredNames =
     [
         ("q", "search — the free-text filter on every list endpoint"),
@@ -61,7 +54,6 @@ public class QueryVocabularyShould
                t == typeof(Guid) || t == typeof(Uri);
     }
 
-    /// <summary>The element type of a bound sequence, or null when it is not one.</summary>
     private static Type? ElementOf(Type type)
     {
         if (type == typeof(string))
@@ -80,7 +72,6 @@ public class QueryVocabularyShould
             .FirstOrDefault();
     }
 
-    /// <summary>Query parameter name of a member, honouring an explicit binder name.</summary>
     private static string WireName(string declared, string? explicitName) =>
         explicitName ?? char.ToLowerInvariant(declared[0]) + declared[1..];
 
@@ -92,8 +83,7 @@ public class QueryVocabularyShould
         return string.IsNullOrEmpty(name) ? null : name;
     }
 
-    /// <summary>Placeholders of the route this action answers, constraints stripped.</summary>
-    /// <remarks>The controller's [Route] counts, and a template starting with '~' replaces it.</remarks>
+    // The controller's [Route] counts, and a template starting with '~' replaces it.
     private static ISet<string> RouteTokens(Type controller, MethodInfo action)
     {
         var templates = action.GetCustomAttributes<HttpMethodAttribute>(inherit: true)
@@ -115,8 +105,7 @@ public class QueryVocabularyShould
         return tokens;
     }
 
-    /// <summary>Whether the query binds a parameter of an action.</summary>
-    /// <remarks>A name the route template holds is a path segment.</remarks>
+    // A name the route template holds is a path segment.
     private static bool BindsFromQuery(ParameterInfo parameter, ISet<string> routeTokens) =>
         !(parameter.GetCustomAttributes(inherit: true).Any(a =>
               a is FromBodyAttribute or FromRouteAttribute or FromHeaderAttribute or
@@ -125,10 +114,7 @@ public class QueryVocabularyShould
           parameter.ParameterType.Namespace?.StartsWith("Microsoft.AspNetCore.Http") == true ||
           routeTokens.Contains(parameter.Name!));
 
-    /// <summary>
-    /// A container the query binds: its properties are the parameters. Inherited
-    /// ones included — skip/take arrive through PagingQuery.
-    /// </summary>
+    // Inherited ones included — skip/take arrive through PagingQuery.
     private static IEnumerable<WireParameter> PropertiesOf(Type container, string origin)
     {
         foreach (var property in container.GetProperties(BindingFlags.Public | BindingFlags.Instance))
@@ -157,9 +143,6 @@ public class QueryVocabularyShould
         }
     }
 
-    /// <summary>
-    /// Every query parameter the API publishes, with the endpoint it belongs to.
-    /// </summary>
     private static IReadOnlyCollection<WireParameter> Published()
     {
         var controllers = typeof(DM.Web.API.Startup).Assembly.GetTypes()
@@ -274,10 +257,8 @@ public class QueryVocabularyShould
             Environment.NewLine + string.Join(Environment.NewLine, offences));
     }
 
-    /// <summary>
-    /// One filter, one name — read from the type the filter is written in.
-    /// </summary>
-    /// <remarks>An enum says which filter it is wherever it is taken; strings and numbers do not, so enums only.</remarks>
+    // An enum says which filter it is wherever it is taken; strings and numbers do not, so enums
+    // only.
     [Fact]
     public void GiveOneFilterOneName()
     {

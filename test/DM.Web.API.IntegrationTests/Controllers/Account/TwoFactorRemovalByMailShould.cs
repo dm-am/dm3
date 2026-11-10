@@ -12,9 +12,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
-/// <summary>
-/// The mailed way back in, for somebody who has lost the device and the codes.
-/// </summary>
 /// <remarks>
 /// The link schedules the removal a week out, ends every session and hands back a way to call it off; signing
 /// in with the factor calls it off too.
@@ -63,9 +60,6 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
         return Client.SendAsync(request);
     }
 
-    /// <summary>
-    /// The link schedules, it does not perform, and it ends the sessions.
-    /// </summary>
     [Fact]
     public async Task ScheduleTheRemovalAndEndEverySession()
     {
@@ -93,7 +87,6 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
         (await Client.SendAsync(check)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    /// <summary>A second link comes with the letter, and it calls the removal off.</summary>
     [Fact]
     public async Task CallTheRemovalOffFromTheSecondLink()
     {
@@ -113,10 +106,7 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
             .RemovalDueUtc.Should().BeNull();
     }
 
-    /// <summary>
-    /// A successful sign-in with the factor calls the removal off.
-    /// </summary>
-    /// <remarks>The real owner, if the device is still in his hand, ends the request by signing in.</remarks>
+    // The real owner, if the device is still in his hand, ends the request by signing in.
     [Fact]
     public async Task CallTheRemovalOffOnASuccessfulSignIn()
     {
@@ -155,7 +145,6 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
             .Should().Be(1);
     }
 
-    /// <summary>A link followed twice opens once.</summary>
     [Fact]
     public async Task SpendALinkExactlyOnce()
     {

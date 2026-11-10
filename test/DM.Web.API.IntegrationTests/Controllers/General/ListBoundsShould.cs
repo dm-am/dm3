@@ -6,27 +6,17 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A list either takes a page or is bounded by what it is.
-/// </summary>
-/// <remarks>
-/// A list that grows with the data needs a page; one bounded by its subject is named below. Asserted both ways,
-/// so it only shrinks.
-/// </remarks>
+// A list that grows with the data needs a page; one bounded by its subject is named below.
 public class ListBoundsShould : IntegrationTestBase
 {
     public ListBoundsShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>Any name under which a caller can ask for less than everything.</summary>
     private static readonly HashSet<string> PagingParameters =
         new(StringComparer.OrdinalIgnoreCase) { "skip", "take", "number", "size", "limit", "cursor" };
 
-    /// <summary>
-    /// Lists bounded by their subject, not by a page.
-    /// </summary>
-    /// <remarks>Adding a line is the decision "this cannot grow without bound".</remarks>
+    // Adding a line is the decision "this cannot grow without bound".
     private static readonly HashSet<string> BoundedBySubject = new(StringComparer.Ordinal)
     {
         "GET /v1/account/sessions",
@@ -88,10 +78,8 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/users/me/notepad",
     };
 
-    /// <summary>Every list this class accounts for, under either heading.</summary>
     private static IEnumerable<string> Accounted => BoundedBySubject.Concat(GrowingWithoutAPage);
 
-    /// <summary>Published list GETs that declare no paging parameter.</summary>
     private async Task<HashSet<string>> UnpagedLists()
     {
         var unpaged = new HashSet<string>(StringComparer.Ordinal);
@@ -145,8 +133,6 @@ public class ListBoundsShould : IntegrationTestBase
             .ToArray();
     }
 
-    /// <summary>Whether a 200 answers a list of resources.</summary>
-    /// <remarks>A declared ListEnvelope, or an array written out in place.</remarks>
     private static bool AnswersAList(JsonElement success)
     {
         var schema = ResponseBodySchema.NameOf(success);
@@ -181,19 +167,14 @@ public class ListBoundsShould : IntegrationTestBase
             "reviewed, waiting for a new list to be given the same address");
     }
 
-    /// <summary>
-    /// The two headings stay apart.
-    /// </summary>
-    /// <remarks>Moving a line from the growing list into the bounded one would make an open finding look closed.</remarks>
+    // Moving a line from the growing list into the bounded one would make an open finding look
+    // closed.
     [Fact]
     public void KeepTheDebtApartFromTheDecision() =>
         BoundedBySubject.Intersect(GrowingWithoutAPage).Should().BeEmpty(
             "a list is either bounded by what it is or waiting for a page, and the " +
             "difference is the whole content of both lists");
 
-    /// <summary>
-    /// A truncated list says how much it truncated.
-    /// </summary>
     [Fact]
     public async Task ReportTheTotalOnATruncatedList()
     {

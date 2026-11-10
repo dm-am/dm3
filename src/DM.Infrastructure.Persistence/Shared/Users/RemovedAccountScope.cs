@@ -23,7 +23,6 @@ namespace DM.Infrastructure.Persistence.Shared.Users;
 /// </remarks>
 internal static class RemovedAccountScope
 {
-    /// <summary>Every removed account.</summary>
     public static async Task<IReadOnlyCollection<Guid>> Ids(DbSet<User> users, CancellationToken ct = default) =>
         await users
             .IgnoreQueryFilters()
@@ -71,10 +70,6 @@ internal static class RemovedAccountScope
         return removed.Concat(named).ToList();
     }
 
-    /// <summary>
-    /// The public ratings of every removed account, added up: the posts they wrote
-    /// and the score those posts earned.
-    /// </summary>
     public static async Task<(int Quality, int Quantity)> RatingTotals(
         DbSet<User> users, CancellationToken ct = default)
     {

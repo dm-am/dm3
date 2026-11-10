@@ -8,10 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// An unread marker is written before the relational row it belongs to, and by the
-/// reservation that can take it back.
-/// </summary>
 /// <remarks>
 /// No transaction spans the two stores, so DATA_STORAGE.md fixes the order. Text with comments taken out
 /// is the only surface: the failure needs one store to refuse between the writes.
@@ -20,7 +16,6 @@ public class UnreadMarkerOwnershipShould
 {
     private static string SourceDirectory => Path.Combine(DM.Testing.RepositoryLayout.Root, "src");
 
-    /// <summary>The two places allowed to write a marker: the contract and its one implementation.</summary>
     private static readonly string[] Owners =
     [
         Path.Combine("DM.Domain.Core", "UnreadCounters"),
@@ -50,9 +45,7 @@ public class UnreadMarkerOwnershipShould
     private static bool IsOwner(string path) =>
         Owners.Any(owner => path.Contains(owner, StringComparison.Ordinal));
 
-    /// <summary>
-    /// A rule that found nothing passes, and both halves of this one are searches.
-    /// </summary>
+    // A rule that found nothing passes, and both halves of this one are searches.
     [Fact]
     public void FindTheIdiomInTheTree()
     {
@@ -123,9 +116,7 @@ public class UnreadMarkerOwnershipShould
         }
     }
 
-    /// <summary>
-    /// Coverage from the other end: a new caller would otherwise slip past the list.
-    /// </summary>
+    // Coverage from the other end: a new caller would otherwise slip past the list.
     [Fact]
     public void NameEveryCallerTheTreeHas()
     {

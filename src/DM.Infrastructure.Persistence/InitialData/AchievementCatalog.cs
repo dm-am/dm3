@@ -15,7 +15,6 @@ namespace DM.Infrastructure.Persistence.InitialData;
 /// </remarks>
 internal static class AchievementCatalog
 {
-    /// <summary>The categories, one per metric, in the order the profile shows them.</summary>
     internal static AchievementCategory[] Categories() =>
     [
         Category(0x1, "days_since_registration", "Выслуга лет",
@@ -46,7 +45,6 @@ internal static class AchievementCatalog
             "Баны, полученные от модерации", "plastic-duck", AchievementMetric.BansReceived, 13)
     ];
 
-    /// <summary>The tiers, chain by chain.</summary>
     internal static AchievementType[] Types() =>
     [
         Tier(0x5, "DAYS_366", "Поселенец", 366, TierScale.Bronze, 0x1),

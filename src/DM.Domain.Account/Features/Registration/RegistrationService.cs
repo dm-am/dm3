@@ -6,10 +6,7 @@ using FluentValidation;
 
 namespace DM.Domain.Account.Features.Registration;
 
-/// <summary>
-/// Service for email-first user registration.
-/// Creates PendingRegistration; User is created later during activation when username is chosen.
-/// </summary>
+// Creates PendingRegistration; User is created later during activation when username is chosen.
 internal class RegistrationService : IRegistrationService
 {
     private readonly IValidator<UserRegistration> _validator;

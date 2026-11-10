@@ -14,20 +14,16 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// The transport decides the Secure attribute of the session cookie.
-/// </summary>
-/// <remarks>A Secure cookie over plain http is dropped silently; asserted on the Set-Cookie header a browser sees.</remarks>
+// A Secure cookie over plain http is dropped silently; asserted on the Set-Cookie header a browser
+// sees.
 public class SessionCookieShould : UnitTestBase
 {
     private static readonly ApiCredentialsStorage Storage =
         new(Options.Create(new AuthenticationConfiguration()),
             Options.Create(new SessionCookieConfiguration()));
 
-    /// <summary>
-    /// Host and transport, deliberately crossed: a domain over http and localhost
-    /// over https are the two cases the host name answers backwards.
-    /// </summary>
+    // Host and transport, deliberately crossed: a domain over http and localhost over https are the
+    // two cases the host name answers backwards.
     public static TheoryData<string, bool> Transports => new()
     {
         { "dm.am", false },
@@ -46,13 +42,8 @@ public class SessionCookieShould : UnitTestBase
             "over https travels in the clear");
     }
 
-    /// <summary>
-    /// The cookie does not travel on a request another site started.
-    /// </summary>
-    /// <remarks>
-    /// The origin check lets a request with neither Origin nor Referer through, and this attribute is what keeps
-    /// the session off it.
-    /// </remarks>
+    // The origin check lets a request with neither Origin nor Referer through, and this attribute
+    // is what keeps the session off it.
     [Fact]
     public async Task WithholdTheSessionFromCrossSiteSubrequests()
     {

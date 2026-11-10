@@ -17,9 +17,6 @@ public class CdnConfiguration
     /// </summary>
     public string Region { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Bucket name
-    /// </summary>
     public string BucketName { get; set; } = string.Empty;
 
     /// <summary>
@@ -27,9 +24,6 @@ public class CdnConfiguration
     /// </summary>
     public string SecretKey { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Public access key
-    /// </summary>
     public string AccessKey { get; set; } = string.Empty;
 
 

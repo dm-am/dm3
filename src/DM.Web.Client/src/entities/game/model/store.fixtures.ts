@@ -7,6 +7,8 @@ import {
   type GameRecruitment,
   type GamePrivacySettings,
 } from "./gameTypes";
+import type { Post } from "./postTypes";
+import type { Character } from "./characterTypes";
 import type { UserRef } from "@/shared/api/models/common";
 import { vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
@@ -14,7 +16,7 @@ import { asServed } from "@/shared/api/models";
 
 const createMockUserRef = (id: string, username: string): UserRef =>
   ({
-    id: id,
+    id,
     username,
     lastActivityUtc: "2024-01-01T00:00:00Z",
   }) as UserRef;
@@ -63,6 +65,25 @@ export const createMockGame = (id: string, title: string): Game => ({
   tagIds: [],
   privacySettings: createMockPrivacySettings(),
   unreadCharactersCount: asServed(0),
+});
+
+export const createMockPost = (id: string, gameText: string): Post => ({
+  id: asServed(id),
+  createdUtc: "2024-01-01T00:00:00Z",
+  gameText,
+});
+
+/** An active player character as the roster reads it: no privacy and no attributes. */
+export const createMockCharacter = (id: string, name: string): Character => ({
+  id: asServed(id),
+  status: "Active",
+  isDead: asServed(false),
+  isPlayerLeft: asServed(false),
+  isPlayerExiled: asServed(false),
+  name,
+  picture: asServed({}),
+  isNpc: asServed(false),
+  totalPostsCount: asServed(0),
 });
 
 /** A store of its own for every case, and mocks with no calls left in them. */

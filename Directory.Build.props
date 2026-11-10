@@ -14,6 +14,9 @@
         <!-- CS1591 forced empty summaries and <inheritdoc /> on constructors. The response
              codes of an action are checked against its doc comment by an architecture test. -->
         <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <!-- CS1573 asked for a param tag on every parameter once one had a tag, so a doc that
+             explains one parameter retold the others by their names. -->
+        <NoWarn>$(NoWarn);CS1573</NoWarn>
         <!-- Pinned, not "preview": a newer local SDK would accept features CI rejects. -->
         <LangVersion>14.0</LangVersion>
         <GenerateAssemblyInfo>true</GenerateAssemblyInfo>

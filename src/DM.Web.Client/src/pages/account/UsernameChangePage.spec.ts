@@ -8,18 +8,15 @@
  * leaves anything to do.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import type { VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
+import type { Router } from "vue-router";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { accountApi, UsernameInput } from "@/entities/user";
 import { useAuthStore } from "@/shared/stores";
 import UsernameChangePage from "./UsernameChangePage.vue";
-import { push } from "./guestPages.doubles";
-
-vi.mock("vue-router", async () =>
-  (await import("./guestPages.doubles")).vueRouter(),
-);
 
 // The account refresh after the rename is stubbed: the page only calls it.
 const fetchUser = vi.hoisted(() => vi.fn());
@@ -33,19 +30,33 @@ vi.mock("@/entities/user/lib/session", () => ({
 /** A request that never settles: the page stays in the state under test. */
 const pending = () => new Promise(() => {}) as never;
 
+/** The page, and every address its card leads to. */
+const routes: Address[] = [
+  ["change-username", "/change-username"],
+  ["home", "/"],
+  ["account", "/account"],
+  ["profile", "/users/:username"],
+  ["support", "/support"],
+];
+
+let router: Router;
+
 /** A card for a guest or for a reader signed in on this device: who reads decides the way out of an expired link. */
-const options = (signedIn = false) => {
+const open = async (signedIn = false) => {
   const pinia = createPinia();
   setActivePinia(pinia);
   if (signedIn) useAuthStore().updateUser({ username: "reader" } as never);
 
-  return {
-    global: {
-      plugins: [pinia],
-      stubs: { RouterLink: { template: "<a><slot /></a>" } },
-    },
-  };
+  const opened = await mountPage(UsernameChangePage, "/change-username", {
+    routes,
+    pinia,
+  });
+  router = opened.router;
+  return opened.wrapper;
 };
+
+/** Where the reader is now. */
+const address = () => router.currentRoute.value.fullPath;
 
 const approval = (
   status: "ready" | "expired" | "used",
@@ -61,7 +72,7 @@ const approval = (
 const atTheName = async (name = "newreader") => {
   approval("ready", "reader");
 
-  const wrapper = mount(UsernameChangePage, options());
+  const wrapper = await open();
   await flushPromises();
 
   const field = wrapper.findComponent(UsernameInput);
@@ -83,7 +94,7 @@ const atTheConfirmation = async (name = "newreader") => {
 const at = async (status: "expired" | "used", signedIn = false) => {
   approval(status);
 
-  const wrapper = mount(UsernameChangePage, options(signedIn));
+  const wrapper = await open(signedIn);
   await flushPromises();
   return wrapper as VueWrapper;
 };
@@ -95,12 +106,11 @@ const atBrokenLink = async () => {
     error: { status: 404, title: "Ссылка недействительна или устарела" },
   } as never);
 
-  const wrapper = mount(UsernameChangePage, options());
+  const wrapper = await open();
   await flushPromises();
   return wrapper as VueWrapper;
 };
 
-/** The page after the name has been changed. */
 const atTheChangedName = async () => {
   vi.spyOn(accountApi, "completeUsernameChange").mockResolvedValue({
     data: { requestedUsername: "newreader" },
@@ -130,9 +140,7 @@ const atTheTakenName = async () => {
 
 describe("the page reached from the approval letter", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     vi.restoreAllMocks();
-    push.mockClear();
     fetchUser.mockClear();
     // The viewer is persisted: a signed-in fixture would be read back by the next test.
     localStorage.clear();
@@ -145,12 +153,12 @@ describe("the page reached from the approval letter", () => {
     } as never);
   });
 
-  it("tells the reader the link is being checked", () => {
+  it("tells the reader the link is being checked", async () => {
     vi.spyOn(accountApi, "getUsernameChangeApproval").mockImplementation(
       pending,
     );
 
-    const wrapper = mount(UsernameChangePage, options());
+    const wrapper = await open();
 
     expect(wrapper.text()).toContain("Проверяем ссылку...");
   });
@@ -236,7 +244,8 @@ describe("the page reached from the approval letter", () => {
 
       expect(on.text()).toBe("Перейти в профиль");
       await on.trigger("click");
-      expect(push).toHaveBeenCalledWith("/users/newreader");
+      await flushPromises();
+      expect(address()).toBe("/users/newreader");
 
       // Nothing has gone wrong, so no help is offered.
       expect(wrapper.find(".auth-footnote").exists()).toBe(false);
@@ -343,7 +352,7 @@ describe("the page reached from the approval letter", () => {
     window.location.hash = "";
     const check = vi.spyOn(accountApi, "getUsernameChangeApproval");
 
-    const wrapper = mount(UsernameChangePage, options());
+    const wrapper = await open();
     await flushPromises();
 
     expect(check).not.toHaveBeenCalled();
@@ -363,8 +372,8 @@ describe("the page reached from the approval letter", () => {
       ["the broken", atBrokenLink, "На главную", "/"],
     ] as const)(
       "leaves %s link by one button",
-      async (_, open, caption, goes) => {
-        const wrapper = await open();
+      async (_, arrive, caption, goes) => {
+        const wrapper = await arrive();
         const ways = wrapper.findAll("button");
 
         // One control and one only.
@@ -373,7 +382,8 @@ describe("the page reached from the approval letter", () => {
         expect(ways[0].text()).toBe(caption);
 
         await ways[0].trigger("click");
-        expect(push).toHaveBeenCalledWith(goes);
+        await flushPromises();
+        expect(address()).toBe(goes);
       },
     );
 
@@ -385,10 +395,8 @@ describe("the page reached from the approval letter", () => {
       expect(out.text()).toBe("Войти");
 
       await out.trigger("click");
-      expect(push).toHaveBeenCalledWith({
-        path: "/",
-        query: { action: "login" },
-      });
+      await flushPromises();
+      expect(address()).toBe("/?action=login");
     });
 
     it("asks nobody to sign in on the spent link", async () => {
@@ -405,12 +413,13 @@ describe("the page reached from the approval letter", () => {
       ["the broken", atBrokenLink],
     ] as const)(
       "keeps the support link on %s link, the only one",
-      async (_, open) => {
-        const wrapper = await open();
+      async (_, arrive) => {
+        const wrapper = await arrive();
         const links = wrapper.findAll("a");
 
         expect(links).toHaveLength(1);
         expect(links[0].text()).toBe("поддержку");
+        expect(links[0].attributes("href")).toBe("/support?subtype=Bug");
         expect(wrapper.get(".auth-footnote").text()).toContain("Нужна помощь?");
       },
     );

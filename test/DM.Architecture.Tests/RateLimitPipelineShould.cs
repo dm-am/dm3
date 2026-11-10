@@ -6,10 +6,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The limiter counts per account only because the pipeline puts the account
-/// there first.
-/// </summary>
 /// <remarks>
 /// A partitioner is called synchronously, so the account must already be on the context; the limiter
 /// stays above authentication so a flood costs no session lookup. Source text: a wrong order still
@@ -42,9 +38,6 @@ public class RateLimitPipelineShould
             "a flood has to be refused before it costs a session lookup");
     }
 
-    /// <summary>
-    /// Every request leaves one line, and only one.
-    /// </summary>
     /// <remarks>
     /// Microsoft logs are cut to Warning, so this is the only request line. Below the error handler it
     /// would log each failure twice, above the correlation middleware without a token.

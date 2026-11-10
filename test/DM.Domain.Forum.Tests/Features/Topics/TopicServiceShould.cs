@@ -17,7 +17,6 @@ namespace DM.Domain.Forum.Tests.Features.Topics;
 
 public class TopicServiceShould : TopicServiceTestBase
 {
-    /// <summary>The store answers a creation with this topic.</summary>
     private void CreateReturns(Topic topic) =>
         repository.Create(
             Arg.Any<CreateTopicEntity>(),
@@ -25,7 +24,6 @@ public class TopicServiceShould : TopicServiceTestBase
             Arg.Any<Guid>(),
             Arg.Any<CancellationToken>()).Returns(topic);
 
-    /// <summary>The store refuses a creation with this failure.</summary>
     private void CreateThrows(Exception failure) =>
         repository.Create(
             Arg.Any<CreateTopicEntity>(),

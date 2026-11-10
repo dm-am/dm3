@@ -6,10 +6,6 @@ namespace DM.Domain.Messaging.Features.Likes;
 
 public interface IMessageLikeService
 {
-    /// <summary>
-    /// Like the message as the current user
-    /// </summary>
-    /// <returns>User who liked the message</returns>
     Task<GeneralUser> LikeMessageAsync(Guid messageId);
 
     Task UnlikeMessageAsync(Guid messageId);

@@ -7,14 +7,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// The description of a game tag is the hint surface: saved with the names of
-/// its tags in lower case, refused with a hidden block in it, given to the card
-/// of the tag rendered by the server and to the edit window as typed.
-/// </summary>
 public class TagDescriptionShould : IntegrationTestBase
 {
-    /// <summary>A group of the migration's catalogue, "Деликатный контент".</summary>
     private static readonly Guid GroupId = Guid.Parse("00000000-0000-0000-0005-000000000008");
 
     public TagDescriptionShould(DatabaseFixture databaseFixture) : base(databaseFixture)

@@ -4,31 +4,13 @@
 
 /** The discussion section: the whole filter reaches the loader, paging both ends, its states. */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
 import type { Comment, PagingInfo } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import RefusalNote from "@/shared/ui/Layout/RefusalNote.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import DiscussionSection from "./DiscussionSection.vue";
-
-/** The URL the section reads its filter, sort and page out of. */
-const route = vi.hoisted(() => ({
-  path: "/game/aaaaa/comments",
-  name: "game-comments",
-  params: { id: "aaaaa" } as Record<string, string>,
-  query: {} as Record<string, string>,
-  hash: "",
-}));
-
-vi.mock("vue-router", () => ({
-  useRoute: () => route,
-  useRouter: () => ({
-    currentRoute: { value: route },
-    replace: vi.fn(),
-    resolve: () => ({ href: "" }),
-  }),
-}));
 
 // The section reads the filter from the URL; the bar has nothing to say here.
 vi.mock("@/features/comment-filter/ui/CommentsFilter.vue", () => ({
@@ -74,13 +56,14 @@ const paging = (over: Partial<PagingInfo> = {}): PagingInfo => ({
   ...over,
 });
 
-function render(over: Record<string, unknown> = {}) {
+/** The discussion of game aaaaa, at the URL it reads its filter, sort and page out of. */
+async function render(
+  over: Record<string, unknown> = {},
+  address = "/game/aaaaa/comments",
+) {
   const load = vi.fn();
-  const wrapper = mount(DiscussionSection, {
-    global: {
-      plugins: [createPinia()],
-      stubs: { RouterLink: RouterLinkStub },
-    },
+  const { wrapper } = await mountPage(DiscussionSection, address, {
+    routes: [["game-comments", "/game/:id/comments"]],
     props: {
       comments: [],
       paging: null,
@@ -105,21 +88,14 @@ function render(over: Record<string, unknown> = {}) {
 
 describe("the discussion section", () => {
   beforeEach(() => {
-    route.query = {};
-    route.hash = "";
     localStorage.clear();
   });
 
-  it("hands the loader the whole filter, not just the page", () => {
-    route.query = {
-      search: "правила",
-      authors: "Мастер,Игрок",
-      sortBy: "likes",
-      sortOrder: "desc",
-      number: "3",
-    };
-
-    const { load } = render();
+  it("hands the loader the whole filter, not just the page", async () => {
+    const { load } = await render(
+      {},
+      "/game/aaaaa/comments?search=правила&authors=Мастер,Игрок&sortBy=likes&sortOrder=desc&number=3",
+    );
 
     expect(load).toHaveBeenCalledWith({
       search: "правила",
@@ -132,7 +108,7 @@ describe("the discussion section", () => {
   });
 
   it("reloads when the record under it changes", async () => {
-    const { wrapper, load } = render();
+    const { wrapper, load } = await render();
     expect(load).toHaveBeenCalledTimes(1);
 
     await wrapper.setProps({ recordId: "bbbbb" });
@@ -140,8 +116,8 @@ describe("the discussion section", () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it("pages above the list as well as below it", () => {
-    const { wrapper } = render({
+  it("pages above the list as well as below it", async () => {
+    const { wrapper } = await render({
       comments: [comment("c-1")],
       paging: paging(),
     });
@@ -149,8 +125,8 @@ describe("the discussion section", () => {
     expect(wrapper.findAll(".paging-block")).toHaveLength(2);
   });
 
-  it("numbers a comment by its place in the discussion, not on the page", () => {
-    const { wrapper } = render({
+  it("numbers a comment by its place in the discussion, not on the page", async () => {
+    const { wrapper } = await render({
       comments: [comment("c-21"), comment("c-22")],
       paging: paging({ current: 2, skip: 20 }),
     });
@@ -161,7 +137,7 @@ describe("the discussion section", () => {
   });
 
   it("says a load failed and offers the retry", async () => {
-    const { wrapper, load } = render({ failed: true });
+    const { wrapper, load } = await render({ failed: true });
 
     const failure = wrapper.find(".error-state");
     expect(failure.text()).toContain("Не удалось загрузить комментарии");
@@ -171,14 +147,16 @@ describe("the discussion section", () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it("tells an empty discussion apart from an empty filter result", () => {
-    expect(render().wrapper.find(".discussion-none").text()).toBe(
+  it("tells an empty discussion apart from an empty filter result", async () => {
+    expect((await render()).wrapper.find(".discussion-none").text()).toBe(
       "Комментариев пока нет",
     );
 
-    route.query = { search: "такого нет" };
-
-    expect(render().wrapper.find(".discussion-none").text()).toBe(
+    const filtered = await render(
+      {},
+      "/game/aaaaa/comments?search=такого%20нет",
+    );
+    expect(filtered.wrapper.find(".discussion-none").text()).toBe(
       "Комментариев по заданным фильтрам не найдено",
     );
   });
@@ -198,7 +176,7 @@ describe("the discussion section", () => {
         errors: { Text: [reason] },
       },
     });
-    const { wrapper } = render({ canComment: true, create });
+    const { wrapper } = await render({ canComment: true, create });
 
     await wrapper.get(".editor-stub").setValue("[private]секрет[/private]");
     await wrapper.get(".discussion-composer button").trigger("click");
@@ -216,7 +194,7 @@ describe("the discussion section", () => {
   /** The blacklist closes the composer and reaches every comment, even when it arrives late. */
   it("says why there is no composer and tells every comment about the blacklist", async () => {
     localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
-    const { wrapper } = render({
+    const { wrapper } = await render({
       comments: [comment("c-1"), comment("c-2")],
       canComment: true,
     });
@@ -240,9 +218,9 @@ describe("the discussion section", () => {
   });
 
   // A ban: no block at all, so no empty step under the list.
-  it("leaves no empty block where there is nothing to offer and nothing to say", () => {
+  it("leaves no empty block where there is nothing to offer and nothing to say", async () => {
     localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
-    const { wrapper } = render({ comments: [comment("c-1")] });
+    const { wrapper } = await render({ comments: [comment("c-1")] });
 
     expect(wrapper.find(".discussion-composer").exists()).toBe(false);
   });
@@ -253,14 +231,12 @@ describe("a discussion closed to writing", () => {
   const OFF = "Писать в обсуждении могут только участники игры";
 
   beforeEach(() => {
-    route.query = {};
-    route.hash = "";
     localStorage.clear();
   });
 
   it("says so under the comments, with no form", async () => {
     localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
-    const { wrapper } = render({
+    const { wrapper } = await render({
       closedHint: OFF,
       comments: [comment("c-1")],
       paging: paging({ total: 1, pages: 1 }),
@@ -276,7 +252,7 @@ describe("a discussion closed to writing", () => {
 
   // Signing in would not open the form.
   it("tells a guest the same instead of inviting him in", async () => {
-    const { wrapper } = render({ closedHint: OFF });
+    const { wrapper } = await render({ closedHint: OFF });
     await flushPromises();
 
     expect(wrapper.get(".discussion-hint").text()).toBe(OFF);
@@ -284,7 +260,7 @@ describe("a discussion closed to writing", () => {
   });
 
   it("invites a guest in where signing in opens the composer", async () => {
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
 
     expect(wrapper.find(".login-prompt").exists()).toBe(true);
@@ -292,7 +268,7 @@ describe("a discussion closed to writing", () => {
   });
 
   it("keeps an empty one whole: the filter bar, the empty line and the line under it", async () => {
-    const { wrapper } = render({
+    const { wrapper } = await render({
       closedHint: OFF,
       paging: paging({ total: 0, pages: 0 }),
     });
@@ -308,7 +284,7 @@ describe("a discussion closed to writing", () => {
   // Each drawn by its own component, so a refusal set in grey would read as nothing.
   it("draws the refusal as a plaque and the empty line in grey", async () => {
     localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
-    const { wrapper } = render({
+    const { wrapper } = await render({
       closedHint: OFF,
       paging: paging({ total: 0, pages: 0 }),
     });

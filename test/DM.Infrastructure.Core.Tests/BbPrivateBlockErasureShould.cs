@@ -33,7 +33,6 @@ namespace DM.Infrastructure.Core.Tests;
 /// </remarks>
 public class BbPrivateBlockErasureShould
 {
-    /// <summary>The place of the block in a post.</summary>
     private const string Here = "BLOCK";
 
     private const string Content =
@@ -49,7 +48,6 @@ public class BbPrivateBlockErasureShould
         "лишний [/quote] и [/b] закрывающий\n" +
         "[code]дверь 7[/code] и последняя строка";
 
-    /// <summary>What the content puts on the page for its readers, one piece each.</summary>
     private static readonly string[] Pieces =
     [
         "Ключ лежит под третьей доской.", "<img src=\"https://tainik.example.net/karta.png\"",
@@ -59,10 +57,6 @@ public class BbPrivateBlockErasureShould
         "и последняя строка",
     ];
 
-    /// <summary>
-    /// What no reader the block is not for may find: its words, its addresses, the
-    /// names it is written to, and any of its tags or of the element it is drawn as.
-    /// </summary>
     private static readonly string[] Traces =
     [
         "Ключ", "доской", "tainik", "karta", "lodka", "Тайник", "Шифр", "Север", "Никому", "Сторож",
@@ -92,7 +86,6 @@ public class BbPrivateBlockErasureShould
         ("spelled with a parameter", "[private to=\"Вася\"]", false, "DungeonMaster, Assistant"),
     ];
 
-    /// <summary>A post with the block in it, and what a reader the block is not for gets of it.</summary>
     private static readonly (string Post, string Remainder)[] Places =
     [
         ("Эльвира входит в каюту.\nBLOCK\nПотом она выходит на палубу.",
@@ -122,11 +115,6 @@ public class BbPrivateBlockErasureShould
 
     public static TheoryData<string> Posts() => new(Places.Select(place => place.Post));
 
-    /// <summary>
-    /// A guest, another player, a mentor, a moderator and an administrator, none of
-    /// them a lead of the game, get the same remainder of the post whatever the
-    /// block held, however long it was and whomever it was written to.
-    /// </summary>
     [Theory]
     [MemberData(nameof(PostsAndRemainders))]
     public void LeaveAReaderTheBlockIsNotForTheSameRemainder(string post, string remainder)
@@ -150,10 +138,6 @@ public class BbPrivateBlockErasureShould
             "whatever it held");
     }
 
-    /// <summary>
-    /// The plain text of the mail and the embed cut every block, and what they leave
-    /// is the same whatever the block held.
-    /// </summary>
     [Theory]
     [MemberData(nameof(Posts))]
     public void LeaveThePlainTextAndTheEmbedTheSameRemainder(string post)
@@ -180,11 +164,6 @@ public class BbPrivateBlockErasureShould
             "the mail and the embed are read by anybody, and a block leaves no more in them than on the page");
     }
 
-    /// <summary>
-    /// The author, the master and, for a block written to their character, the
-    /// addressee get the whole of it, each piece drawn as it is drawn outside the
-    /// block, inside the element that names who reads it.
-    /// </summary>
     [Theory]
     [MemberData(nameof(Posts))]
     public void ShowTheReadersOfTheBlockAllOfIt(string post)
@@ -204,10 +183,6 @@ public class BbPrivateBlockErasureShould
         }
     }
 
-    /// <summary>
-    /// A block nobody closed runs to the end of the text: a reader it is not for
-    /// gets nothing of what follows its opening tag, and its readers get all of it.
-    /// </summary>
     [Fact]
     public void HideABlockNobodyClosedToTheEndOfTheText()
     {
@@ -244,7 +219,6 @@ public class BbPrivateBlockErasureShould
 
     private static string Block(string opening, string content) => opening + content + "[/private]";
 
-    /// <summary>What the rendering gives that the remainder does not: a different text, and each trace in it.</summary>
     private static IEnumerable<string> Leaks(string html, string remainder)
     {
         if (!string.Equals(html, remainder, StringComparison.Ordinal))
@@ -271,7 +245,6 @@ public class BbPrivateBlockErasureShould
             },
         });
 
-    /// <summary>The readers a block is not for: nobody of them wrote it, leads the game or is named in it.</summary>
     private static IEnumerable<(string Name, IAuthorizationSubject Viewer)> Strangers(bool addressed)
     {
         yield return ("a guest", Viewer(UserRole.Guest));

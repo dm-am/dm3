@@ -17,11 +17,6 @@ public interface IPollService
     /// <returns>Created poll</returns>
     Task<Poll> CreateAsync(CreatePoll createPoll);
 
-    /// <summary>
-    /// Get single poll by identifier
-    /// </summary>
-    /// <param name="pollId">Poll identifier</param>
-    /// <returns>Poll</returns>
     Task<Poll> GetAsync(Guid pollId);
 
     /// <summary>
@@ -31,11 +26,6 @@ public interface IPollService
     /// <returns>Polls with paging info</returns>
     Task<(IEnumerable<Poll> Polls, PagingResult Paging)> GetListAsync(PollsQuery query);
 
-    /// <summary>
-    /// Update existing poll
-    /// </summary>
-    /// <param name="updatePoll">Poll update data</param>
-    /// <returns>Updated poll</returns>
     Task<Poll> UpdateAsync(UpdatePoll updatePoll);
 
     /// <summary>

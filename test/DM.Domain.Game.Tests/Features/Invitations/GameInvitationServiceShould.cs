@@ -186,10 +186,8 @@ public class GameInvitationServiceShould : UnitTestBase
         await producer.Received(1).SendAsync(EventType.PlayerInvitationCreated, tokenId);
     }
 
-    /// <summary>
-    /// Inviting somebody the game blacklisted is the lead's own decision: the
-    /// entry withdraws the invitations already sent, not the right to send one.
-    /// </summary>
+    // Inviting somebody the game blacklisted is the lead's own decision: the entry withdraws the
+    // invitations already sent, not the right to send one.
     [Fact]
     public async Task InviteAUserTheGameBlacklisted()
     {
@@ -243,9 +241,6 @@ public class GameInvitationServiceShould : UnitTestBase
         await producer.Received(1).SendAsync(EventType.ReaderInvitationAccepted, tokenId);
     }
 
-    /// <summary>
-    /// The acceptance that spent no link announces nothing, whichever role it was for.
-    /// </summary>
     /// <remarks>
     /// Both links are spent by a conditional statement carrying the soft-delete
     /// filter, so a link already spent - by the acceptance running beside this one,
@@ -299,7 +294,6 @@ public class GameInvitationServiceShould : UnitTestBase
         await producer.DidNotReceive().SendAsync(announcement, Arg.Any<Guid>());
     }
 
-    /// <summary>The rejection that spent the link is the one that announces it.</summary>
     [Theory]
     [InlineData(TokenType.GamePlayerInvitation, EventType.PlayerInvitationRejected)]
     [InlineData(TokenType.GameReaderInvitation, EventType.ReaderInvitationRejected)]
@@ -315,7 +309,6 @@ public class GameInvitationServiceShould : UnitTestBase
         await producer.Received(1).SendAsync(announcement, tokenId);
     }
 
-    /// <summary>A live invitation of any kind, addressed to the current user.</summary>
     private Guid Invitation(TokenType tokenType, Guid? gameId = null)
     {
         var tokenId = Guid.NewGuid();
@@ -345,9 +338,6 @@ public class GameInvitationServiceShould : UnitTestBase
         await producer.Received(1).SendAsync(EventType.AssignmentRequestAccepted, tokenId);
     }
 
-    /// <summary>
-    /// The acceptance that spent nothing announces nothing.
-    /// </summary>
     /// <remarks>
     /// Two people following one link, or one person following it twice, both end
     /// with the same assistant row and only one of the two spent the invitation.

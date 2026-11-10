@@ -24,9 +24,7 @@ public sealed class UnreadCountersReservation : IAsyncDisposable
 
     internal UnreadCountersReservation(IUnreadCountersRepository repository) => this.repository = repository;
 
-    /// <summary>
-    /// Writes one marker and keeps it on the list of what has to be taken back.
-    /// </summary>
+    // Writes one marker and keeps it on the list of what has to be taken back.
     internal async Task WriteAsync(UnreadMarker marker)
     {
         if (marker.Readers == null)

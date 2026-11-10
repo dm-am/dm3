@@ -84,7 +84,6 @@ internal sealed class TipTag : ContentTag
         return text != null || image != null;
     }
 
-    /// <summary>Text encoded the way the parser encodes text: ampersand and angle brackets.</summary>
     private static string EncodeText(string value) =>
         BbParser.SecuritySubstitutions.Aggregate(value, (text, pair) => text.Replace(pair.Key, pair.Value));
 

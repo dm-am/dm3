@@ -30,13 +30,8 @@ public class GameServiceShould : GameServiceTestBase
         author.QuantityRating = ProbationPolicy.NewbiePostThreshold;
     }
 
-    /// <summary>
-    /// The premoderation status a game is born in, over all four combinations of
-    /// the two things that hold an author back.
-    /// </summary>
-    /// <remarks>
-    /// The rule lives in ModulePremoderationPolicy, what is proved here is that the creation path asks it.
-    /// </remarks>
+    // The rule lives in ModulePremoderationPolicy, what is proved here is that the creation path
+    // asks it.
     [Theory]
     [InlineData(false, false, PremoderationStatus.Approved)]
     [InlineData(true, false, PremoderationStatus.AwaitingEdits)]
@@ -76,9 +71,8 @@ public class GameServiceShould : GameServiceTestBase
         await producer.Received(1).SendAsync(EventType.NewGame, gameId);
     }
 
-    /// <remarks>
-    /// The counters are outside the game's transaction, and written first a failure loses a game nobody has seen.
-    /// </remarks>
+    // The counters are outside the game's transaction, and written first a failure loses a game
+    // nobody has seen.
     [Fact]
     public async Task LeaveNoCountersBehindWhenTheGameItselfFailsToSave()
     {
@@ -97,10 +91,6 @@ public class GameServiceShould : GameServiceTestBase
         await unreadCountersRepository.Received(1).DeleteAsync(gameId, UnreadEntryType.Character);
     }
 
-    /// <summary>
-    /// The first room of a game is parented by that game, like every room made
-    /// after it.
-    /// </summary>
     [Fact]
     public async Task ParentTheFirstRoomsCounterByItsGame()
     {
@@ -166,13 +156,9 @@ public class GameServiceShould : GameServiceTestBase
             Arg.Is<IEnumerable<EventType>>(e => e.SequenceEqual(new[] { EventType.ChangedGame })), gameId);
     }
 
-    /// <summary>
-    /// Tags are editable after creation, and the settings page is where they are
-    /// edited. The wire carries short identifiers — what the tag list serves and
-    /// what the game filters take — so the update goes through the same catalog
-    /// translation the creation form does; the link table keys on the tags' own
-    /// identifiers and nothing else may reach it.
-    /// </summary>
+    // The wire carries short identifiers — what the tag list serves and what the game filters take
+    // — so the update goes through the same catalog translation the creation form does; the link
+    // table keys on the tags' own identifiers and nothing else may reach it.
     [Fact]
     public async Task TranslateTagShortIdsOnUpdateBeforeWritingThem()
     {
@@ -192,12 +178,9 @@ public class GameServiceShould : GameServiceTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Null and empty are two different answers, and the repository writes them
-    /// differently: an update that says nothing about tags must leave them
-    /// standing, while an empty list is the master taking every tag off. Saving
-    /// the title alone would otherwise strip the game of its tags.
-    /// </summary>
+    // Null and empty are two different answers, and the repository writes them differently: an
+    // update that says nothing about tags must leave them standing, while an empty list is the
+    // master taking every tag off.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -220,11 +203,9 @@ public class GameServiceShould : GameServiceTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Creation answers to the create intention right after the form passes
-    /// validation: someone the policy refuses gets the refusal before anything
-    /// is written, and no game reaches the repository.
-    /// </summary>
+    // Creation answers to the create intention right after the form passes validation: someone the
+    // policy refuses gets the refusal before anything is written, and no game reaches the
+    // repository.
     [Fact]
     public async Task RefuseToCreateAGameForSomeoneWhoMayNotCreateOne()
     {
@@ -239,11 +220,9 @@ public class GameServiceShould : GameServiceTestBase
         await repository.DidNotReceive().Create(Arg.Any<CreateGameEntity>(), Arg.Any<CreateRoomEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Tags answer to the same gate as the rest of the information form, so a
-    /// stranger cannot retag someone else's game: the refusal arrives before
-    /// anything is written, and nothing reaches the repository.
-    /// </summary>
+    // Tags answer to the same gate as the rest of the information form, so a stranger cannot retag
+    // someone else's game: the refusal arrives before anything is written, and nothing reaches the
+    // repository.
     [Fact]
     public async Task RefuseATagChangeFromSomeoneWhoMayNotEditTheSettings()
     {
@@ -283,13 +262,7 @@ public class GameServiceShould : GameServiceTestBase
         await producer.Received(1).SendAsync(EventType.DeletedGame, gameId);
     }
 
-    /// <summary>
-    /// The master removes someone who is not an assistant of the game: the refusal says so
-    /// and calls the person an assistant.
-    /// </summary>
-    /// <remarks>
-    /// The assistant repository substitute answers false to "is an assistant": nobody is.
-    /// </remarks>
+    // The assistant repository substitute answers false to "is an assistant": nobody is.
     [Fact]
     public async Task RefuseToRemoveSomeoneWhoIsNotAnAssistantOfTheGame()
     {
@@ -304,11 +277,8 @@ public class GameServiceShould : GameServiceTestBase
         await producer.DidNotReceive().SendAsync(EventType.ChangedGame, gameId);
     }
 
-    /// <summary>
-    /// The tag list is not the tag catalog alone: every entry carries the number
-    /// of active games with that tag, so a day-long entry shows the filter the
-    /// counts of yesterday.
-    /// </summary>
+    // The tag list is not the tag catalog alone: every entry carries the number of active games
+    // with that tag, so a day-long entry shows the filter the counts of yesterday.
     [Fact]
     public async Task CacheTheTagListOnlyAsLongAsItsGameCountsHold()
     {

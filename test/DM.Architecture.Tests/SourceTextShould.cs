@@ -3,10 +3,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The method reader under SizeRatchetShould finds a method whatever shape its
-/// declaration takes, and measures it from its signature to the end of its body.
-/// </summary>
 /// <remarks>Each method below has a shape a pattern reader misses; the fields and the property, shapes it takes for one.</remarks>
 public class SourceTextShould
 {

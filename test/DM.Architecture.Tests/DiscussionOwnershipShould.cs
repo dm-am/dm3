@@ -8,15 +8,9 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Reading a discussion is written once, whatever owns the comments.
-/// </summary>
-/// <remarks>Textual: each surface has its own service interface and query type, so types cannot say it.</remarks>
+// Textual: each surface has its own service interface and query type, so types cannot say it.
 public class DiscussionOwnershipShould
 {
-    /// <summary>
-    /// The step a copied discussion reader carries: asking which authors the reader hid.
-    /// </summary>
     private const string SharedStep = "GetBlockedUserIdsIfFlagEnabledAsync";
 
     private const string Owner = "CommentReading.cs";

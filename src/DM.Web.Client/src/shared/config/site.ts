@@ -97,10 +97,8 @@ export function otherSiteAddresses(
  * The origin of a link built to leave this page: a permalink a reader copies,
  * the address of a post pasted into a moderator's warning.
  *
- * The address being read, and not one address for every link: the owner put
- * "always the RU proxy" against "where the reader is" and chose the second
- * (5 October 2026). A reader on dm.am copies a dm.am link, a reader on the
- * proxy a proxy link. Every link to a page of the site that a reader copies or
+ * The address being read, and not one address for every link: a reader on
+ * dm.am copies a dm.am link, a reader on the proxy a proxy link. Every link to a page of the site that a reader copies or
  * a moderator quotes is built here (the number of a comment, the anchor of a
  * message of the chat, the post in a warning, the address of a support
  * ticket), so the decision is taken in one place. The link to a file of a post

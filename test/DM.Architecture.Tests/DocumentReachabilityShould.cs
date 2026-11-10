@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every hand-written document can be reached from README.md by following links.
-/// </summary>
 /// <remarks>
 /// A document no link leads to stops being read and corrected. Relative links in prose are
 /// followed through every markdown file, and a folder link reaches its README.md.
@@ -19,7 +16,6 @@ public class DocumentReachabilityShould
 {
     private const string Start = "README.md";
 
-    /// <summary>A markdown link: the target up to an optional anchor.</summary>
     private static readonly Regex Link = new(@"\]\((?<target>[^)\s#]*)(?:#[^)\s]+)?\)", RegexOptions.Compiled);
 
 
@@ -56,10 +52,6 @@ public class DocumentReachabilityShould
             "is there: link it from the index of its folder");
     }
 
-    /// <summary>
-    /// The documents a file links to, as paths from the root: relative links in
-    /// prose, resolved against the folder of the file.
-    /// </summary>
     private static IEnumerable<string> LinksIn(string file, string text)
     {
         var folder = Path.GetDirectoryName(file.Replace('/', Path.DirectorySeparatorChar)) ?? string.Empty;

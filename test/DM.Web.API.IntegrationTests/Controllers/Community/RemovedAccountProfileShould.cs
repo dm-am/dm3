@@ -21,22 +21,16 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Community;
 
-/// <summary>
-/// "Аккаунт удален" is a profile like any other, made of everything removed accounts
-/// left, and of nothing that was theirs alone.
-/// </summary>
 /// <remarks>
 /// The profile adds up the counters of every removed account and its tabs are the ordinary lists with their
 /// own access rules. The database is shared, so sums are asserted as differences.
 /// </remarks>
 public class RemovedAccountProfileShould : IntegrationTestBase
 {
-    /// <summary>
-    /// The key the summary is cached under for a minute, dropped on both sides of a change.
-    /// </summary>
+    // The key the summary is cached under for a minute, dropped on both sides of a change.
     private const string SummaryCacheKey = "removed_account_summary";
 
-    /// <summary>The "е" with two dots, spelled as its code point as the sources require.</summary>
+    // The "е" with two dots, spelled as its code point as the sources require.
     private const char DottedE = (char)0x0451;
 
     public RemovedAccountProfileShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -65,10 +59,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
             .Should().Be(RemovedAccount.Name, "the profile is written as the site writes the name");
     }
 
-    /// <summary>
-    /// A lookalike is refused as an account name, and it does not open the profile
-    /// either: the address answers the name, and nobody holds the lookalike.
-    /// </summary>
     [Fact]
     public async Task AnswerALookalikeAsAnUnknownName()
     {
@@ -147,10 +137,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         (Count(after, "blogsHosting") - Count(before, "blogsHosting")).Should().Be(1);
     }
 
-    /// <summary>
-    /// The tabs of the profile are the ordinary lists asked by the name, and they keep the
-    /// rules those lists have for every reader.
-    /// </summary>
     [Fact]
     public async Task ListWhatRemovedAccountsLeftAndOnlyWhatTheReaderMaySee()
     {
@@ -183,10 +169,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         byOldLogin.Should().BeEmpty("the removed login is nobody's now, and must not find what the removal took off it");
     }
 
-    /// <summary>
-    /// Asked together with a live name, the list answers both: the name narrows by the
-    /// removed accounts and the other name by its own account.
-    /// </summary>
     [Fact]
     public async Task ListTheNameAlongsideALiveAuthor()
     {
@@ -217,10 +199,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         "/v1/users/{0}/subscribers",
     ];
 
-    /// <summary>
-    /// Every other read that takes a name answers this one as it answers a name nobody
-    /// holds: the profile is the only thing the name opens.
-    /// </summary>
     [Theory]
     [MemberData(nameof(OtherReadsByName))]
     public async Task AnswerEveryOtherReadAsAnUnknownName(string template)
@@ -266,9 +244,8 @@ public class RemovedAccountProfileShould : IntegrationTestBase
             "the activation that picks the login refuses the reserved name as a taken one");
     }
 
-    /// <summary>
-    /// A removed row that carries the name stays removed: brought back it would sign as all removed accounts.
-    /// </summary>
+    // A removed row that carries the name stays removed: brought back it would sign as all removed
+    // accounts.
     [Fact]
     public async Task RefuseToRestoreARowUnderTheName()
     {
@@ -319,9 +296,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         Guid ClosedRoomId,
         Guid BlogId);
 
-    /// <summary>
-    /// A removed account with content of every kind, open and closed, removed after everything is written.
-    /// </summary>
     private async Task<Removed> SeedRemovedAccountAsync(int quality, int quantity)
     {
         var marker = "rmp" + Guid.NewGuid().ToString("N")[..10];
@@ -516,7 +490,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         return document.RootElement.GetProperty("resource").Clone();
     }
 
-    /// <summary>The identifiers of one page of a list, read as a guest.</summary>
     private async Task<Guid[]> IdsAsync(string url)
     {
         var response = await Client.GetAsync(url);

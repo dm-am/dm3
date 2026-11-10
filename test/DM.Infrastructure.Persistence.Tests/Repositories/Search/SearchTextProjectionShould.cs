@@ -7,10 +7,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Search;
 
-/// <summary>
-/// The visible text of a body, which is what gets indexed and what gets previewed.
-/// </summary>
-/// <remarks>The tag set differs between surfaces; [private] is a node on every one and dropped on every one.</remarks>
+// The tag set differs between surfaces; [private] is a node on every one and dropped on every one.
 public class SearchTextProjectionShould
 {
     [Fact]
@@ -38,10 +35,8 @@ public class SearchTextProjectionShould
         projected.Should().Contain("к реке");
     }
 
-    /// <summary>
-    /// And it stays dropped when an unclosed tag above it reaches over the block.
-    /// </summary>
-    /// <remarks>Text swallowed into an image URL before the parse would never be a node the filter is asked about.</remarks>
+    // Text swallowed into an image URL before the parse would never be a node the filter is asked
+    // about.
     [Fact]
     public void DropItAlsoWhenAnUnclosedImageTagReachesOverTheBlock()
     {
@@ -86,10 +81,7 @@ public class SearchTextProjectionShould
         projected.Should().Contain("до");
     }
 
-    /// <summary>
-    /// The characters a reader sees, not the entities of a page.
-    /// </summary>
-    /// <remarks>"a &lt; b" indexed as the page spells it could not be searched for; a typed entity stays.</remarks>
+    // "a &lt; b" indexed as the page spells it could not be searched for; a typed entity stays.
     [Fact]
     public void ReadBackTheEntitiesTheRendererWrote()
     {
@@ -114,10 +106,8 @@ public class SearchTextProjectionShould
         SearchTextProjection.Of(body, BbSurface.GamePost).Should().Be(expected);
     }
 
-    /// <summary>
-    /// A hidden block off the game post is dropped from the text as well: the
-    /// page erases it for every reader, so nobody can find it by its words.
-    /// </summary>
+    // A hidden block off the game post is dropped from the text as well: the page erases it for
+    // every reader, so nobody can find it by its words.
     [Theory]
     [InlineData(BbSurface.Comment)]
     [InlineData(BbSurface.GlobalChatMessage)]
@@ -174,13 +164,8 @@ public class SearchTextProjectionShould
         projected.Should().Be("первая строка вторая строка");
     }
 
-    /// <summary>
-    /// Control characters out: the preview marks a match with two of them.
-    /// </summary>
-    /// <remarks>
-    /// BbParser.Parse removes them for every consumer, so the words join as the page draws them; Collapse keeps
-    /// the second lock for the fallback path.
-    /// </remarks>
+    // BbParser.Parse removes them for every consumer, so the words join as the page draws them;
+    // Collapse keeps the second lock for the fallback path.
     [Fact]
     public void KeepControlCharactersOutOfTheProjection()
     {
@@ -196,11 +181,9 @@ public class SearchTextProjectionShould
         SearchTextProjection.Of("   ", BbSurface.Comment).Should().BeEmpty();
     }
 
-    /// <summary>
-    /// The text is one for every reader, and which files a reader may open is his question: no picture
-    /// or link that names a file is indexed, in either spelling of its identifier, whoever it is for.
-    /// A link elsewhere stays.
-    /// </summary>
+    // The text is one for every reader, and which files a reader may open is his question: no
+    // picture or link that names a file is indexed, in either spelling of its identifier, whoever
+    // it is for.
     [Theory]
     [InlineData("[img]https://dm.am/v1/uploads/{0:D}/content[/img]")]
     [InlineData("[IMG]/v1/uploads/{0:N}/content[/IMG]")]
@@ -214,7 +197,6 @@ public class SearchTextProjectionShould
         projected.Should().Be("Карта и https://example.com/map");
     }
 
-    /// <summary>And in a text the parser refuses, nothing from the first identifier on.</summary>
     [Fact]
     public void IndexNoFileOfATextTooDeepToParse()
     {

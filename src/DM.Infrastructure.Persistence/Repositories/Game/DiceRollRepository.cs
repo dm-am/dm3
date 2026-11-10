@@ -73,9 +73,6 @@ internal class DiceRollRepository : IDiceRollRepository
             .ToList();
     }
 
-    /// <summary>
-    /// The rolls of a post as rows, for the one write path — post creation.
-    /// </summary>
     internal static IEnumerable<DbDiceRoll> MapToDb(IEnumerable<DiceRoll> rolls) => rolls
         .Select(roll => new DbDiceRoll
         {

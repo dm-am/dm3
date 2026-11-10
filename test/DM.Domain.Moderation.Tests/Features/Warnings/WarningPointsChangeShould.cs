@@ -16,22 +16,13 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
-/// <summary>
-/// The change of the points of a warning: who may make it, what it needs, and
-/// what it announces.
-/// </summary>
 public class WarningPointsChangeShould : WarningServiceTestBase
 {
-    /// <summary>The change of the points of the warning under test.</summary>
     private Task<Warning> ChangeTo(int? points, string reason) =>
         service.ChangeWarningPoints(warningId, new ChangeWarningPoints { Points = points, Reason = reason });
 
-    /// <summary>
-    /// The moderator who wrote the warning may correct its points.
-    /// </summary>
-    /// <remarks>
-    /// A correction is open to the senior ranks and to the issuer, who is often best placed to say the points were wrong.
-    /// </remarks>
+    // A correction is open to the senior ranks and to the issuer, who is often best placed to say
+    // the points were wrong.
     [Fact]
     public async Task LetTheAuthorOfTheWarningChangeItsPoints()
     {
@@ -45,9 +36,6 @@ public class WarningPointsChangeShould : WarningServiceTestBase
             warningId, 0, moderatorUserId, now, "Ошибка модератора", Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A senior moderator may correct anybody's warning.
-    /// </summary>
     [Fact]
     public async Task LetASeniorModeratorChangeThePointsOfSomebodyElsesWarning()
     {
@@ -63,13 +51,8 @@ public class WarningPointsChangeShould : WarningServiceTestBase
             warningId, 1, seniorId, now, "Нарушение легче", Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// An ordinary moderator does not touch a warning another moderator issued.
-    /// </summary>
-    /// <remarks>
-    /// The refusal is the general one rather than one naming a rank: the rule is
-    /// a rank or an authorship, and no rank is the whole of it.
-    /// </remarks>
+    // The refusal is the general one rather than one naming a rank: the rule is a rank or an
+    // authorship, and no rank is the whole of it.
     [Fact]
     public async Task RefuseAModeratorThePointsOfSomebodyElsesWarning()
     {
@@ -85,9 +68,6 @@ public class WarningPointsChangeShould : WarningServiceTestBase
             Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A warning that does not exist is answered with 404, not with a write.
-    /// </summary>
     [Fact]
     public async Task AnswerWithNotFoundWhenTheWarningIsNotThere()
     {

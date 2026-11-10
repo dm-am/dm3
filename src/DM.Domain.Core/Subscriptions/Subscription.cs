@@ -15,7 +15,6 @@ public class Subscription
 
     public SubscriptionTargetType TargetType { get; set; }
 
-    /// <summary>Target entity identifier</summary>
     public Guid TargetId { get; set; }
 
     /// <summary>

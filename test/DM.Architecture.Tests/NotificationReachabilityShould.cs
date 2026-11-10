@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every event a notification generator answers is sent by somebody.
-/// </summary>
 /// <remarks>
 /// The queue binding is NotificationRoutingShould's; this is the other half. An event named anywhere
 /// outside the dispatcher counts as sent. Asserted against the sources: publication is a call inside
@@ -20,12 +17,11 @@ namespace DM.Architecture.Tests;
 public class NotificationReachabilityShould
 {
 
-    /// <summary>The dispatcher owns the answering side: naming an event there is not sending it.</summary>
+    // The dispatcher owns the answering side: naming an event there is not sending it.
     private const string DispatcherProject = "DM.Workers.NotificationDispatcher";
 
-    /// <summary>
-    /// The tables every reader of a notification shares; each names events by the dozen and sends none.
-    /// </summary>
+    // The tables every reader of a notification shares; each names events by the dozen and sends
+    // none.
     private static readonly string[] SharedTables =
     {
         "NotificationCategoryMapper.cs",

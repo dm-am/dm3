@@ -6,9 +6,6 @@ using DM.Domain.Core.Users;
 
 namespace DM.Domain.Account.Features.Availability;
 
-/// <summary>
-/// Service for checking email and username availability
-/// </summary>
 internal class AvailabilityService : IAvailabilityService
 {
     private readonly IRegistrationRepository _registrationRepository;

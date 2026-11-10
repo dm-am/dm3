@@ -14,15 +14,9 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
 [Table("Posts")]
 public class Post : ISoftDeletable
 {
-    /// <summary>
-    /// Post identifier
-    /// </summary>
     [Key]
     public Guid PostId { get; set; }
 
-    /// <summary>
-    /// Room identifier
-    /// </summary>
     public Guid RoomId { get; set; }
 
     /// <summary>
@@ -95,9 +89,6 @@ public class Post : ISoftDeletable
     public virtual ICollection<PostEdit> Edits { get; set; } = [];
 
 
-    /// <summary>
-    /// Reviews for this post
-    /// </summary>
     [InverseProperty(nameof(PostReview.Post))]
     public virtual ICollection<PostReview> Reviews { get; set; } = [];
 }

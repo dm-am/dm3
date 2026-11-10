@@ -41,12 +41,7 @@ public class SiteAddressConfigurationShould
             "the development server of the client is not an address of the site and still calls it");
     }
 
-    /// <summary>
-    /// Both sides of the comparison go through one normaliser.
-    /// </summary>
-    /// <remarks>
-    /// A browser sends the canonical origin, an address written by hand often is not.
-    /// </remarks>
+    // A browser sends the canonical origin, an address written by hand often is not.
     [Theory]
     [InlineData("https://DM.am/", "https://dm.am")]
     [InlineData("https://dm.am:443", "https://dm.am")]

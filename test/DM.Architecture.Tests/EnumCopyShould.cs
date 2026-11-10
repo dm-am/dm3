@@ -7,11 +7,7 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The words a person reads live in one dictionary, and it is not an attribute
-/// on a domain enum.
-/// </summary>
-/// <remarks>The client owns the words; textual, because an attribute is copied from the member above.</remarks>
+// The client owns the words; textual, because an attribute is copied from the member above.
 public class EnumCopyShould
 {
     private static readonly string[] BuildOutput = ["bin", "obj", "node_modules", "coverage", "dist"];

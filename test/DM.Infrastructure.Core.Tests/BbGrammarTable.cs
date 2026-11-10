@@ -9,10 +9,8 @@ using DM.Testing.Markup;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The rows of the grammar table the client and the server are both held to.
-/// </summary>
-/// <remarks>Read from bbcodeGrammar.cases.ts in the client, strict JSON between two marker comments, one row per line.</remarks>
+// Read from bbcodeGrammar.cases.ts in the client, strict JSON between two marker comments, one row
+// per line.
 internal static class BbGrammarTable
 {
 
@@ -30,7 +28,6 @@ internal static class BbGrammarTable
         .ToArray();
 }
 
-/// <summary>One row of the grammar table.</summary>
 internal sealed class GrammarRow
 {
     internal GrammarRow(JsonObject row)
@@ -54,10 +51,7 @@ internal sealed class GrammarRow
     internal bool SaveRefused { get; }
     internal JsonArray Expect { get; }
 
-    /// <summary>
-    /// The surfaces the row speaks for: all five surfaces of content for "any".
-    /// The hint has a tag set of its own, and every row for it names it.
-    /// </summary>
+    // The hint has a tag set of its own, and every row for it names it.
     internal IEnumerable<BbSurface> Surfaces => Surface == "any"
         ? MarkupSurfaces.Content
         : [Enum.Parse<BbSurface>(Surface)];
@@ -65,7 +59,6 @@ internal sealed class GrammarRow
     public override string ToString() => Id;
 }
 
-/// <summary>Who reads private text, in the table's own words.</summary>
 internal enum GrammarReader
 {
     Stranger,

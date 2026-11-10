@@ -27,7 +27,6 @@ public class BbUnclosedTagShould
 
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 
-    /// <summary>Every tag a post can leave open, in the cases a post has them in.</summary>
     private static readonly string[] Openers =
     [
         "[b]", "[B]", "[i]", "[u]", "[strike]",
@@ -37,7 +36,6 @@ public class BbUnclosedTagShould
         "[img]", "[img width=\"300\"]", "[link]", "[link text=\"Главная\"]", "[mention]"
     ];
 
-    /// <summary>The hidden blocks, each addressed to the same character, in both cases of the name.</summary>
     private static readonly string[] Blocks =
     [
         "[private=\"Вася\"]" + Secret + "[/private]",
@@ -91,10 +89,6 @@ public class BbUnclosedTagShould
         new Regex(PrivateBlockMarkup.BlockPattern).Replace(input, " ").Should().NotContain(Secret);
     }
 
-    /// <summary>
-    /// Off the game post the block is erased for everybody, its author as well,
-    /// whatever was left open above it.
-    /// </summary>
     [Theory]
     [MemberData(nameof(OpenersAndBlocks))]
     public void EraseTheBlockOffTheGamePostUnderATagLeftOpen(string opener, string block)
@@ -107,12 +101,9 @@ public class BbUnclosedTagShould
             .Should().Be($"до {opener} пример  хвост");
     }
 
-    /// <summary>
-    /// The save path accepts the block under an ordinary tag left open, and
-    /// refuses it under a [noparse] left open: the author almost always wrote an
-    /// example there and forgot the closing tag.
-    /// </summary>
-    /// <remarks>[code] only changes the font, so a block under one left open is no forgotten example.</remarks>
+    // The save path accepts the block under an ordinary tag left open, and refuses it under a
+    // [noparse] left open: the author almost always wrote an example there and forgot the closing
+    // tag.
     [Theory]
     [MemberData(nameof(OpenersAndBlocks))]
     public void RefuseTheBlockOnlyUnderANoparseLeftOpen(string opener, string block)
@@ -124,10 +115,6 @@ public class BbUnclosedTagShould
         PrivateBlockMarkup.ReadAddresseeAttributes(input).Should().Equal("Вася");
     }
 
-    /// <summary>
-    /// A hidden block that is not closed either holds the rest of the text,
-    /// under whatever was left open above it.
-    /// </summary>
     [Theory]
     [MemberData(nameof(AllOpeners))]
     public void HideTheRestOfTheTextWhenTheBlockUnderATagLeftOpenIsNotClosedEither(string opener)

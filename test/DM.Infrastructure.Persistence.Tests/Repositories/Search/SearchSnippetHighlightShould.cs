@@ -5,13 +5,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Search;
 
-/// <summary>
-/// The window the database marked, split into the runs a reader sees.
-/// </summary>
-/// <remarks>
-/// The search matches by lexeme, so the window and the mark come from the database. The sentinels are
-/// control characters, which the projection strips from every body.
-/// </remarks>
+// The search matches by lexeme, so the window and the mark come from the database.
 public class SearchSnippetHighlightShould
 {
     private const char Start = '\u0011';
@@ -57,10 +51,8 @@ public class SearchSnippetHighlightShould
         SearchSnippet.Highlight("").Should().BeEmpty();
     }
 
-    /// <summary>
-    /// A search with no words in it has no match to build a window around.
-    /// </summary>
-    /// <remarks>Filtering by author or date matches every row equally, so the start of the text is one unmarked run.</remarks>
+    // Filtering by author or date matches every row equally, so the start of the text is one
+    // unmarked run.
     [Fact]
     public void FallBackToThePlainBeginningWithNothingMarked()
     {

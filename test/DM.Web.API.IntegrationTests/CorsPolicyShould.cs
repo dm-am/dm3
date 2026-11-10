@@ -95,9 +95,8 @@ public class CorsPolicyShould : IntegrationTestBase
     private static string[] AllowedRequestHeaders(HttpResponseMessage response) =>
         CommaSeparated(response, "Access-Control-Allow-Headers");
 
-    /// <summary>
-    /// A missing header reads as an empty list, so the failure is an assertion rather than an exception.
-    /// </summary>
+    // A missing header reads as an empty list, so the failure is an assertion rather than an
+    // exception.
     private static string[] CommaSeparated(HttpResponseMessage response, string headerName) =>
         response.Headers.TryGetValues(headerName, out var values)
             ? values.SelectMany(value => value.Split(',')).Select(value => value.Trim()).ToArray()

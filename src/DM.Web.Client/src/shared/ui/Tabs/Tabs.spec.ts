@@ -51,7 +51,6 @@ const Host = defineComponent({
       h(Tabs, {
         modelValue: active.value,
         tabs: props.tabs,
-        idPrefix: "t",
         "onUpdate:modelValue": (value: string) => {
           active.value = value;
         },
@@ -65,9 +64,12 @@ describe("Tabs keyboard navigation", () => {
 
   type Strip = ReturnType<typeof mountTabs>;
 
-  /** Id of the tab the strip currently reports as selected. */
+  /** The value a tab id names, past the strip's own instance prefix. */
+  const valueOf = (id: string | null | undefined) => id?.split("-tab-")[1];
+
+  /** Value of the tab the strip currently reports as selected. */
   const selected = (strip: Strip) =>
-    strip.find('[role="tab"][aria-selected="true"]').attributes("id");
+    valueOf(strip.find('[role="tab"][aria-selected="true"]').attributes("id"));
 
   /** Presses a key on the only tab in the Tab cycle — the selected one. */
   const press = async (strip: Strip, key: string) => {
@@ -84,34 +86,34 @@ describe("Tabs keyboard navigation", () => {
   it("walks the whole declared order rightwards and wraps", async () => {
     const strip = mountTabs("about");
     expect(await walk(strip, "ArrowRight", 5)).toEqual([
-      "t-tab-games",
-      "t-tab-blogs",
-      "t-tab-topics",
-      "t-tab-achievements",
-      "t-tab-about",
+      "games",
+      "blogs",
+      "topics",
+      "achievements",
+      "about",
     ]);
   });
 
   it("walks the whole declared order leftwards and wraps", async () => {
     const strip = mountTabs("about");
     expect(await walk(strip, "ArrowLeft", 5)).toEqual([
-      "t-tab-achievements",
-      "t-tab-topics",
-      "t-tab-blogs",
-      "t-tab-games",
-      "t-tab-about",
+      "achievements",
+      "topics",
+      "blogs",
+      "games",
+      "about",
     ]);
   });
 
   it("selects the first declared tab on Home", async () => {
     const strip = mountTabs("blogs");
-    expect(await press(strip, "Home")).toBe("t-tab-about");
+    expect(await press(strip, "Home")).toBe("about");
   });
 
   it("selects the last declared tab on End and stays there", async () => {
     const strip = mountTabs("about");
-    expect(await press(strip, "End")).toBe("t-tab-achievements");
-    expect(await press(strip, "End")).toBe("t-tab-achievements");
+    expect(await press(strip, "End")).toBe("achievements");
+    expect(await press(strip, "End")).toBe("achievements");
   });
 
   it("steps over a hidden tab", async () => {
@@ -119,14 +121,14 @@ describe("Tabs keyboard navigation", () => {
       tab.value === "blogs" ? { ...tab, hidden: true } : tab,
     );
     const strip = mountTabs("games", tabs);
-    expect(await press(strip, "ArrowRight")).toBe("t-tab-topics");
+    expect(await press(strip, "ArrowRight")).toBe("topics");
   });
 
   it("moves focus onto the selected tab once the strip has reordered", async () => {
     const strip = mountTabs("about");
     await press(strip, "ArrowRight");
     const focused = document.activeElement;
-    expect(focused?.getAttribute("id")).toBe("t-tab-games");
+    expect(valueOf(focused?.getAttribute("id"))).toBe("games");
     expect(focused?.getAttribute("aria-selected")).toBe("true");
   });
 
@@ -135,10 +137,10 @@ describe("Tabs keyboard navigation", () => {
     const buttons = strip.findAll('[role="tab"]');
     // Rendered active-first: the selected tab comes first, but announces
     // itself as the fourth of five.
-    expect(buttons[0].attributes("id")).toBe("t-tab-topics");
+    expect(valueOf(buttons[0].attributes("id"))).toBe("topics");
     expect(buttons[0].attributes("aria-posinset")).toBe("4");
     expect(buttons[0].attributes("aria-setsize")).toBe("5");
-    expect(buttons[1].attributes("id")).toBe("t-tab-about");
+    expect(valueOf(buttons[1].attributes("id"))).toBe("about");
     expect(buttons[1].attributes("aria-posinset")).toBe("1");
   });
 });

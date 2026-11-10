@@ -20,23 +20,16 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// </remarks>
 public class PollVoteResetShould : IntegrationTestBase
 {
-    /// <summary>
-    /// How long the queued call is watched before it is called blocked.
-    /// </summary>
     private static readonly TimeSpan Probe = TimeSpan.FromSeconds(2);
 
-    /// <summary>The bound on the whole wait, so a lock nobody releases fails.</summary>
+    // The bound on the whole wait, so a lock nobody releases fails.
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
 
     public PollVoteResetShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// A vote still in flight when the ballot is cleared is cleared with it,
-    /// rather than surfacing afterwards on the published poll.
-    /// </summary>
-    /// <remarks>The vote is held open by hand in the repository's shape; the reset is the real call.</remarks>
+    // The vote is held open by hand in the repository's shape; the reset is the real call.
     [Fact]
     public async Task ClearTheVoteThatWasStillInFlightWhenTheBallotWasCleared()
     {
@@ -86,11 +79,8 @@ public class PollVoteResetShould : IntegrationTestBase
             "including the one that had not committed when the reset started");
     }
 
-    /// <summary>
-    /// A poll is published once. A second request to publish it, sent while the
-    /// first is still in flight, must not clear the ballot again.
-    /// </summary>
-    /// <remarks>The poll is public by the time the second request decides, and its votes are nobody's anonymous ones.</remarks>
+    // The poll is public by the time the second request decides, and its votes are nobody's
+    // anonymous ones.
     [Fact]
     public async Task LeaveTheBallotAloneWhenThePollIsPublicByTheTimeItDecides()
     {

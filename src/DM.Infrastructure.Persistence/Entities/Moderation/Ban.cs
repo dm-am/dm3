@@ -2,7 +2,6 @@ using DM.Domain.Core.Enums;
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Moderation;
@@ -12,10 +11,12 @@ namespace DM.Infrastructure.Persistence.Entities.Moderation;
 /// </summary>
 /// <remarks>
 /// Not soft-deletable: a lifted ban keeps its row for the moderation history and
-/// is marked by <see cref="LiftedUtc" />.
+/// is marked by <see cref="LiftedUtc" />. It stays off IRemovable on purpose:
+/// under the global IsRemoved filter of DmDbContext a lifted ban would leave every
+/// history the moment it was lifted.
 /// </remarks>
 [Table("Bans")]
-public class Ban : IAdministrated
+public class Ban
 {
     /// <summary>
     /// Ban identifier
@@ -23,10 +24,14 @@ public class Ban : IAdministrated
     [Key]
     public Guid BanId { get; set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// User who received the ban
+    /// </summary>
     public Guid TargetUserId { get; set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Moderator who issued the ban
+    /// </summary>
     public Guid AuthorId { get; set; }
 
     /// <summary>
@@ -69,11 +74,9 @@ public class Ban : IAdministrated
     /// </summary>
     public string? LiftReason { get; set; }
 
-    /// <inheritdoc />
     [ForeignKey(nameof(TargetUserId))]
     public virtual User TargetUser { get; set; } = null!;
 
-    /// <inheritdoc />
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;
 }

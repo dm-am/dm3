@@ -33,6 +33,15 @@ export function readArguments(argv, { values = [], flags = [] } = {}) {
       options.paths.push(arg);
     }
   }
+  readSides(options);
+  return options;
+}
+
+/**
+ * Each side is a revision or a directory, never both; the base defaults to
+ * HEAD and the head to the working tree.
+ */
+function readSides(options) {
   if (options.base !== undefined && options["base-dir"] !== undefined) {
     throw new UsageError("--base and --base-dir name the same side");
   }
@@ -47,7 +56,6 @@ export function readArguments(argv, { values = [], flags = [] } = {}) {
     options["head-dir"] !== undefined
       ? parseSide(options["head-dir"], "dir")
       : parseSide(options.head, "rev");
-  return options;
 }
 
 /**

@@ -11,45 +11,26 @@ namespace DM.Domain.Account.Features.TwoFactor;
 /// </summary>
 public interface ITwoFactorRepository
 {
-    /// <summary>
-    /// Whether the account has a confirmed factor.
-    /// </summary>
     /// <remarks>
     /// The narrowest read there is, and the only one on the hot path: the fold
     /// that withholds a rank asks this and nothing else, so the secret never
     /// travels with an ordinary request.
     /// </remarks>
-    /// <param name="userId">Account</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<bool> IsConfirmed(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The factor of one account, secret included.
     /// </summary>
-    /// <param name="userId">Account</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<TwoFactorState?> Find(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The account the removal paths address, by its confirmed address.
     /// </summary>
-    /// <param name="email">Address</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<TwoFactorAccount?> FindAccountByEmail(string email, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// The account the removal paths address, by name.
-    /// </summary>
-    /// <param name="username">Name</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<TwoFactorAccount?> FindAccountByUsername(
         string username, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// The account the removal paths address, by identifier.
-    /// </summary>
-    /// <param name="userId">Account</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<TwoFactorAccount?> FindAccount(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -110,21 +91,13 @@ public interface ITwoFactorRepository
     /// <summary>
     /// Stamp a successful verification that did not come from a time step.
     /// </summary>
-    /// <param name="userId">Account</param>
-    /// <param name="verifiedUtc">Moment of the verification</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task MarkVerified(Guid userId, DateTimeOffset verifiedUtc, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Remove the factor and every recovery code with it.
-    /// </summary>
     /// <remarks>
     /// The factor row is written first and the codes after it, and every write
     /// that touches both keeps that order: taken the other way round, a removal
     /// and a reissue running together each hold the row the other is waiting for.
     /// </remarks>
-    /// <param name="userId">Account</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task Remove(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -191,25 +164,13 @@ public interface ITwoFactorRepository
         Guid recoveryCodeId, DateTimeOffset usedUtc, string? usedFromIp,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// How many codes of the current set are unspent.
-    /// </summary>
-    /// <param name="userId">Account</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<int> CountUnusedRecoveryCodes(Guid userId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Store a challenge.
-    /// </summary>
-    /// <param name="challenge">Challenge to store</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task AddChallenge(TwoFactorChallengeState challenge, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The challenge by its identifier, whatever state it is in.
     /// </summary>
-    /// <param name="challengeId">Challenge identifier</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<TwoFactorChallengeState?> FindChallenge(
         Guid challengeId, CancellationToken cancellationToken = default);
 
@@ -221,23 +182,13 @@ public interface ITwoFactorRepository
     /// <returns>How many attempts the challenge has now spent</returns>
     Task<int> CountChallengeAttempt(Guid challengeId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Delete one challenge.
-    /// </summary>
-    /// <param name="challengeId">Challenge identifier</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task RemoveChallenge(Guid challengeId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Delete every challenge of an account.
-    /// </summary>
     /// <remarks>
     /// Called when the owner changes the password by any route: a change of
     /// password is a statement that the account may be compromised, and a login
     /// begun with the old one must not survive it.
     /// </remarks>
-    /// <param name="userId">Account</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task RemoveChallengesOf(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -262,11 +213,6 @@ public interface ITwoFactorRepository
     /// <returns>Whether a removal was pending</returns>
     Task<bool> CancelScheduledRemoval(Guid userId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Accounts whose scheduled removal has come due.
-    /// </summary>
-    /// <param name="now">Moment the pass runs at</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<IReadOnlyList<Guid>> FindRemovalsDue(
         DateTimeOffset now, CancellationToken cancellationToken = default);
 

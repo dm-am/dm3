@@ -243,8 +243,8 @@ function apiCalls(): Call[] {
       }
 
       calls.push({
-        key: asPath(file) + ":" + method,
-        at: asPath(file) + ":" + line,
+        key: `${asPath(file)}:${method}`,
+        at: `${asPath(file)}:${line}`,
         declared,
       });
     }

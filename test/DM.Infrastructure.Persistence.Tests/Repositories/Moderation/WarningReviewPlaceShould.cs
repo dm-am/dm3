@@ -14,10 +14,6 @@ using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Moderation;
 
-/// <summary>
-/// A review of a game and the text of a post's review are places a warning names: their text is copied, they
-/// are placed at their game, and the open log reads them where their game, and the post its room, are read.
-/// </summary>
 public class WarningReviewPlaceShould
 {
     private static readonly DateTimeOffset Written = new(2026, 5, 1, 10, 0, 0, TimeSpan.Zero);
@@ -45,10 +41,6 @@ public class WarningReviewPlaceShould
         return states[WarningId];
     }
 
-    /// <summary>
-    /// A game with a review of it and a post in one room, the post with a review of its own, both reviews
-    /// carrying the offending text.
-    /// </summary>
     private DmDbContext SeededWithReviews(ModuleStatus status, RoomAccessType roomAccess)
     {
         var context = InMemoryStore.Open(_databaseName);
@@ -102,10 +94,6 @@ public class WarningReviewPlaceShould
         return context;
     }
 
-    /// <summary>
-    /// A review of a game and the text of a post's review are places a warning names: the text is taken, and
-    /// each is placed at its game.
-    /// </summary>
     [Theory]
     [InlineData(WarningEntityType.GameReview, "/game/gamew/reviews")]
     [InlineData(WarningEntityType.PostReview, "/game/gamew/post-reviews#review-6b1f0c22-0000-4000-8000-000000000044")]
@@ -125,10 +113,6 @@ public class WarningReviewPlaceShould
         state.LogClosure.Should().BeNull("a guest reads an active game and its open room");
     }
 
-    /// <summary>
-    /// A review is read where its game is, and the review of a post where its post is: a game hidden from a
-    /// guest closes both, a closed room closes the review of its post.
-    /// </summary>
     [Theory]
     [InlineData(ModuleStatus.Draft, RoomAccessType.Open, WarningEntityType.GameReview)]
     [InlineData(ModuleStatus.Draft, RoomAccessType.Open, WarningEntityType.PostReview)]

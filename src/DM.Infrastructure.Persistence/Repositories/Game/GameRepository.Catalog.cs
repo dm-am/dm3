@@ -17,9 +17,6 @@ using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
-/// <summary>
-/// The catalog of games: the filtered, sorted and paged list, and how it is asked
-/// </summary>
 internal partial class GameRepository
 {
     public async Task<int> Count(GamesQuery query, Guid userId, CancellationToken ct = default)
@@ -384,13 +381,7 @@ internal partial class GameRepository
         // When searching without explicit sort, use relevance-based ordering
         if (!string.IsNullOrWhiteSpace(query.Search) && string.IsNullOrEmpty(query.SortBy))
         {
-            var searchLower = query.Search.ToLower();
-            var prefixPattern = LikePatterns.StartsWith(query.Search);
-            return games
-                .OrderByDescending(g => g.Title.ToLower() == searchLower) // Exact match first
-                .ThenByDescending(g => EF.Functions.ILike(g.Title, prefixPattern)) // Prefix match
-                .ThenByDescending(g => EF.Functions.TrigramsSimilarity(g.Title, searchLower)) // Fuzzy match score
-                .ThenBy(g => g.Title);
+            return OrderBySearchRelevance(games, query.Search);
         }
 
         if (sortBy == "recruitmentstarted")
@@ -455,6 +446,22 @@ internal partial class GameRepository
                 .ThenBy(g => g.Title);
         }
 
+        return OrderByStart(games, query, isAscending);
+    }
+
+    private static IOrderedQueryable<DbGame> OrderBySearchRelevance(IQueryable<DbGame> games, string search)
+    {
+        var searchLower = search.ToLower();
+        var prefixPattern = LikePatterns.StartsWith(search);
+        return games
+            .OrderByDescending(g => g.Title.ToLower() == searchLower) // Exact match first
+            .ThenByDescending(g => EF.Functions.ILike(g.Title, prefixPattern)) // Prefix match
+            .ThenByDescending(g => EF.Functions.TrigramsSimilarity(g.Title, searchLower)) // Fuzzy match score
+            .ThenBy(g => g.Title);
+    }
+
+    private static IOrderedQueryable<DbGame> OrderByStart(IQueryable<DbGame> games, GamesQuery query, bool isAscending)
+    {
         // Check if filtering only Closed games - sort by ClosedUtc
         var isClosedOnly = query.Statuses is { Count: 1 } && query.Statuses.Contains(ModuleStatus.Closed);
         if (isClosedOnly)

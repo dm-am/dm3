@@ -17,22 +17,16 @@ namespace DM.Web.API.Tests.Shared;
 /// </remarks>
 public class RequestBodyTypesShould
 {
-    /// <summary>
-    /// Actions whose body type is also a response type, as inherited. Named by
-    /// action rather than by type: the fix is a per-endpoint request DTO, so the
-    /// list shrinks one action at a time.
-    /// </summary>
-    /// <remarks>Creation shares the debt: a POST binding the resource DTO asks for the id and the counters.</remarks>
+    // Named by action rather than by type: the fix is a per-endpoint request DTO, so the list
+    // shrinks one action at a time.
     private static readonly string[] Legacy =
     [
         "CharacterController.PostCharacter",
         "RoomController.PostAccess",
     ];
 
-    /// <summary>Every controller action in the host.</summary>
     private static MethodInfo[] Actions() => ApiSurface.RoutedActions().ToArray();
 
-    /// <summary>Types the host declares as a success body anywhere.</summary>
     private static HashSet<Type> ResponseTypes()
     {
         var types = new HashSet<Type>();
@@ -83,7 +77,6 @@ public class RequestBodyTypesShould
             "reviewed, waiting for a new action to be given the same name");
     }
 
-    /// <summary>The actions whose request body is a response type, as Controller.Action.</summary>
     private static string[] TakingAResponseType()
     {
         var responses = ResponseTypes();

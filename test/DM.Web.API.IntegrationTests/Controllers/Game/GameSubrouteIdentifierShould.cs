@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// Every subroute of a game takes the same identifier as the game itself.
-/// </summary>
 /// <remarks>
 /// The page URL carries the five-letter public id. Checked against the registered route templates, where an
 /// {id:guid} constraint lives; the published schema shows a plain string either way.
@@ -51,10 +48,8 @@ public class GameSubrouteIdentifierShould : IntegrationTestBase
             "contract to read it off");
     }
 
-    /// <summary>
-    /// A guid-shaped game parameter in the document is the same defect written
-    /// the other way round: the action takes a Guid, so nothing but a Guid binds.
-    /// </summary>
+    // A guid-shaped game parameter in the document is the same defect written the other way round:
+    // the action takes a Guid, so nothing but a Guid binds.
     [Fact]
     public async Task PublishNoGuidOnlyGameSegment()
     {

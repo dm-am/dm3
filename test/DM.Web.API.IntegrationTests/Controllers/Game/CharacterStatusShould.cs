@@ -17,9 +17,6 @@ using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAt
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// Taking a character out of a game answers over HTTP at all.
-/// </summary>
 public class CharacterStatusShould : IntegrationTestBase
 {
     public CharacterStatusShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -55,10 +52,8 @@ public class CharacterStatusShould : IntegrationTestBase
             "exile had no caller before this endpoint existed");
     }
 
-    /// <summary>
-    /// Killing something already retired is the caller's mistake, so 400 — not
-    /// the 500 an unhandled exception produced.
-    /// </summary>
+    // Killing something already retired is the caller's mistake, so 400 — not the 500 an unhandled
+    // exception produced.
     [Fact]
     public async Task RefuseATransitionThatDoesNotStartFromTheCurrentStatus()
     {
@@ -69,9 +64,6 @@ public class CharacterStatusShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// Exile is the lead's move, and the lead takes it back.
-    /// </summary>
     [Fact]
     public async Task BringBackTheCharacterTheMasterExiled()
     {
@@ -85,10 +77,6 @@ public class CharacterStatusShould : IntegrationTestBase
         character.IsPlayerExiled.Should().BeFalse("a character back in play is not marked thrown out");
     }
 
-    /// <summary>
-    /// Each way back undoes its own move. A death is not undone by Readmit, an
-    /// exile is not undone by Resurrect, and what the player left nobody undoes.
-    /// </summary>
     [Theory]
     [InlineData(CharacterStatusTransition.Readmit, true, false, false)]
     [InlineData(CharacterStatusTransition.Resurrect, false, false, true)]
@@ -149,10 +137,8 @@ public class CharacterStatusShould : IntegrationTestBase
                ?? throw new InvalidOperationException("character disappeared");
     }
 
-    /// <summary>
-    /// A fresh master, game and character per test: the fixture database is shared
-    /// and seeded, so fixed identifiers would collide.
-    /// </summary>
+    // A fresh master, game and character per test: the fixture database is shared and seeded, so
+    // fixed identifiers would collide.
     private async Task<(GeneralUser Master, Guid CharacterId)> AddGameWithCharacterAsync(
         CharacterStatus status, bool dead = false, bool left = false, bool exiled = false)
     {

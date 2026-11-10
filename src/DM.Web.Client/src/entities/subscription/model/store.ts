@@ -18,25 +18,18 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
       ) ?? [],
   );
 
-  const isSubscribed = (
-    targetType: SubscriptionTargetType,
-    targetId: string,
-  ) => {
-    return (
-      all.data.value?.some(
-        (s) => s.targetType === targetType && s.targetId === targetId,
-      ) ?? false
-    );
-  };
+  const isSubscribed = (targetType: SubscriptionTargetType, targetId: string) =>
+    all.data.value?.some(
+      (s) => s.targetType === targetType && s.targetId === targetId,
+    ) ?? false;
 
   const getSubscription = (
     targetType: SubscriptionTargetType,
     targetId: string,
-  ) => {
-    return all.data.value?.find(
+  ) =>
+    all.data.value?.find(
       (s) => s.targetType === targetType && s.targetId === targetId,
     );
-  };
 
   // The refetch is forced: an unforced one would answer from the minute of cache.
   const reloadAfter = async (

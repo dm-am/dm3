@@ -26,10 +26,11 @@ async function saveSession(
   });
   if (!response.ok()) {
     throw new Error(
-      `login of ${role.email} failed: ${response.status()} ${await response.text()}. ` +
-        (response.status() === 429
+      `login of ${role.email} failed: ${response.status()} ${await response.text()}. ${
+        response.status() === 429
           ? 'The API\'s rate limiting is on: "powershell -File scripts/dm.ps1 e2e" recreates only the API, with the limits off, and the data stays.'
-          : "Is the stand up and seeded? node scripts/visual/visual.mjs stand checks it."),
+          : "Is the stand up and seeded? node scripts/visual/visual.mjs stand checks it."
+      }`,
     );
   }
   const { user } = await response.json();

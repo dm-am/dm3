@@ -10,13 +10,17 @@ import { userApi, type GameReviewsQuery } from "@/entities/user";
 import { GameReviewCard } from "@/entities/game";
 import type { Username } from "@/shared/api/models/community";
 import ProfileTestimonialsFrame from "./ProfileTestimonialsFrame.vue";
+import type {
+  GameReviewsSubpageName,
+  TestimonialSide,
+} from "./profileSubpages";
 
 const props = defineProps<{
   username: string;
   /** Received: reviews of the games this user masters; written: the reviews he wrote. */
-  mode: "received" | "written";
+  mode: TestimonialSide;
   /** The route of the page, for the paging links. */
-  routeName: "received-game-reviews" | "given-game-reviews";
+  routeName: GameReviewsSubpageName;
 }>();
 
 function fetchPage(q: GameReviewsQuery) {

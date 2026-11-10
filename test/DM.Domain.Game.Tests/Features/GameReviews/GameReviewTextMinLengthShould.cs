@@ -5,9 +5,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.GameReviews;
 
-/// <summary>
-/// Creation and editing take a review text of a single character.
-/// </summary>
 /// <remarks>
 /// The text is stored trimmed, so the spaces around it do not count. An edit is
 /// the other way a text creation refuses gets stored, so the case is put to both
@@ -29,9 +26,7 @@ public class GameReviewTextMinLengthShould
             .ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// Trimmed, a text of spaces is an empty review.
-    /// </summary>
+    // Trimmed, a text of spaces is an empty review.
     [Fact]
     public void FailACreatedTextOfNothingButSpaces() =>
         creation.TestValidate(new CreateGameReview { GameId = Guid.NewGuid(), Text = "   " })

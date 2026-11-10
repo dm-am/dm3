@@ -6,7 +6,6 @@
         type="text"
         :value="modelValue"
         @input="onInput"
-        :disabled="disabled"
         :class="{ 'has-status': showStatus }"
         :maxlength="USERNAME_MAX_LENGTH"
         autocomplete="off"
@@ -35,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, onBeforeUnmount } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { SEARCH_DEBOUNCE_MS } from "@/shared/lib/constants/search";
 import { accountApi } from "../api";
@@ -44,15 +43,10 @@ import {
   USERNAME_MIN_LENGTH,
 } from "@/shared/lib/constants/user";
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: string;
-    disabled?: boolean;
-    debounceMs?: number;
-    id?: string;
-  }>(),
-  { debounceMs: SEARCH_DEBOUNCE_MS },
-);
+const props = defineProps<{
+  modelValue: string;
+  id?: string;
+}>();
 
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -71,12 +65,11 @@ const forbiddenPattern =
   // eslint-disable-next-line no-control-regex
   /[\x00-\x1F\x7F<>"'`\\/@?#%&[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
 
-const showStatus = computed(() => {
-  return (
+const showStatus = computed(
+  () =>
     props.modelValue.length >= USERNAME_MIN_LENGTH &&
-    (checking.value || isAvailable.value !== null)
-  );
-});
+    (checking.value || isAvailable.value !== null),
+);
 
 const statusClass = computed(() => {
   if (isAvailable.value === true) return "available";
@@ -127,7 +120,7 @@ function onInput(event: Event) {
     checking.value = true;
     debounceTimer = setTimeout(
       () => checkAvailability(value),
-      props.debounceMs,
+      SEARCH_DEBOUNCE_MS,
     );
   } else {
     emit("availability", false);
@@ -161,15 +154,9 @@ async function checkAvailability(username: string) {
   }
 }
 
-// A form that was reset enables the field again.
-watch(
-  () => props.disabled,
-  (newDisabled) => {
-    if (!newDisabled && props.modelValue.length >= USERNAME_MIN_LENGTH) {
-      checkAvailability(props.modelValue);
-    }
-  },
-);
+onBeforeUnmount(() => {
+  if (debounceTimer) clearTimeout(debounceTimer);
+});
 </script>
 
 <style scoped lang="sass">

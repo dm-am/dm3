@@ -23,8 +23,8 @@ describe("SortButton", () => {
     { value: "rating", label: "Рейтинг", defaultDirection: "desc" as const },
   ];
 
-  const mountComponent = (props = {}) => {
-    return mount(SortButton, {
+  const mountComponent = (props = {}) =>
+    mount(SortButton, {
       props: {
         options: defaultOptions,
         sortBy: "created",
@@ -32,7 +32,6 @@ describe("SortButton", () => {
         ...props,
       },
     });
-  };
 
   describe("Basic Rendering", () => {
     it("shows current sort label", () => {

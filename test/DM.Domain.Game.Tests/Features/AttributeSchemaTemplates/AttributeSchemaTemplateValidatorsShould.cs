@@ -18,7 +18,6 @@ public class AttributeSchemaTemplateValidatorsShould
     private readonly CreateAttributeSchemaTemplateValidator createValidator = new();
     private readonly ReplaceAttributeSchemaTemplateValidator replaceValidator = new();
 
-    /// <summary>The longest title the site accepts, and one letter past it.</summary>
     private const int LongestTitle = 100;
 
     private static CreateAttributeSpecification ValidSpecification() => new()
@@ -59,20 +58,16 @@ public class AttributeSchemaTemplateValidatorsShould
             .ShouldHaveValidationErrorFor(t => t.Title).WithErrorMessage(error);
     }
 
-    /// <summary>
-    /// A replacement addresses a template, and a body naming none is refused
-    /// before anything is looked up.
-    /// </summary>
+    // A replacement addresses a template, and a body naming none is refused before anything is
+    // looked up.
     [Fact]
     public void RefuseAReplacementNamingNoTemplate() =>
         replaceValidator.TestValidate(new ReplaceAttributeSchemaTemplate { Title = "Лайт" })
             .ShouldHaveValidationErrorFor(t => t.TemplateId)
             .WithErrorMessage(ValidationError.Empty);
 
-    /// <summary>
-    /// One refusal for one empty field: the schema-level rules name the attribute
-    /// in their sentences and do not repeat the field's own refusal.
-    /// </summary>
+    // One refusal for one empty field: the schema-level rules name the attribute in their sentences
+    // and do not repeat the field's own refusal.
     [Fact]
     public void RefuseASpecificationWithoutATitleOnce()
     {
@@ -97,10 +92,8 @@ public class AttributeSchemaTemplateValidatorsShould
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// A maximal length below one admits no value at all: every character sheet
-    /// written against such a specification would be refused.
-    /// </summary>
+    // A maximal length below one admits no value at all: every character sheet written against such
+    // a specification would be refused.
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

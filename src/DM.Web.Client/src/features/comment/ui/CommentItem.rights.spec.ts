@@ -4,70 +4,47 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import {
   enableAutoUnmount,
-  mount,
   flushPromises,
   type VueWrapper,
 } from "@vue/test-utils";
-import { createPinia } from "pinia";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import CommentItem from "./CommentItem.vue";
 import type { Comment } from "@/shared/api/models/common/comment";
-import {
-  submitDelete,
-  submitEdit,
-  submitLike,
-  submitUnlike,
-} from "./CommentItem.doubles";
+import { submitLike } from "./CommentItem.doubles";
 import {
   LIKE_BUTTON,
-  RouterLinkStub,
   action,
   comment,
   freshComment,
   mountComponent,
+  mountItem,
   signInAs,
 } from "./CommentItem.fixtures";
-
-vi.mock("vue-router", async () =>
-  (await import("./CommentItem.doubles")).vueRouter(),
-);
 
 enableAutoUnmount(afterEach);
 
 beforeEach(freshComment);
 
 describe("CommentItem warning", () => {
-  const mountItem = (over: Partial<Comment> = {}, number?: number) =>
-    mount(CommentItem, {
-      global: {
-        plugins: [createPinia()],
-        stubs: { RouterLink: { template: "<a><slot /></a>" } },
-      },
-      props: {
-        comment: comment(over),
-        fetchEditSource: vi.fn() as never,
-        submitEdit: submitEdit as never,
-        submitDelete: submitDelete as never,
-        submitLike: submitLike as never,
-        submitUnlike: submitUnlike as never,
-        number,
-      },
-    });
+  const mountWarned = (over: Partial<Comment> = {}, number?: number) =>
+    mountComponent(vi.fn(), over, { number });
 
   it("asks the list for the warning window about this comment", async () => {
     signInAs("Mod", "Moderator");
-    const wrapper = mountItem({}, 12);
+    const wrapper = await mountWarned({}, 12);
 
     await action(wrapper, "Предупреждение").trigger("click");
 
-    expect(wrapper.emitted("warn")).toEqual([["c-1", 12]]);
+    expect(wrapper.findComponent(CommentItem).emitted("warn")).toEqual([
+      ["c-1", 12],
+    ]);
   });
 
   it.each(["Moderator", "SeniorModerator", "Admin"])(
     "offers a moderator no warning about a comment of a %s",
-    (role) => {
+    async (role) => {
       signInAs("Mod", "Moderator");
-      const wrapper = mountItem({
+      const wrapper = await mountWarned({
         author: { username: "Staff", role, lastActivityUtc: null } as never,
       });
 
@@ -77,9 +54,9 @@ describe("CommentItem warning", () => {
     },
   );
 
-  it("offers a senior moderator the warning about a comment of a moderator", () => {
+  it("offers a senior moderator the warning about a comment of a moderator", async () => {
     signInAs("Senior", "SeniorModerator");
-    const wrapper = mountItem({
+    const wrapper = await mountWarned({
       author: {
         username: "Staff",
         role: "Moderator",
@@ -92,9 +69,9 @@ describe("CommentItem warning", () => {
     ).toContain("Предупреждение");
   });
 
-  it("offers no warning about a comment whose account was removed", () => {
+  it("offers no warning about a comment whose account was removed", async () => {
     signInAs("Mod", "Moderator");
-    const wrapper = mountItem({ author: null as never });
+    const wrapper = await mountWarned({ author: null as never });
 
     expect(
       wrapper.findAll(".caption-action").map((one) => one.text()),
@@ -111,7 +88,7 @@ describe("CommentItem on a blacklist", () => {
 
   it("offers Нравится on somebody else's comment as it does to anybody", async () => {
     signInAs("Reader");
-    const wrapper = onTheList({
+    const wrapper = await onTheList({
       likes: [{ id: "u-1", username: "Other" }] as never,
     });
 
@@ -121,12 +98,12 @@ describe("CommentItem on a blacklist", () => {
     expect(submitLike).toHaveBeenCalledWith("c-1");
   });
 
-  it("keeps Удалить and takes Редактировать off the reader's own comment", () => {
+  it("keeps Удалить and takes Редактировать off the reader's own comment", async () => {
     // Signed in as the author, inside the quarter of an hour.
-    const free = mountComponent(vi.fn());
+    const free = await mountComponent(vi.fn());
     expect(actions(free)).toEqual(["Редактировать", "Удалить"]);
 
-    const listed = onTheList();
+    const listed = await onTheList();
     expect(actions(listed)).toEqual(["Удалить"]);
   });
 });
@@ -136,18 +113,12 @@ describe("CommentItem read only", () => {
     over: Partial<Comment> = {},
     extra: Record<string, unknown> = {},
   ) =>
-    mount(CommentItem, {
-      global: {
-        plugins: [createPinia()],
-        stubs: { RouterLink: RouterLinkStub },
-      },
-      props: { comment: comment(over), readonly: true, number: 3, ...extra },
-    });
+    mountItem({ comment: comment(over), readonly: true, number: 3, ...extra });
 
-  it("offers nothing to press, in either layout, even to a senior moderator", () => {
+  it("offers nothing to press, in either layout, even to a senior moderator", async () => {
     signInAs("Senior", "SeniorModerator");
     for (const compact of [true, false]) {
-      const wrapper = readOnly(
+      const wrapper = await readOnly(
         { likes: [{ id: "u-1", username: "Other" }] as never },
         { compact },
       );
@@ -161,17 +132,20 @@ describe("CommentItem read only", () => {
     }
   });
 
-  it("keeps its number in the corner, and no empty line beside it", () => {
+  it("keeps its number in the corner, and no empty line beside it", async () => {
     signInAs("Senior", "SeniorModerator");
-    const wrapper = readOnly({}, { compact: false });
+    const wrapper = await readOnly({}, { compact: false });
 
     expect(wrapper.get(".comment-footer .comment-number").text()).toBe("3");
+    expect(
+      wrapper.get(".comment-footer .comment-number").attributes("href"),
+    ).toBe("/forum#comment-c-1");
     expect(wrapper.find(".comment-caption").exists()).toBe(false);
     expect(wrapper.find(".comment-edit-line").exists()).toBe(false);
   });
 
-  it("keeps the author and the date in the compact caption", () => {
-    const wrapper = readOnly(
+  it("keeps the author and the date in the compact caption", async () => {
+    const wrapper = await readOnly(
       { createdUtc: "2026-09-09T06:33:00Z" as never },
       { compact: true },
     );

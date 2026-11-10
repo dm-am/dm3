@@ -173,19 +173,9 @@ public class EmailChangeServiceShould : UnitTestBase
         await noticeMailSender.DidNotReceiveWithAnyArgs().SendCompleted(default!, default!);
     }
 
-    /// <summary>
-    /// An address taken while the letter waited is refused the way the form
-    /// refuses one, and the link is spent all the same.
-    /// </summary>
-    /// <remarks>
-    /// The check that the address is free runs when the change is asked for, and
-    /// nothing holds it between then and the click: whoever registers or moves
-    /// onto it first gets it, and the unique index is what says so. Answered under
-    /// the address field, because the form that sent the person here is the form
-    /// that has to offer them another address - and spent, because the link
-    /// authorised a move that cannot happen and would otherwise only collect the
-    /// same refusal again.
-    /// </remarks>
+    // The check that the address is free runs when the change is asked for, and nothing holds it
+    // between then and the click: whoever registers or moves onto it first gets it, and the unique
+    // index is what says so.
     [Fact]
     public async Task RefuseAnAddressTakenWhileTheLetterWaited()
     {

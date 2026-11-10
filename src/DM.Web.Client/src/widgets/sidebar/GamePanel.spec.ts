@@ -13,10 +13,14 @@ import {
   GameParticipation,
   discussionApi,
   useGameDetailsStore,
-  type Character,
   type Game,
   type Room,
 } from "@/entities/game";
+import {
+  createMockCharacter,
+  createMockGame,
+} from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { useAuthStore } from "@/entities/user";
 import { UserRole, type PremoderationStatus } from "@/shared/api/models/common";
 
@@ -28,16 +32,15 @@ const stubs = {
   GameJoinActions: true,
 };
 
-const game = {
-  id: "g-1",
-  publicId: "abcde",
-  title: "Хроники Забытых Королевств",
-  participation: [],
-  unreadCommentsCount: 0,
-  unreadCharactersCount: 2,
-  gameReviewsCount: 1,
-  postReviewsCount: 7,
-} as unknown as Game;
+const game: Game = {
+  ...createMockGame("g-1", "Хроники Забытых Королевств"),
+  publicId: asServed("abcde"),
+  participation: asServed([]),
+  unreadCommentsCount: asServed(0),
+  unreadCharactersCount: asServed(2),
+  gameReviewsCount: asServed(1),
+  postReviewsCount: asServed(7),
+};
 
 const rooms = [
   {
@@ -70,15 +73,13 @@ function mountPanel(
   const store = useGameDetailsStore();
   store.game = {
     ...game,
-    participation,
+    participation: asServed(participation),
     premoderationStatus,
-  } as unknown as Game;
+  };
   store.rooms = rooms;
   // A non-empty slice keeps the mount off the network: the panel loads
   // characters only when it holds none.
-  store.characters = [
-    { id: "c-1", name: "Гоблин", isNpc: false, status: "Active" },
-  ] as unknown as Character[];
+  store.characters = [createMockCharacter("c-1", "Гоблин")];
   return mount(GamePanel, {
     props: { gameId: "abcde" },
     global: { stubs: { ...stubs, ...overrides } },
@@ -181,8 +182,11 @@ describe("GamePanel", () => {
   it("leads the master to the first non-player character of the game", async () => {
     const wrapper = mountPanel([GameParticipation.Owner]);
     useGameDetailsStore().characters = [
-      { id: "c-2", name: "Трактирщик", isNpc: true, status: "Active" },
-    ] as unknown as Character[];
+      {
+        ...createMockCharacter("c-2", "Трактирщик"),
+        isNpc: asServed(true),
+      },
+    ];
     await nextTick();
 
     expect(rows(wrapper)).toContain("- Редактировать неигрового персонажа");
@@ -341,10 +345,13 @@ describe("GamePanel discussion row", () => {
     const wrapper = mountPanel(participation);
     const store = useGameDetailsStore();
     store.game = {
-      ...store.game,
-      privacySettings: { commentariesAccess },
+      ...store.game!,
+      privacySettings: {
+        ...store.game!.privacySettings,
+        commentariesAccess: commentariesAccess as CommentariesAccessMode,
+      },
       ...over,
-    } as unknown as Game;
+    };
     return wrapper;
   }
 

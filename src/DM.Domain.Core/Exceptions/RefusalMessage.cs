@@ -21,8 +21,6 @@ namespace DM.Domain.Core.Exceptions;
 /// </remarks>
 public static partial class RefusalMessage
 {
-    // Fields
-
     /// <summary>
     /// Title of a refusal whose substance is the per-field errors beside it
     /// </summary>

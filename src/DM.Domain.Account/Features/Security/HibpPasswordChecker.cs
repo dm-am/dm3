@@ -22,8 +22,6 @@ public class HibpPasswordChecker : ICompromisedPasswordChecker
     private readonly ILogger<HibpPasswordChecker> _logger;
     private const string HibpApiUrl = "https://api.pwnedpasswords.com/range/";
 
-    /// <param name="httpClient">HTTP client for API calls</param>
-    /// <param name="logger">Logger instance</param>
     public HibpPasswordChecker(
         HttpClient httpClient,
         ILogger<HibpPasswordChecker> logger)

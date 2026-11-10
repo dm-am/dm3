@@ -5,9 +5,6 @@ namespace DM.Domain.Forum.Features.Topics;
 /// </summary>
 public class PeriodDigest
 {
-    /// <summary>
-    /// Year of the summarized period
-    /// </summary>
     public int Year { get; set; }
 
     /// <summary>

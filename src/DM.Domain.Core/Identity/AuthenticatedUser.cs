@@ -66,9 +66,7 @@ public class AuthenticatedUser : GeneralUser, IAuthorizationSubject
         return end is { } ends && ends <= moment.AddYears(PermanenceThresholdYears) ? ends : null;
     }
 
-    /// <summary>
-    /// A ban that runs longer than this is told as one with no end
-    /// </summary>
+    // A ban that runs longer than this is told as one with no end
     private const int PermanenceThresholdYears = 50;
 
     /// <summary>

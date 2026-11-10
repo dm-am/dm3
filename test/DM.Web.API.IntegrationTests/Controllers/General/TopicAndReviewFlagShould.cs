@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
@@ -19,23 +18,13 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// The forum offers "Создать топик" by <c>board.viewer.canCreateTopic</c>, the
-/// game its review form by <c>game.viewer.canReview</c>, and a post the form of
-/// its rating by <c>post.viewer.canReview</c>. Each flag is false exactly when
-/// the write it stands for is refused.
-/// </summary>
-/// <remarks>
-/// What the user may not do is not offered. Every row reads the flag where the page reads it and sends what the
-/// form would, as the same viewer, against an expected value.
-/// </remarks>
-public class TopicAndReviewFlagShould : IntegrationTestBase
+// Each flag is false exactly when the write it stands for is refused.
+public class TopicAndReviewFlagShould : ViewerRequestTestBase
 {
     public TopicAndReviewFlagShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>Who stands on the board.</summary>
     public enum Visitor
     {
         Guest,
@@ -108,10 +97,8 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The list of boards offers nothing to write, and the topic list of a
-    /// board carries the board in every row: neither answers for the viewer.
-    /// </summary>
+    // The list of boards offers nothing to write, and the topic list of a board carries the board
+    // in every row: neither answers for the viewer.
     [Fact]
     public async Task LeaveTheBoardFlagOffTheLists()
     {
@@ -133,22 +120,17 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>Who reads the game and writes the review.</summary>
     public enum Reviewer
     {
         Guest,
 
-        /// <summary>A member past the probation with a post in the game.</summary>
         Player,
 
-        /// <summary>A member past the probation with no post in the game.</summary>
         Stranger,
 
-        /// <summary>A member with a post in the game and under a hundred posts on the site.</summary>
         Newbie
     }
 
-    /// <summary>What the reviewer left on the game before.</summary>
     public enum GameReviewBefore
     {
         Nothing,
@@ -217,24 +199,18 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>What the stranger rated before, and when.</summary>
     public enum RatedBefore
     {
         Nothing,
 
-        /// <summary>The very post asked about, five days ago: out of the window, still rated.</summary>
         ThisPost,
 
-        /// <summary>Another post of the same game, yesterday.</summary>
         GameYesterday,
 
-        /// <summary>Another post of the same game, four days ago: the window has passed.</summary>
         GameFourDaysAgo,
 
-        /// <summary>A post of another game, yesterday.</summary>
         OtherGameYesterday,
 
-        /// <summary>Another post of the same game, yesterday, and the rating was removed.</summary>
         RemovedGameYesterday
     }
 
@@ -323,9 +299,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A rating closes the game for three days: the next read says so, and the racing write is a conflict.
-    /// </summary>
     [Fact]
     public async Task CloseTheGameForThreeDaysWithARatingAndSayWhyToTheRace()
     {
@@ -356,9 +329,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Every answer that carries posts carries the flag, the rated feed included.
-    /// </summary>
     [Fact]
     public async Task AnswerTheRatedFeedWithTheFlagOfEveryPost()
     {
@@ -396,11 +366,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The records of a case and the people around them: two boards, each with a
-    /// topic; a game with an open room and posts of the master, a player and a
-    /// newbie in it; another game with a post of the master.
-    /// </summary>
     private sealed record Seed(
         GeneralUser Master,
         GeneralUser Player,
@@ -573,27 +538,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
             .ExecuteDeleteAsync();
         await db.Set<DbTopic>().IgnoreQueryFilters().Where(t => boards.Contains(t.BoardId)).ExecuteDeleteAsync();
         await db.Set<DbBoard>().Where(b => boards.Contains(b.BoardId)).ExecuteDeleteAsync();
-    }
-
-    /// <summary>A request as the viewer, under an ordinary ban when asked; a guest sends none.</summary>
-    private Task<HttpResponseMessage> Send(
-        GeneralUser? user, bool banned, HttpMethod method, string url, object? body = null)
-    {
-        var request = user is null
-            ? new HttpRequestMessage(method, url)
-            : CreateAuthenticatedRequest(method, url, user);
-        if (user is not null && banned)
-        {
-            request.Headers.Add(TestAuthenticationMiddleware.TestUserAccessPolicyHeader,
-                AccessPolicy.DemocraticBan.ToString());
-        }
-
-        if (body is not null)
-        {
-            request.Content = JsonContent.Create(body);
-        }
-
-        return Client.SendAsync(request);
     }
 
     /// <summary>The resource of one record, as the viewer reads it.</summary>

@@ -14,14 +14,8 @@ internal static class LikePatterns
     /// The trigram similarity above which the catalogue and user searches take a fuzzy match.
     /// </summary>
     public const double TrigramThreshold = 0.3;
-    /// <summary>
-    /// Pattern matching <paramref name="term" /> anywhere in the value.
-    /// </summary>
     public static string Contains(string term) => $"%{Escape(term)}%";
 
-    /// <summary>
-    /// Pattern matching the values that begin with <paramref name="term" />.
-    /// </summary>
     public static string StartsWith(string term) => $"{Escape(term)}%";
 
     /// <summary>

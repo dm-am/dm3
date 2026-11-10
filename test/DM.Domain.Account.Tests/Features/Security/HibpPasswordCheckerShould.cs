@@ -10,9 +10,6 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Security;
 
-/// <summary>
-/// The range lookup, and the fail-open answer when it cannot be made.
-/// </summary>
 public class HibpPasswordCheckerShould
 {
     // SHA-1 of "password" is 5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8.

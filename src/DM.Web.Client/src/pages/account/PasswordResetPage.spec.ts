@@ -8,35 +8,40 @@
  * and the two dead ends. The checking line is tokenPages.spec.ts's.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import type { VueWrapper } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import type { Router } from "vue-router";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { accountApi } from "@/entities/user";
 import PasswordResetPage from "./PasswordResetPage.vue";
-import { push } from "./guestPages.doubles";
+/** The page, and every address its card leads to. */
+const routes: Address[] = [
+  ["reset-password", "/reset-password"],
+  ["home", "/"],
+  ["support", "/support"],
+];
 
-vi.mock("vue-router", async () =>
-  (await import("./guestPages.doubles")).vueRouter(),
-);
+let router: Router;
 
-/** Attached to the document, for the caret. */
-const options = () => ({
-  global: {
-    plugins: [createPinia()],
-    stubs: { RouterLink: { template: "<a><slot /></a>" } },
-  },
-  attachTo: document.body,
-});
+/** Open the page at its address, attached to the document for the caret. */
+const open = async () => {
+  const opened = await mountPage(PasswordResetPage, "/reset-password", {
+    routes,
+    attachTo: document.body,
+  });
+  router = opened.router;
+  return opened.wrapper;
+};
+
+/** Where the reader is now. */
+const address = () => router.currentRoute.value.fullPath;
 
 const BREACHED = "Пароль встречается в утечках";
 
 enableAutoUnmount(afterEach);
 
 beforeEach(() => {
-  setActivePinia(createPinia());
   vi.restoreAllMocks();
-  // Not a spy, so restoreAllMocks does not reach it.
-  push.mockClear();
   document.body.innerHTML = "";
   // The value arrives in the fragment.
   window.location.hash = "#token=a-token";
@@ -49,7 +54,7 @@ const atForm = async () => {
     error: null,
   } as never);
 
-  const wrapper = mount(PasswordResetPage, options());
+  const wrapper = await open();
   await flushPromises();
   return wrapper;
 };
@@ -60,7 +65,7 @@ const atAnswer = (answer: unknown) => async () => {
     answer as never,
   );
 
-  const wrapper = mount(PasswordResetPage, options());
+  const wrapper = await open();
   await flushPromises();
   return wrapper;
 };
@@ -191,10 +196,8 @@ describe("the dead ends of the reset page", () => {
     expect(wrapper.findAll(".auth-note a")).toHaveLength(0);
 
     await ask.trigger("click");
-    expect(push).toHaveBeenLastCalledWith({
-      path: "/",
-      query: { action: "recovery" },
-    });
+    await flushPromises();
+    expect(address()).toBe("/?action=recovery");
   });
 
   /** One way out of a dead link, as on every screen that answers one. */
@@ -215,6 +218,7 @@ describe("the dead ends of the reset page", () => {
     expect(wrapper.findAll(".auth-note")).toHaveLength(0);
 
     await ways[0].trigger("click");
-    expect(push).toHaveBeenLastCalledWith("/");
+    await flushPromises();
+    expect(address()).toBe("/");
   });
 });

@@ -15,10 +15,6 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
-/// <summary>
-/// The preferences write one page size into the settings and read it back; the
-/// participation in the rating is the profile's.
-/// </summary>
 public class PreferencesApiServiceShould
 {
     private const string Username = "Reader";

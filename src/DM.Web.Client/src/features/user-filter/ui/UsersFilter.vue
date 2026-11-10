@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { vClickOutside } from "@/shared/directives";
 import {
   useUsersFilter,
   ACTIVITY_OPTIONS,
@@ -9,7 +8,12 @@ import {
   SORT_OPTIONS,
   optionsHint,
 } from "../model";
-import type { ActivityFilter, RoleFilter, ExperienceFilter } from "../model";
+import type {
+  UserActivityChoice,
+  RoleFilter,
+  ExperienceFilter,
+  UsersFilterKey,
+} from "../model";
 import {
   formatDateRangeForDisplay,
   formatNumberRangeForDisplay,
@@ -18,10 +22,7 @@ import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import {
   FilterSearchInput,
-  FilterButton,
-  FilterDropdown,
-  FilterDropdownHeader,
-  FilterDropdownItem,
+  FilterMenu,
   OptionsList,
   NumericRangePicker,
   DateRangePicker,
@@ -53,7 +54,7 @@ const { localInput, handleInput, applySearch } = useFilterSearch(
 );
 
 const { showDropdown, navPath, closeDropdown, toggleDropdown, navigateBack } =
-  useFilterDropdown();
+  useFilterDropdown<UsersFilterKey>();
 
 const filterOptions = [
   {
@@ -69,10 +70,6 @@ const filterOptions = [
   { key: "blogs", label: "Блоги", hint: "Диапазон значений" },
   { key: "registered", label: "Дата регистрации", hint: "Диапазон дат" },
 ];
-
-function selectRootItem(key: string) {
-  navPath.value = { filter: key };
-}
 
 function getDropdownTitle(): string | null {
   if (!navPath.value) return null;
@@ -112,7 +109,7 @@ function handleActivitySelect(value: string) {
     setActivity("active");
     setOnlineFilter("online");
   } else {
-    setActivity(value as ActivityFilter);
+    setActivity(value as UserActivityChoice);
     setOnlineFilter("all");
   }
   closeDropdown();
@@ -244,16 +241,16 @@ const hasRegisteredFilter = computed(
     filterState.value.registeredFromUtc !== null ||
     filterState.value.registeredToUtc !== null,
 );
-const registeredLabel = computed(() => {
-  return formatDateRangeForDisplay({
+const registeredLabel = computed(() =>
+  formatDateRangeForDisplay({
     from: filterState.value.registeredFromUtc,
     to: filterState.value.registeredToUtc,
-  });
-});
+  }),
+);
 
 // The sort is the SortButton's: it does not raise the "Сбросить" row.
-const hasBubbles = computed(() => {
-  return (
+const hasBubbles = computed(
+  () =>
     hasActivityFilter.value ||
     hasRoleFilter.value ||
     hasExperienceFilter.value ||
@@ -261,9 +258,8 @@ const hasBubbles = computed(() => {
     hasGamesHostingFilter.value ||
     hasGamesPlayingFilter.value ||
     hasBlogsFilter.value ||
-    hasRegisteredFilter.value
-  );
-});
+    hasRegisteredFilter.value,
+);
 
 function clearActivityFilter() {
   setActivity("all");
@@ -332,88 +328,71 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton
-          :active="showDropdown"
-          @click="toggleDropdown"
-          @close="closeDropdown"
+      <FilterMenu
+        v-model:nav-path="navPath"
+        :open="showDropdown"
+        :title="getDropdownTitle()"
+        :options="filterOptions"
+        @toggle="toggleDropdown"
+        @close="closeDropdown"
+        @back="navigateBack"
+      >
+        <OptionsList
+          v-if="navPath?.filter === 'activity'"
+          :options="activityListOptions"
+          @select="handleActivitySelect"
         />
 
-        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <FilterDropdownHeader
-            v-if="navPath"
-            :title="getDropdownTitle() ?? ''"
-            @back="navigateBack"
-          />
+        <OptionsList
+          v-if="navPath?.filter === 'role'"
+          :options="roleListOptions"
+          @select="handleRoleSelect"
+        />
 
-          <template v-if="!navPath">
-            <FilterDropdownItem
-              v-for="item in filterOptions"
-              :key="item.key"
-              :label="item.label"
-              :hint="item.hint"
-              has-sub-options
-              @item-select="selectRootItem(item.key)"
-            />
-          </template>
+        <OptionsList
+          v-if="navPath?.filter === 'experience'"
+          :options="experienceListOptions"
+          @select="handleExperienceSelect"
+        />
 
-          <OptionsList
-            v-if="navPath?.filter === 'activity'"
-            :options="activityListOptions"
-            @select="handleActivitySelect"
-          />
+        <NumericRangePicker
+          v-if="navPath?.filter === 'rating'"
+          :min-value="filterState.ratingMin"
+          :max-value="filterState.ratingMax"
+          :allow-negative="true"
+          @apply="handleRatingApply"
+        />
 
-          <OptionsList
-            v-if="navPath?.filter === 'role'"
-            :options="roleListOptions"
-            @select="handleRoleSelect"
-          />
+        <NumericRangePicker
+          v-if="navPath?.filter === 'gamesHosting'"
+          :min-value="filterState.gamesHostingMin"
+          :max-value="filterState.gamesHostingMax"
+          @apply="handleGamesHostingApply"
+        />
 
-          <OptionsList
-            v-if="navPath?.filter === 'experience'"
-            :options="experienceListOptions"
-            @select="handleExperienceSelect"
-          />
+        <NumericRangePicker
+          v-if="navPath?.filter === 'gamesPlaying'"
+          :min-value="filterState.gamesPlayingMin"
+          :max-value="filterState.gamesPlayingMax"
+          @apply="handleGamesPlayingApply"
+        />
 
-          <NumericRangePicker
-            v-if="navPath?.filter === 'rating'"
-            :min-value="filterState.ratingMin"
-            :max-value="filterState.ratingMax"
-            :allow-negative="true"
-            @apply="handleRatingApply"
-          />
+        <NumericRangePicker
+          v-if="navPath?.filter === 'blogs'"
+          :min-value="filterState.blogsHostingMin"
+          :max-value="filterState.blogsHostingMax"
+          @apply="handleBlogsApply"
+        />
 
-          <NumericRangePicker
-            v-if="navPath?.filter === 'gamesHosting'"
-            :min-value="filterState.gamesHostingMin"
-            :max-value="filterState.gamesHostingMax"
-            @apply="handleGamesHostingApply"
-          />
-
-          <NumericRangePicker
-            v-if="navPath?.filter === 'gamesPlaying'"
-            :min-value="filterState.gamesPlayingMin"
-            :max-value="filterState.gamesPlayingMax"
-            @apply="handleGamesPlayingApply"
-          />
-
-          <NumericRangePicker
-            v-if="navPath?.filter === 'blogs'"
-            :min-value="filterState.blogsHostingMin"
-            :max-value="filterState.blogsHostingMax"
-            @apply="handleBlogsApply"
-          />
-
-          <DateRangePicker
-            v-if="navPath?.filter === 'registered'"
-            :from-value="filterState.registeredFromUtc"
-            :to-value="filterState.registeredToUtc"
-            :show-clear-button="hasRegisteredFilter"
-            @apply="handleRegisteredApply"
-            @clear="handleRegisteredClear"
-          />
-        </FilterDropdown>
-      </div>
+        <DateRangePicker
+          v-if="navPath?.filter === 'registered'"
+          :from-value="filterState.registeredFromUtc"
+          :to-value="filterState.registeredToUtc"
+          :show-clear-button="hasRegisteredFilter"
+          @apply="handleRegisteredApply"
+          @clear="handleRegisteredClear"
+        />
+      </FilterMenu>
 
       <SortButton
         :options="sortOptions"
@@ -493,7 +472,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
   gap: $small
 
   +filter-bar
-  +filter-button
 
 +dropdown-search-input
 +filter-dropdown-base

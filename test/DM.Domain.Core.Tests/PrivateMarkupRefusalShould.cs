@@ -4,13 +4,7 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests;
 
-/// <summary>
-/// Hiding markup is refused where it cannot hide, and the refusal says enough
-/// to act on.
-/// </summary>
-/// <remarks>
-/// Only the game post declares [private], elsewhere the page erases the block for every reader.
-/// </remarks>
+// Only the game post declares [private], elsewhere the page erases the block for every reader.
 public class PrivateMarkupRefusalShould
 {
     [Theory]
@@ -49,11 +43,7 @@ public class PrivateMarkupRefusalShould
         PrivateBlockMarkup.ContainsPrivateMarkup(source).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The refusal on a surface that does not declare the tag names three
-    /// things: the spelling, where the tag works and how to show it as an
-    /// example. No character number: the editor's check points at the line.
-    /// </summary>
+    // No character number: the editor's check points at the line.
     [Fact]
     public void TellTheAuthorWhatWasReadAndWhereItWorks()
     {
@@ -63,10 +53,6 @@ public class PrivateMarkupRefusalShould
             "Скрытый блок работает только в игровых постах: [private=\"Чак\"]. Для примера оберните его в [noparse].");
     }
 
-    /// <summary>
-    /// The refusal names where the tag works and promises nothing about who
-    /// would read the block.
-    /// </summary>
     [Fact]
     public void NotTellTheAuthorThatEveryReaderWouldSeeTheBlock()
     {
@@ -76,10 +62,8 @@ public class PrivateMarkupRefusalShould
         refusal.Should().NotContain("читател");
     }
 
-    /// <summary>
-    /// With nothing to point at, the refusal is the reason alone, one sentence
-    /// and so without a period.
-    /// </summary>
+    // With nothing to point at, the refusal is the reason alone, one sentence and so without a
+    // period.
     [Fact]
     public void GiveTheReasonAloneWhenThereIsNothingToPointAt()
     {
@@ -98,9 +82,7 @@ public class PrivateMarkupRefusalShould
             .Should().NotContain("СЕКРЕТ");
     }
 
-    /// <summary>
-    /// An attribute has no length of its own, and the refusal is one line.
-    /// </summary>
+    // An attribute has no length of its own, and the refusal is one line.
     [Fact]
     public void CutAnUnboundedSpellingShort()
     {
@@ -128,11 +110,7 @@ public class PrivateMarkupRefusalShould
         refusal.Should().Be(expected);
     }
 
-    /// <summary>
-    /// The [noparse] the author left open is named, because closing it is the
-    /// fix. A [code] left open is no forgotten example, and the block after it
-    /// is accepted.
-    /// </summary>
+    // The [noparse] the author left open is named, because closing it is the fix.
     [Theory]
     [InlineData("[noparse][private=\"Чак\"]СЕКРЕТ[/private]")]
     [InlineData("[NoParse] и [/private]")]

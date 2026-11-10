@@ -4,10 +4,6 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// What the tests of the open log share: the comments their warnings are given for, written straight
-/// into the table and removed after.
-/// </summary>
 public abstract class WarningOpenLogTestBase : WarningControllerTestBase
 {
     protected WarningOpenLogTestBase(DatabaseFixture databaseFixture) : base(databaseFixture)

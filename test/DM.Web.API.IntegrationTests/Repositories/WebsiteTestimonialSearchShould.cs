@@ -7,10 +7,8 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The search of the testimonials reads "%" and "_" as themselves, as every
-/// other search of the site does.
-/// </summary>
+// The search of the testimonials reads "%" and "_" as themselves, as every other search of the site
+// does.
 public class WebsiteTestimonialSearchShould : IntegrationTestBase
 {
     public WebsiteTestimonialSearchShould(DatabaseFixture databaseFixture) : base(databaseFixture)

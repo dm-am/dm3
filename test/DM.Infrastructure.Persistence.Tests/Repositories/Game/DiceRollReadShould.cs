@@ -12,10 +12,7 @@ using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 
-/// <summary>
-/// A roll is read with the two settings that decide who else may see it.
-/// </summary>
-/// <remarks>Left at their defaults they hide every roll from all but the leads and the author.</remarks>
+// Left at their defaults they hide every roll from all but the leads and the author.
 public class DiceRollReadShould
 {
     private static readonly DateTimeOffset Created = new(2026, 10, 18, 9, 0, 0, TimeSpan.Zero);
@@ -24,10 +21,6 @@ public class DiceRollReadShould
     private static readonly Guid ShowingPostId = Guid.Parse("5d2f1e33-0000-4000-8000-000000000011");
     private static readonly Guid HidingPostId = Guid.Parse("5d2f1e33-0000-4000-8000-000000000012");
 
-    /// <summary>
-    /// One post in a game and room that show the results to everybody, one in a
-    /// game that hides them and a room that does not show them, a roll on each.
-    /// </summary>
     private static DmDbContext Seeded()
     {
         var context = InMemoryStore.Open();

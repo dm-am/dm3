@@ -33,10 +33,8 @@ public class TelegramWebhookHandlerShould : UnitTestBase
         return document.RootElement.Clone();
     }
 
-    /// <summary>
-    /// The account page hands the code out as a link, t.me/{bot}?start={code},
-    /// and Telegram delivers the press of Start in that chat as "/start {code}".
-    /// </summary>
+    // The account page hands the code out as a link, t.me/{bot}?start={code}, and Telegram delivers
+    // the press of Start in that chat as "/start {code}".
     [Theory]
     [InlineData("""{"message": {"text": "/connect ABC123", "chat": {"id": 12345}}}""", "ABC123")]
     [InlineData("""{"message": {"text": "/connect  abc123 ", "chat": {"id": 12345}}}""", "abc123")]

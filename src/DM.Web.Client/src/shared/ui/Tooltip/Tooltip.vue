@@ -10,7 +10,7 @@ import {
 } from "vue";
 import TooltipBubble from "./TooltipBubble.vue";
 import { isKeyboardFocus, trackInput } from "./inputSource";
-import type { TooltipPlacement } from "./types";
+import type { OpenedBy, TooltipPlacement } from "./types";
 
 const slots = useSlots();
 const hasContentSlot = computed(() => !!slots.content);
@@ -41,8 +41,6 @@ const tooltipId = `tooltip-${useId()}`;
 const triggerRef = ref<HTMLElement | null>(null);
 const bubbleRef = ref<InstanceType<typeof TooltipBubble> | null>(null);
 
-/** What opened the bubble closes it: one source per bubble, so focus and hover cannot undo each other. */
-type OpenedBy = "hover" | "focus";
 const openedBy = ref<OpenedBy | null>(null);
 const isVisible = computed(() => openedBy.value !== null);
 const shown = computed(

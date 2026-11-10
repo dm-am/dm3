@@ -125,10 +125,8 @@ public class UserEmailChangeValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// A wrong password learns nothing about the new address: "taken" is
-    /// said only after the password matched.
-    /// </summary>
+    // A wrong password learns nothing about the new address: "taken" is said only after the
+    // password matched.
     [Fact]
     public async Task NotSayTakenToAWrongPassword()
     {

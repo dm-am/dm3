@@ -7,9 +7,6 @@ using FluentValidation;
 
 namespace DM.Domain.Moderation.Features.Tickets;
 
-/// <summary>
-/// Validator for ticket creation from the public intake forms
-/// </summary>
 internal class CreateTicketIntakeValidator : AbstractValidator<CreateTicketIntake>
 {
     public CreateTicketIntakeValidator(IIdentityProvider identityProvider, IBbCodeNestingLimit nestingLimit)
@@ -69,9 +66,6 @@ internal class CreateTicketIntakeValidator : AbstractValidator<CreateTicketIntak
         });
     }
 
-    /// <summary>
-    /// The refusal of a reason that is filed from an account, under the picker.
-    /// </summary>
     internal const string SignInForThisReason = "Войдите в аккаунт, чтобы выбрать эту причину";
 
     /// <summary>

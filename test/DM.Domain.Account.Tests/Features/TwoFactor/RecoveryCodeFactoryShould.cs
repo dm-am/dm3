@@ -7,16 +7,9 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.TwoFactor;
 
-/// <summary>
-/// The values that let a person in when the device is gone.
-/// </summary>
-/// <remarks>
-/// A code is stored only as the SHA-256 of its value. The entropy is asserted as
-/// well, because it is the whole argument for a fast hash: the secret of the
-/// factor is shut behind the application key, so a recovery code is what a reader
-/// of a database dump attacks without one, and eighty bits is what makes that not
-/// worth doing.
-/// </remarks>
+// The entropy is asserted as well, because it is the whole argument for a fast hash: the secret of
+// the factor is shut behind the application key, so a recovery code is what a reader of a database
+// dump attacks without one, and eighty bits is what makes that not worth doing.
 public class RecoveryCodeFactoryShould
 {
     [Fact]
@@ -69,9 +62,6 @@ public class RecoveryCodeFactoryShould
             "the alphabet leaves these letters out precisely because a handwritten code " +
             "loses them to the digits beside them");
 
-    /// <summary>
-    /// What the database keeps is the SHA-256 of the normalized value.
-    /// </summary>
     [Fact]
     public void StoreOnlyTheHashOfTheValue()
     {

@@ -6,9 +6,6 @@ using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Game;
 
-/// <summary>
-/// DAL model for game review (review of a game by a player)
-/// </summary>
 /// <remarks>
 /// BBCode is supported in the Text field.
 /// Any sentiment text is allowed (positive, negative, neutral).
@@ -18,9 +15,6 @@ namespace DM.Infrastructure.Persistence.Entities.Game;
 [Table("GameReviews")]
 public class GameReview : ISoftDeletable
 {
-    /// <summary>
-    /// Review identifier
-    /// </summary>
     [Key]
     public Guid GameReviewId { get; set; }
 

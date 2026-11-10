@@ -226,7 +226,6 @@ export enum GameStatusTransition {
   Start = "Start",
   /** Active -> Closed (frozen) */
   Freeze = "Freeze",
-  /** Active -> Closed (finished) */
   Finish = "Finish",
   /** Active or frozen -> Closed */
   Close = "Close",

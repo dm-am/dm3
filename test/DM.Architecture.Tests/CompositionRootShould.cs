@@ -19,9 +19,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The container each host builds is held to the two contracts nothing else checks.
-/// </summary>
 /// <remarks>
 /// Built with ValidateScopes and ValidateOnBuild, the options every Program.cs passes. The seeder
 /// composes in a private method of its entry point and has a rule of its own.
@@ -85,9 +82,6 @@ public class CompositionRootShould
             "needs it instead of missing at startup");
     }
 
-    /// <summary>
-    /// The seeder resolves the one component it runs on.
-    /// </summary>
     /// <remarks>
     /// The popularity processors it scores with are internal to their modules and found by assembly
     /// scans; the seeder passes ValidateOnBuild.
@@ -115,10 +109,6 @@ public class CompositionRootShould
                 "client needs a store");
     }
 
-    /// <summary>
-    /// A host refuses to start over the values its own components read, and over
-    /// no others.
-    /// </summary>
     /// <remarks>
     /// Run rather than read: the host reads its own settings with one section withheld, as a
     /// deployment that lost that variable would.
@@ -146,14 +136,39 @@ public class CompositionRootShould
             "sends a reader a link that points at nothing without a word in any log");
     }
 
-    /// <summary>
-    /// What a host refuses to start over when <paramref name="withheld" /> is
-    /// absent, everything else being what it reads on a local run.
-    /// </summary>
+    /// <remarks>
+    /// The verifier throws on a key that is no point of the curve, which would be a 500 on every
+    /// interaction. The dispatcher binds the same section and sends with the tokens alone.
+    /// </remarks>
+    [Fact]
+    public void RefuseADiscordKeyNoSignatureVerifiesAgainstOnlyInTheHostThatVerifies()
+    {
+        var notAPoint = KeyValuePair.Create<string, string?>(
+            "BotConfiguration:DiscordPublicKey", "02" + new string('0', 62));
+
+        var api = Refusals("DM.Web.API", "BotConfiguration", (configuration, environment) =>
+        {
+            var startup = new DM.Web.API.Startup(configuration, environment);
+            return startup.ConfigureServices;
+        }, notAPoint);
+
+        api.Should().Contain(failure => failure.Contains("DiscordPublicKey", StringComparison.Ordinal));
+
+        var dispatcher = Refusals("DM.Workers.NotificationDispatcher", "BotConfiguration", (configuration, environment) =>
+        {
+            var startup = new DM.Workers.NotificationDispatcher.Startup(configuration, environment);
+            return startup.ConfigureServices;
+        }, notAPoint);
+
+        dispatcher.Should().NotContain(failure => failure.Contains("DiscordPublicKey", StringComparison.Ordinal),
+            "a host that never checks a signature has no use for the key and no reason to stop over it");
+    }
+
     private static IReadOnlyList<string> Refusals(
         string project,
         string withheld,
-        Func<IConfiguration, IWebHostEnvironment, Action<IServiceCollection>> compose)
+        Func<IConfiguration, IWebHostEnvironment, Action<IServiceCollection>> compose,
+        params KeyValuePair<string, string?>[] supplied)
     {
         var full = new ConfigurationBuilder()
             .SetBasePath(Path.Combine(RepositoryLayout.Root, "src", project))
@@ -164,7 +179,8 @@ public class CompositionRootShould
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(full
                 .AsEnumerable()
-                .Where(pair => !pair.Key.StartsWith(withheld, StringComparison.OrdinalIgnoreCase)))
+                .Where(pair => !pair.Key.StartsWith(withheld, StringComparison.OrdinalIgnoreCase))
+                .Concat(supplied))
             .Build();
 
         var services = new ServiceCollection();
@@ -193,10 +209,7 @@ public class CompositionRootShould
         }
     }
 
-    /// <summary>
-    /// The component each worker exists to run resolves, with everything under it.
-    /// </summary>
-    /// <remarks>The processor is resolved by type out of the message scope at runtime, inside a scope.</remarks>
+    // The processor is resolved by type out of the message scope at runtime, inside a scope.
     [Fact]
     public void ResolveTheComponentEachWorkerRunsOn()
     {
@@ -221,9 +234,6 @@ public class CompositionRootShould
         }
     }
 
-    /// <summary>
-    /// A host with no requests has no current user, and says so.
-    /// </summary>
     /// <remarks>
     /// The notification worker never reads the current user; a provider registered for it would
     /// answer null or Guest. Resolved in a scope, as its processor is.
@@ -301,10 +311,6 @@ public class CompositionRootShould
             "error: it surfaces on the first request or the first message that reaches the type");
     }
 
-    /// <summary>
-    /// Every contract a background job asks the scope for is one the container can
-    /// supply.
-    /// </summary>
     /// <remarks>
     /// A job resolves its processor inside the timer tick, invisible to the compiler and to the rule
     /// above. The names are read out of the sources.
@@ -366,11 +372,7 @@ public class CompositionRootShould
             "is not done");
     }
 
-    /// <summary>
-    /// The sort vocabulary is enforced by a filter, and a filter enforces
-    /// nothing until it is registered.
-    /// </summary>
-    /// <remarks>The end-to-end check (SortRefusalShould) needs Docker; this reads the registration.</remarks>
+    // The end-to-end check (SortRefusalShould) needs Docker; this reads the registration.
     [Fact]
     public void RegisterTheFilterThatEnforcesTheSortVocabulary()
     {
@@ -531,10 +533,6 @@ public class CompositionRootShould
         .Select(type => type!.Assembly)
         .Distinct();
 
-    /// <summary>
-    /// Constructor parameter types of a component, minus the ones the container
-    /// supplies from itself and the wrappers that defer or fan out a resolution.
-    /// </summary>
     private static IEnumerable<Type> Dependencies(Type type) => type
         .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
         .SelectMany(constructor => constructor.GetParameters())

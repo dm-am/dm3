@@ -11,9 +11,6 @@ using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The review row and the post author's quality rating, written as one thing.
-/// </summary>
 /// <remarks>
 /// QualityRating is a stored column nothing recomputes. Against the container Postgres: the rollback is under test,
 /// forced by a foreign key on the modifier after the counter moved inside the transaction.
@@ -24,12 +21,11 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     {
     }
 
-    /// <summary>The post every review here lands on, and the user who wrote it.</summary>
     private static Guid PostId => TestConstants.TestGamePostId;
 
     private static Guid PostAuthorId => TestConstants.TestUserId;
 
-    /// <summary>Whoever writes the reviews below; not the post's author.</summary>
+    // Whoever writes the reviews below; not the post's author.
     private static Guid RaterId => TestConstants.MentorUserId;
 
     private async Task<Guid> SeedReview(short sign)
@@ -52,7 +48,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
         return reviewId;
     }
 
-    /// <summary>The counter is shared with the rest of the fixture, so put it back.</summary>
+    // The counter is shared with the rest of the fixture, so put it back.
     private async Task RestoreQualityRating(Guid userId, int value)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -64,16 +60,30 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     private static IPostReviewRepository Repository(IServiceScope scope) =>
         scope.ServiceProvider.GetRequiredService<IPostReviewRepository>();
 
-    /// <summary>
-    /// The edit that cannot be written does not pay the counter either.
-    /// </summary>
+    private async Task WithSeededReview(short sign, Func<Guid, int, Task> test)
+    {
+        var reviewId = await SeedReview(sign);
+        int? before = null;
+        try
+        {
+            before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
+            await test(reviewId, before.Value);
+        }
+        finally
+        {
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
+            if (before is { } rating)
+            {
+                await RestoreQualityRating(PostAuthorId, rating);
+            }
+        }
+    }
+
     [Fact]
     public async Task LeaveTheCounterWhereItWasWhenTheRowWriteIsRefused()
     {
-        var reviewId = await SeedReview(sign: 1);
-        try
+        await WithSeededReview(sign: 1, async (reviewId, before) =>
         {
-            var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
             using var scope = DatabaseFixture.Factory.Services.CreateScope();
 
             // A modifier nobody is: the foreign key refuses the row, and the
@@ -91,22 +101,13 @@ public class PostReviewRepositoryShould : IntegrationTestBase
                 "the counter is stored and nothing recomputes it, so a delta that " +
                 "outlives the write it belongs to is a drift with nothing to catch it");
             (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.SignValue.Should().Be(1, "and the sign it was paid for is unchanged");
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-        }
+        });
     }
 
-    /// <summary>
-    /// The other half of the same rule: when the write goes through, both land.
-    /// </summary>
     [Fact]
     public async Task MoveTheCounterWithTheSignItPaysFor()
     {
-        var reviewId = await SeedReview(sign: 1);
-        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
-        try
+        await WithSeededReview(sign: 1, async (reviewId, before) =>
         {
             using var scope = DatabaseFixture.Factory.Services.CreateScope();
 
@@ -120,24 +121,13 @@ public class PostReviewRepositoryShould : IntegrationTestBase
             (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.SignValue.Should().Be(-1);
             (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before - 2,
                 "the plus taken back and the minus applied, in the write that moved the sign");
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-            await RestoreQualityRating(PostAuthorId, before);
-        }
+        });
     }
 
-    /// <summary>
-    /// The removal is the same method with the sign given back, and it rolls back
-    /// the same way.
-    /// </summary>
     [Fact]
     public async Task GiveTheSignBackWithTheRemovalAndNotBeforeIt()
     {
-        var reviewId = await SeedReview(sign: -1);
-        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
-        try
+        await WithSeededReview(sign: -1, async (reviewId, before) =>
         {
             // A scope apiece, as two requests would have: a context whose
             // SaveChanges was refused still carries the change it could not write.
@@ -168,24 +158,14 @@ public class PostReviewRepositoryShould : IntegrationTestBase
 
             (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.IsRemoved.Should().BeTrue();
             (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before + 1);
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-            await RestoreQualityRating(PostAuthorId, before);
-        }
+        });
     }
 
-    /// <summary>
-    /// The review the unique index refuses costs the post author nothing.
-    /// </summary>
     [Fact]
     public async Task PayNothingForAReviewTheUniqueIndexRefuses()
     {
-        var reviewId = await SeedReview(sign: 1);
-        try
+        await WithSeededReview(sign: 1, async (reviewId, before) =>
         {
-            var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
             using var scope = DatabaseFixture.Factory.Services.CreateScope();
 
             var act = async () => await Repository(scope).CreateAsync(
@@ -204,23 +184,14 @@ public class PostReviewRepositoryShould : IntegrationTestBase
             await act.Should().ThrowAsync<DuplicateEntityException>();
 
             (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before);
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-        }
+        });
     }
 
-    /// <summary>
-    /// One review taken down twice at once gives its sign back once.
-    /// </summary>
-    /// <remarks>What the counter owes is read off the row; a scope apiece and a timeout on the pair.</remarks>
+    // What the counter owes is read off the row; a scope apiece and a timeout on the pair.
     [Fact]
     public async Task GiveTheSignBackOnceWhenTwoRemovalsRaceForOneReview()
     {
-        var reviewId = await SeedReview(sign: 1);
-        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
-        try
+        await WithSeededReview(sign: 1, async (reviewId, before) =>
         {
             await Task.WhenAll(Remove(reviewId), Remove(reviewId))
                 .WaitAsync(TimeSpan.FromSeconds(30));
@@ -229,24 +200,14 @@ public class PostReviewRepositoryShould : IntegrationTestBase
             (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before - 1,
                 "the plus is given back by the removal that happened, and the one that " +
                 "found the review already gone owes nothing");
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-            await RestoreQualityRating(PostAuthorId, before);
-        }
+        });
     }
 
-    /// <summary>
-    /// An edit that arrives after the removal moves nothing.
-    /// </summary>
-    /// <remarks>A removed review is worth nothing, which only a write reading the row itself can see.</remarks>
+    // A removed review is worth nothing, which only a write reading the row itself can see.
     [Fact]
     public async Task MoveNothingForAnEditQueuedBehindTheRemoval()
     {
-        var reviewId = await SeedReview(sign: 1);
-        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
-        try
+        await WithSeededReview(sign: 1, async (reviewId, before) =>
         {
             await Remove(reviewId);
 
@@ -265,24 +226,14 @@ public class PostReviewRepositoryShould : IntegrationTestBase
             (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before - 1,
                 "the review is removed and contributes nothing whatever its sign says, " +
                 "so the edit has no difference to pay");
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-            await RestoreQualityRating(PostAuthorId, before);
-        }
+        });
     }
 
-    /// <summary>
-    /// A sign the request does not carry is the sign the row already holds.
-    /// </summary>
-    /// <remarks>An edit of the text carries no sign, and the counter owes the difference of contributions.</remarks>
+    // An edit of the text carries no sign, and the counter owes the difference of contributions.
     [Fact]
     public async Task KeepTheStoredSignWhenTheRequestCarriesOnlyText()
     {
-        var reviewId = await SeedReview(sign: 1);
-        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
-        try
+        await WithSeededReview(sign: 1, async (reviewId, before) =>
         {
             using var scope = DatabaseFixture.Factory.Services.CreateScope();
 
@@ -299,48 +250,28 @@ public class PostReviewRepositoryShould : IntegrationTestBase
                 "the request named no sign, so the row keeps the one it had");
             (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before,
                 "and an edit that leaves the sign where it was owes the post author nothing");
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-            await RestoreQualityRating(PostAuthorId, before);
-        }
+        });
     }
 
-    /// <summary>
-    /// Taking down a review that carried no sign costs the post author nothing.
-    /// </summary>
-    /// <remarks>The contribution is read off the row, not guessed from the review's existence.</remarks>
+    // The contribution is read off the row, not guessed from the review's existence.
     [Fact]
     public async Task GiveNothingBackForTheRemovalOfANeutralReview()
     {
-        var reviewId = await SeedReview(sign: 0);
-        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
-        try
+        await WithSeededReview(sign: 0, async (reviewId, before) =>
         {
             await Remove(reviewId);
 
             (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.IsRemoved.Should().BeTrue();
             (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before,
                 "the review was worth nothing while it stood, so there is nothing to give back");
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-            await RestoreQualityRating(PostAuthorId, before);
-        }
+        });
     }
 
-    /// <summary>
-    /// The audit names the removal that happened, not the one that arrived after.
-    /// </summary>
-    /// <remarks>The second press finds the row removed, and the audit columns hold still.</remarks>
+    // The second press finds the row removed, and the audit columns hold still.
     [Fact]
     public async Task KeepTheFirstRemoversHandWhenTheReviewIsRemovedAgain()
     {
-        var reviewId = await SeedReview(sign: 1);
-        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
-        try
+        await WithSeededReview(sign: 1, async (reviewId, before) =>
         {
             await Remove(reviewId);
             var first = (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!;
@@ -354,18 +285,11 @@ public class PostReviewRepositoryShould : IntegrationTestBase
                 "the review was taken down once, and the hand recorded is the one that took it down");
             second.DeletedUtc.Should().Be(firstUtc, "along with the moment it happened");
             (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before - 1);
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-            await RestoreQualityRating(PostAuthorId, before);
-        }
+        });
     }
 
-    /// <summary>
-    /// Reviews of one post written in one moment come back in one order on every read: the list numbers them by it.
-    /// </summary>
-    /// <remarks>Written in an order that is neither the identifiers' nor its reverse.</remarks>
+    // Reviews of one post written in one moment come back in one order on every read: the list
+    // numbers them by it.
     [Fact]
     public async Task CloseATieOfTheSameMomentByTheIdentifier()
     {
@@ -423,7 +347,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>One removal on a scope of its own, as a request would have.</summary>
+    // One removal on a scope of its own, as a request would have.
     private Task Remove(Guid reviewId, Guid? removedBy = null) => Task.Run(async () =>
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

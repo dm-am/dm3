@@ -15,10 +15,8 @@ using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAt
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// A file stops existing when the thing it hangs on does.
-/// </summary>
-/// <remarks>The soft delete and its author are asserted: the stamp starts the grace period the sweeper waits out.</remarks>
+// The soft delete and its author are asserted: the stamp starts the grace period the sweeper waits
+// out.
 public class PostAttachmentLifecycleShould : IntegrationTestBase
 {
     public PostAttachmentLifecycleShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -32,10 +30,8 @@ public class PostAttachmentLifecycleShould : IntegrationTestBase
         Role = UserRole.RegularUser,
     };
 
-    /// <summary>
-    /// A game of its own per case: both paths under test end in a soft delete
-    /// that other suites would notice.
-    /// </summary>
+    // A game of its own per case: both paths under test end in a soft delete that other suites
+    // would notice.
     private async Task<(Guid GameId, Guid PostId, Guid UploadId)> SeedAsync(string publicId)
     {
         var gameId = Guid.NewGuid();
@@ -107,7 +103,7 @@ public class PostAttachmentLifecycleShould : IntegrationTestBase
         return (gameId, postId, uploadId);
     }
 
-    /// <summary>The row as the sweeper will read it, soft-delete filter ignored.</summary>
+    // The row as the sweeper will read it, soft-delete filter ignored.
     private async Task<DbUpload> StoredUpload(Guid uploadId)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -148,10 +144,9 @@ public class PostAttachmentLifecycleShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// The browser keeps a file a guest reads too, for a guest and a reader signed in alike, and not one whose
-    /// mark makes it a matter of the reader: the next account signed in the same browser would get the copy.
-    /// </summary>
+    // The browser keeps a file a guest reads too, for a guest and a reader signed in alike, and not
+    // one whose mark makes it a matter of the reader: the next account signed in the same browser
+    // would get the copy.
     [Fact]
     public async Task LetTheBrowserKeepOnlyAFileEveryReaderGets()
     {

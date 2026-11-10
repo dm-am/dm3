@@ -5,9 +5,6 @@ using FluentValidation;
 
 namespace DM.Domain.Moderation.Features.Tickets;
 
-/// <summary>
-/// Validator for an answer in the conversation of a ticket
-/// </summary>
 internal class CreateTicketCommentValidator : AbstractValidator<CreateTicketComment>
 {
     public CreateTicketCommentValidator(IBbCodeNestingLimit nestingLimit)

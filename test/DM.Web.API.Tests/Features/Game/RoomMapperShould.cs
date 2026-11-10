@@ -19,9 +19,6 @@ public class RoomMapperShould : UnitTestBase
         return new RoomMapper(userMapper, new CharacterMapper(userMapper));
     }
 
-    /// <summary>
-    /// The policy decides who may write in the room, and every response carries it.
-    /// </summary>
     [Fact]
     public void CarryTheAccessPolicy()
     {
@@ -35,9 +32,8 @@ public class RoomMapperShould : UnitTestBase
         access.Policy.Should().Be(RoomAccessPolicy.ReadOnly);
     }
 
-    /// <summary>
-    /// PATCH carries "not sent" as null and the write model keeps saying it: each setting applies only when set.
-    /// </summary>
+    // PATCH carries "not sent" as null and the write model keeps saying it: each setting applies
+    // only when set.
     [Fact]
     public void KeepAnUnsentUpdateFieldNull()
     {
@@ -79,9 +75,7 @@ public class RoomMapperShould : UnitTestBase
         update.HiddenWithoutAccess.Should().BeTrue();
     }
 
-    /// <summary>
-    /// PreviousRoomId is three-valued: absent, explicit null (move to the head) and a value.
-    /// </summary>
+    // PreviousRoomId is three-valued: absent, explicit null (move to the head) and a value.
     [Fact]
     public void CarryAnExplicitNullPreviousRoomThrough()
     {

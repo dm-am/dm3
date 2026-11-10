@@ -75,10 +75,6 @@ public class NotificationServiceShould : UnitTestBase
             Arg.Is<PagingData>(p => p.Skip == 0 && p.Take == 10));
     }
 
-    /// <summary>
-    /// A request that names no size is served the reader's own, as every paged
-    /// list is: one number on the account for all of them.
-    /// </summary>
     [Fact]
     public async Task ServeTheReadersPageSizeWhenTheQueryNamesNone()
     {
@@ -208,9 +204,8 @@ public class NotificationServiceShould : UnitTestBase
         result.Should().HaveCount(1);
     }
 
-    /// <summary>
-    /// Blocking somebody is a statement about hearing from them at all, the other recipient still gets it.
-    /// </summary>
+    // Blocking somebody is a statement about hearing from them at all, the other recipient still
+    // gets it.
     [Fact]
     public async Task NotAddressARecipientWhoBlockedTheActor()
     {
@@ -264,9 +259,7 @@ public class NotificationServiceShould : UnitTestBase
         await blacklistChecker.DidNotReceive().GetOwnersBlockingAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// One read per actor, not per recipient: a publication notifies every subscriber of the blog.
-    /// </summary>
+    // One read per actor, not per recipient: a publication notifies every subscriber of the blog.
     [Fact]
     public async Task AskTheBlacklistOnceForTheWholeAudienceOfAnActor()
     {
@@ -290,9 +283,8 @@ public class NotificationServiceShould : UnitTestBase
         await blacklistChecker.Received(1).GetOwnersBlockingAsync(actorId, Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The bus delivers at least once, and the pair (EventId, EventType) names one logical notification.
-    /// </summary>
+    // The bus delivers at least once, and the pair (EventId, EventType) names one logical
+    // notification.
     [Fact]
     public async Task DropNotificationsAlreadyStoredForTheSameEvent()
     {
@@ -350,9 +342,6 @@ public class NotificationServiceShould : UnitTestBase
         await repository.DidNotReceive().Create(Arg.Any<CreateNotificationEntity[]>());
     }
 
-    /// <summary>
-    /// No EventId means there is nothing to deduplicate against, so the write proceeds without a lookup.
-    /// </summary>
     [Fact]
     public async Task NotConsultTheStoreForANotificationWithoutEventId()
     {
@@ -372,7 +361,6 @@ public class NotificationServiceShould : UnitTestBase
         result.Should().ContainSingle();
     }
 
-    /// <summary>Entity that mirrors the request it was built from.</summary>
     private void PassThroughFactory() =>
         factory.Create(Arg.Any<CreateNotification>(), now).Returns(ci =>
         {

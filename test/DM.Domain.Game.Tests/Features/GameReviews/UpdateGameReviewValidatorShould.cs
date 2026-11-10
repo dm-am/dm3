@@ -35,10 +35,8 @@ public class UpdateGameReviewValidatorShould
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// Present and blank is not "keep what is stored": the service trims the text
-    /// before storing it, so a text of spaces would publish an empty review.
-    /// </summary>
+    // Present and blank is not "keep what is stored": the service trims the text before storing it,
+    // so a text of spaces would publish an empty review.
     [Theory]
     [InlineData("")]
     [InlineData("            ")]

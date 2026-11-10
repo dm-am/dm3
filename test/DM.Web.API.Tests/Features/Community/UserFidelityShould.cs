@@ -13,20 +13,12 @@ using DomainUsernameHistoryEntry = DM.Domain.Core.Users.UsernameHistoryEntry;
 
 namespace DM.Web.API.Tests.Features.Community;
 
-/// <summary>
-/// The user schema goes out at two fidelities, and the response has to say which
-/// one it is.
-/// </summary>
-/// <remarks>
-/// A nested user is filled by the query of the resource and counts no aggregates, so every aggregate is
-/// nullable and the serializer drops nulls. The two tests hold both directions.
-/// </remarks>
+// A nested user is filled by the query of the resource and counts no aggregates, so every aggregate
+// is nullable and the serializer drops nulls.
 public class UserFidelityShould : UnitTestBase
 {
-    /// <summary>
-    /// Everything the base projection fills, and therefore the whole of what a
-    /// nested user may put on the wire.
-    /// </summary>
+    // Everything the base projection fills, and therefore the whole of what a nested user may put
+    // on the wire.
     private static readonly string[] Projected =
     {
         "id", "username", "lastActivityUtc", "role", "isNewbie",
@@ -50,10 +42,8 @@ public class UserFidelityShould : UnitTestBase
         Picture = new AvatarPicture(),
     };
 
-    /// <summary>
-    /// The JSON the API would actually write, under the API's own conventions —
-    /// camel case, string enums, and nulls omitted.
-    /// </summary>
+    // The JSON the API would actually write, under the API's own conventions — camel case, string
+    // enums, and nulls omitted.
     private static JsonObject Wire(User user) => JsonNode
         .Parse(JsonSerializer.Serialize(user, new JsonSerializerOptions().ApplyApiConventions()))!
         .AsObject();

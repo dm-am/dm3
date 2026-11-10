@@ -48,11 +48,8 @@ public static class DefaultAttributeSchema
     private static readonly Guid WisdomId = new("b1a5c0de-0000-4000-8000-00000000010e");
     private static readonly Guid CharismaId = new("b1a5c0de-0000-4000-8000-00000000010f");
 
-    /// <summary>
-    /// The moment the row is dated with. A literal, because the migration
-    /// carries the row as literals and a clock read would make every build of
-    /// the model differ from it.
-    /// </summary>
+    // A literal, because the migration carries the row as literals and a clock read would make
+    // every build of the model differ from it.
     private static readonly DateTimeOffset Shipped = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     /// <summary>
@@ -73,10 +70,6 @@ public static class DefaultAttributeSchema
         "Хаотичный злой"
     ];
 
-    /// <summary>
-    /// The rungs every ability is measured on: a word and the modifier it
-    /// stands for.
-    /// </summary>
     private static readonly (string Value, int Modifier)[] AbilityRungs =
     [
         ("очень плохо", -20),
@@ -86,7 +79,6 @@ public static class DefaultAttributeSchema
         ("очень хорошо", 20)
     ];
 
-    /// <summary>The abilities, in the order the sheet draws them</summary>
     private static readonly (Guid Id, string Title)[] Abilities =
     [
         (StrengthId, "Сила"),
@@ -97,7 +89,6 @@ public static class DefaultAttributeSchema
         (CharismaId, "Обаяние")
     ];
 
-    /// <summary>The formatted-text fields, in order</summary>
     private static readonly (Guid Id, string Title)[] Narrative =
     [
         (AppearanceId, "Внешность"),
@@ -107,7 +98,6 @@ public static class DefaultAttributeSchema
         (InventoryId, "Инвентарь")
     ];
 
-    /// <summary>How long a formatted-text field may be</summary>
     private const int BbCodeFieldLength = 20000;
 
     /// <summary>

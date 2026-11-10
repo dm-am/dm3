@@ -13,10 +13,6 @@ using NSubstitute;
 
 namespace DM.Domain.Account.Tests.Dsl;
 
-/// <summary>
-/// The username change service over substitutes: a validator that passes, the
-/// current time, and a fresh identifier on every call.
-/// </summary>
 public abstract class UsernameChangeServiceTestBase : UnitTestBase
 {
     protected readonly IValidator<CreateUsernameChangeRequest> validator = Mock<IValidator<CreateUsernameChangeRequest>>();
@@ -28,7 +24,7 @@ public abstract class UsernameChangeServiceTestBase : UnitTestBase
     protected readonly IDateTimeProvider dateTimeProvider = Mock<IDateTimeProvider>();
     protected readonly IUsernameChangeMailSender notificationSender = Mock<IUsernameChangeMailSender>();
 
-    /// <summary>Not the default, so an approval that still counted its own hours would show.</summary>
+    // Not the default, so an approval that still counted its own hours would show.
     protected readonly TokenConfiguration tokens = new() { UsernameChangeApprovalTokenLifetimeHours = 30 };
     private protected readonly UsernameChangeService service;
 

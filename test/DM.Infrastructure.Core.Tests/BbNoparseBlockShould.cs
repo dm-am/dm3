@@ -4,16 +4,10 @@ using static DM.Infrastructure.Core.Tests.BbAudienceRender;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The [noparse] block shows markup as typed, and only inside it
-/// (BBCODE_RENDERING.md, "[code] и [noparse]").
-/// </summary>
 public class BbNoparseBlockShould
 {
-    /// <summary>
-    /// [noparse] shows markup, it does not run it. [code] is no such block: it
-    /// changes the font, and what the grammar table says of it is the rule.
-    /// </summary>
+    // [code] is no such block: it changes the font, and what the grammar table says of it is the
+    // rule.
     [Theory]
     [InlineData("[noparse][img]https://example.com/a.png[/img][/noparse]")]
     [InlineData("[noparse][link text=\"text\"]https://example.com[/link][/noparse]")]
@@ -23,9 +17,6 @@ public class BbNoparseBlockShould
         Comment(input).Should().NotContain("<img").And.NotContain("<a ");
     }
 
-    /// <summary>
-    /// The counterweight: outside the block the same tags still render.
-    /// </summary>
     [Fact]
     public void KeepRenderingTheSameTagsOutsideAVerbatimBlock()
     {

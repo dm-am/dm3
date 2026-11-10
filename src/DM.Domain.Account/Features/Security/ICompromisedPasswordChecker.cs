@@ -12,7 +12,6 @@ public interface ICompromisedPasswordChecker
     /// <summary>
     /// Check if password has been found in known data breaches
     /// </summary>
-    /// <returns>True if password is compromised, false otherwise</returns>
     /// <remarks>
     /// Uses k-anonymity model - only first 5 characters of SHA-1 hash are sent to the API.
     /// If the service is unavailable, returns false (fail-open for availability).

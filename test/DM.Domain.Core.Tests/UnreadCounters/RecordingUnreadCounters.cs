@@ -7,24 +7,16 @@ using DM.Domain.Core.UnreadCounters;
 
 namespace DM.Domain.Core.Tests.UnreadCounters;
 
-/// <summary>
-/// A counters store that writes nothing and remembers everything it was asked to.
-/// </summary>
-/// <remarks>
-/// Members outside the marker lifecycle refuse, so a wrong call cannot look right.
-/// </remarks>
+// Members outside the marker lifecycle refuse, so a wrong call cannot look right.
 internal sealed class RecordingUnreadCounters : IUnreadCountersRepository
 {
     private readonly List<(Guid EntityId, Guid? ParentId, UnreadEntryType EntryType, Guid[]? Readers)> written = [];
     private readonly List<(Guid EntityId, UnreadEntryType EntryType, Guid[]? Readers)> takenBack = [];
 
-    /// <summary>Type of the exception the next write refuses with, if any.</summary>
     public Func<Exception>? RefuseWriteOf { get; set; }
 
-    /// <summary>Entry type whose write is refused, when <see cref="RefuseWriteOf" /> is set.</summary>
     public UnreadEntryType? RefusedEntryType { get; set; }
 
-    /// <summary>Exception every take-back throws with, if any.</summary>
     public Func<Exception>? RefuseTakeBack { get; set; }
 
     public IReadOnlyList<(Guid EntityId, Guid? ParentId, UnreadEntryType EntryType, Guid[]? Readers)> Written => written;

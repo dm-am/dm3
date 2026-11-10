@@ -133,14 +133,8 @@ public class RecoveryServiceShould : UnitTestBase
         result.Should().Be(RecoveryResult.NotFound);
     }
 
-    /// <summary>
-    /// A removed account earns the same result as a live one, and nothing else:
-    /// no reset it cannot use, and no letter naming its state.
-    /// </summary>
-    /// <remarks>
-    /// "Not found" here plus "taken" on registration equalled "removed" for a
-    /// guest with two requests and no password (SECURITY.md).
-    /// </remarks>
+    // "Not found" here plus "taken" on registration equalled "removed" for a guest with two
+    // requests and no password (SECURITY.md).
     [Fact]
     public async Task AnswerARemovedAccountAsALiveOneAndSendNothing()
     {

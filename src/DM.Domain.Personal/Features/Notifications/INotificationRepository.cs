@@ -37,15 +37,10 @@ public interface INotificationRepository
     /// </returns>
     Task<IEnumerable<ListedNotification>> GetNotifications(Guid userId, PagingData pagingData);
 
-    /// <summary>
-    /// Event types of the notifications already stored for a bus publication
-    /// </summary>
     /// <remarks>
     /// What the idempotent write reads before creating: a redelivered event finds
     /// here what its first delivery stored, one type per generator that answered.
     /// </remarks>
-    /// <param name="eventId">Bus publication identifier</param>
-    /// <returns>Event types stored under the identifier</returns>
     Task<IReadOnlySet<EventType>> GetCreatedEventTypes(Guid eventId);
 
     // Write

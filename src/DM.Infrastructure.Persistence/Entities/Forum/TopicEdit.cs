@@ -38,9 +38,6 @@ public class TopicEdit
     [ForeignKey(nameof(TopicId))]
     public virtual Topic Topic { get; set; } = null!;
 
-    /// <summary>
-    /// Editor user
-    /// </summary>
     [ForeignKey(nameof(EditorUserId))]
     public virtual User Editor { get; set; } = null!;
 }

@@ -20,9 +20,6 @@ internal sealed partial class DataSeeder
     /// </summary>
     internal const string GuestTicketToken = "5eedc0de5eedc0de5eedc0de5eedc0de";
 
-    /// <summary>
-    /// The tracking token of the guest ticket the seed closes as spam.
-    /// </summary>
     internal const string SpamTicketToken = "5eedc0de5eedc0de5eedc0dedeadbeef";
 
 
@@ -102,14 +99,8 @@ internal sealed partial class DataSeeder
             $"with {comments.Length} comments, and TestUser's report of a bug with a full conversation");
     }
 
-    /// <summary>The ticket whose conversation reached its ceiling.</summary>
     internal static readonly Guid FullTicketId = FixedGuid(0xd5, 1);
 
-    /// <summary>
-    /// A report of a bug by the member, answered back and forth by an administrator until the
-    /// conversation took all it takes: open and waiting for the member, so the thread shows the line
-    /// of the full conversation where the answer form stands.
-    /// </summary>
     /// <remarks>
     /// Written on fixed identifiers, so nothing drawn after it moves. Filed weeks ago and in a category
     /// only administrators read, so the queues open with the tickets they opened with.
@@ -165,10 +156,6 @@ internal sealed partial class DataSeeder
         "Видим ошибку в журнале сервера, разбираемся. Напишем сюда, когда починим.",
     ];
 
-    /// <summary>
-    /// Authenticated complaint about a user (Moderator scope): the moderator
-    /// asked for the comment the link did not point at, and waits for the author.
-    /// </summary>
     private Ticket UserComplaint(DbUser reporter, DbUser target) =>
         new()
         {
@@ -185,10 +172,6 @@ internal sealed partial class DataSeeder
             Comment = ""
         };
 
-    /// <summary>
-    /// Authenticated complaint about a user, answered in the site markup and
-    /// closed (Moderator scope).
-    /// </summary>
     private Ticket AnsweredComplaint(DbUser author, DbUser offender, DbUser moderator) =>
         new()
         {
@@ -206,11 +189,6 @@ internal sealed partial class DataSeeder
             ResolvedUtc = _now.AddDays(-4)
         };
 
-    /// <summary>
-    /// Authenticated complaint about a junior moderator decision: a senior
-    /// moderator asked, the author answered, and it waits for moderation again
-    /// (SeniorModerator scope).
-    /// </summary>
     private Ticket DecisionComplaint(DbUser reporter) =>
         new()
         {
@@ -225,10 +203,6 @@ internal sealed partial class DataSeeder
             Comment = ""
         };
 
-    /// <summary>
-    /// Guest support request with a contact email, and a word the guest added
-    /// on his tracking page (Admin scope).
-    /// </summary>
     private Ticket GuestRequest() =>
         new()
         {
@@ -245,10 +219,6 @@ internal sealed partial class DataSeeder
             Comment = ""
         };
 
-    /// <summary>
-    /// Guest submission marked as spam (Admin scope, Spam status demo): closed
-    /// without a word, as spam is.
-    /// </summary>
     private Ticket GuestSpam(DbUser moderator) =>
         new()
         {
@@ -266,10 +236,7 @@ internal sealed partial class DataSeeder
             ResolvedUtc = _now.AddDays(-3).AddHours(2)
         };
 
-    /// <summary>
-    /// A comment of a seeded conversation; a null author is the guest who filed
-    /// the ticket.
-    /// </summary>
+    // A comment of a seeded conversation; a null author is the guest who filed the ticket.
     private static TicketComment SeedComment(int number, Ticket ticket, DbUser? author, DateTimeOffset createdUtc,
         string text) =>
         new()
@@ -281,11 +248,6 @@ internal sealed partial class DataSeeder
             Text = text
         };
 
-    /// <summary>
-    /// The complaint a warning was issued on, closed with the answer that says
-    /// so, at the moment the warning was issued from the profile: the one closed
-    /// complaint of the seed that ended in a sanction.
-    /// </summary>
     /// <remarks>
     /// Written by SeedWarnings with the warning's moments, last, so the identifiers of the warnings stay.
     /// </remarks>

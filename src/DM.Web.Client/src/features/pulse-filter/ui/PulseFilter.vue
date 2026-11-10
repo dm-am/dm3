@@ -4,18 +4,14 @@ import {
   formatNumberRangeForDisplay,
 } from "@/shared/lib/filters";
 import { computed, ref, watch } from "vue";
-import { vClickOutside } from "@/shared/directives";
 import { gameApi } from "@/entities/game";
 import { usePulseFilter } from "../model";
-import type { PulseSortBy } from "../model";
+import type { PulseFilterKey, PulseSortBy } from "../model";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import {
   FilterSearchInput,
-  FilterButton,
-  FilterDropdown,
-  FilterDropdownHeader,
-  FilterDropdownItem,
+  FilterMenu,
   NumericRangePicker,
   DateRangePicker,
   SortButton,
@@ -25,6 +21,7 @@ import {
 } from "@/shared/ui/Filters";
 import { UserMultiSelect } from "@/entities/user";
 import type { BubbleValue } from "@/shared/ui/Filters";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 // Pages with an implicit author scope (profile subpages) hide the "Авторы" filter.
 const props = withDefaults(
@@ -52,7 +49,7 @@ const { localInput, handleInput, applySearch } = useFilterSearch(
 );
 
 const { showDropdown, navPath, closeDropdown, toggleDropdown } =
-  useFilterDropdown();
+  useFilterDropdown<PulseFilterKey>();
 
 const filterOptions = computed(() => {
   const items = [
@@ -64,10 +61,6 @@ const filterOptions = computed(() => {
     ? items.filter((i) => i.key !== "author")
     : items;
 });
-
-function selectRootItem(key: string) {
-  navPath.value = { filter: key };
-}
 
 function navigateBack() {
   navPath.value = null;
@@ -120,12 +113,12 @@ const sortOptions = [
   },
 ];
 
-function handleSortSelect(value: string, direction?: "asc" | "desc") {
+function handleSortSelect(value: string, direction?: SortDirection) {
   setSort(value as PulseSortBy, direction);
 }
 
 // No toggle action of its own: the flip is a re-sort on the field in effect.
-function handleSortOrderChange(order: "asc" | "desc") {
+function handleSortOrderChange(order: SortDirection) {
   setSort(filterState.value.sortBy, order);
 }
 
@@ -227,60 +220,41 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @keydown="handleSearchKeydown"
       />
 
-      <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton
-          label="Фильтры"
-          :active="showDropdown"
-          @click="toggleDropdown"
-          @close="closeDropdown"
+      <FilterMenu
+        v-model:nav-path="navPath"
+        :open="showDropdown"
+        :title="dropdownTitle"
+        :options="filterOptions"
+        @toggle="toggleDropdown"
+        @close="closeDropdown"
+        @back="navigateBack"
+      >
+        <!-- Shut in hideAuthor mode even with ?author= in the address; include inactive: an author away for 30 days stays findable. -->
+        <UserMultiSelect
+          v-if="!hideAuthorFilter && navPath?.filter === 'author'"
+          :selected-users="filterState.authorUsernames"
+          placeholder="Поиск автора"
+          include-inactive
+          @add="addAuthor"
         />
 
-        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <FilterDropdownHeader
-            v-if="navPath"
-            :title="dropdownTitle"
-            @back="navigateBack"
-          />
+        <NumericRangePicker
+          v-if="navPath?.filter === 'rating'"
+          :min-value="filterState.minRating"
+          :max-value="filterState.maxRating"
+          :allow-negative="true"
+          @apply="handleRatingApply"
+          @clear="handleRatingClear"
+        />
 
-          <template v-if="!navPath">
-            <FilterDropdownItem
-              v-for="option in filterOptions"
-              :key="option.key"
-              :label="option.label"
-              :hint="option.hint"
-              :has-sub-options="true"
-              @item-select="selectRootItem(option.key)"
-            />
-          </template>
-
-          <!-- Shut in hideAuthor mode even with ?author= in the address; include inactive: an author away for 30 days stays findable. -->
-          <UserMultiSelect
-            v-if="!hideAuthorFilter && navPath?.filter === 'author'"
-            :selected-users="filterState.authorUsernames"
-            placeholder="Поиск автора"
-            include-inactive
-            @add="addAuthor"
-            @remove="removeAuthor"
-          />
-
-          <NumericRangePicker
-            v-if="navPath?.filter === 'rating'"
-            :min-value="filterState.minRating"
-            :max-value="filterState.maxRating"
-            :allow-negative="true"
-            @apply="handleRatingApply"
-            @clear="handleRatingClear"
-          />
-
-          <DateRangePicker
-            v-if="navPath?.filter === 'date'"
-            :from-value="filterState.createdFrom"
-            :to-value="filterState.createdTo"
-            @apply="handleDateApply"
-            @clear="handleDateClear"
-          />
-        </FilterDropdown>
-      </div>
+        <DateRangePicker
+          v-if="navPath?.filter === 'date'"
+          :from-value="filterState.createdFrom"
+          :to-value="filterState.createdTo"
+          @apply="handleDateApply"
+          @clear="handleDateClear"
+        />
+      </FilterMenu>
 
       <SortButton
         :options="sortOptions"
@@ -343,7 +317,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
   gap: $small
 
   +filter-bar
-  +filter-button
 
 +filter-dropdown-base
 </style>

@@ -95,7 +95,6 @@ internal static class BlogMappers
                 .ToList()
         }));
 
-    /// <summary>EF projection to the domain rubric</summary>
     public static IQueryable<Rubric> ProjectToRubric(this IQueryable<DbRubric> query) =>
         query.Select(ExpressionSplicer.Expand(RubricProjection));
 

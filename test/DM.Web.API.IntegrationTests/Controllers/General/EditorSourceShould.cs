@@ -13,15 +13,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Whoever may edit a text gets it for editing as it was handed in, as its author
-/// does, and a reader without that right gets the render.
-/// </summary>
-/// <remarks>
-/// The editor saves the string it was given: a render handed to a moderator or a
-/// master would be written back into the text as HTML. The right is the one the
-/// write of the text checks.
-/// </remarks>
+// The editor saves the string it was given: a render handed to a moderator or a master would be
+// written back into the text as HTML.
 public class EditorSourceShould : IntegrationTestBase
 {
     private const string Source = "[b]Жирный[/b] текст";
@@ -30,7 +23,6 @@ public class EditorSourceShould : IntegrationTestBase
     {
     }
 
-    /// <summary>A reader with no right to edit either text: a mentor outside the game and the board staff.</summary>
     private static GeneralUser Reader => new()
     {
         UserId = TestConstants.MentorUserId,
@@ -58,10 +50,7 @@ public class EditorSourceShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The master edits a player's post written without a character, though not its
-    /// author. Moderation does not: nothing in a game room is moderated.
-    /// </summary>
+    // Moderation does not: nothing in a game room is moderated.
     [Fact]
     public async Task HandTheMasterAndNotAModeratorTheSourceOfAPlayersPost()
     {
@@ -82,12 +71,8 @@ public class EditorSourceShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The right of moderation to edit a post is not a right to read its hidden
-    /// blocks: the source would hand them over, and the editor would save the post
-    /// without them. Such a post is not offered for editing, is not taken edited,
-    /// and its source is not handed out. The master reads them all.
-    /// </summary>
+    // The right of moderation to edit a post is not a right to read its hidden blocks: the source
+    // would hand them over, and the editor would save the post without them.
     [Fact]
     public async Task KeepTheHiddenBlocksOfAPostFromAModerator()
     {
@@ -104,10 +89,6 @@ public class EditorSourceShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The moderator gets the render without <paramref name="kept"/>, no "Править" and a refused
-    /// edit; the master gets the source and the right.
-    /// </summary>
     private async Task ExpectTheEditKeptFromAModerator(Guid postId, string source, string kept)
     {
         var moderator = CustomWebApplicationFactory.CreateModeratorUser();
@@ -123,10 +104,8 @@ public class EditorSourceShould : IntegrationTestBase
         (await Client.SendAsync(edit)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// Nor is it a right to a file the post keeps from moderation: the source names the file marked
-    /// "Выбранные" outside every block, which the page cuts out for the moderator.
-    /// </summary>
+    // Nor is it a right to a file the post keeps from moderation: the source names the file marked
+    // "Выбранные" outside every block, which the page cuts out for the moderator.
     [Fact]
     public async Task KeepAMarkedFileOfAPostFromAModerator()
     {
@@ -147,10 +126,8 @@ public class EditorSourceShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// What the author sends is what the editor gets back: the spaces around the text and the case of
-    /// the tag names are his (BBCODE_RENDERING.md, "Регистр имен").
-    /// </summary>
+    // What the author sends is what the editor gets back: the spaces around the text and the case
+    // of the tag names are his (BBCODE_RENDERING.md, "Регистр имен").
     [Theory]
     [InlineData("  текст\n")]
     [InlineData("[B]x[/B]")]
@@ -180,7 +157,6 @@ public class EditorSourceShould : IntegrationTestBase
         }
     }
 
-    /// <summary>A file of the post marked for a character of nobody in the test room.</summary>
     private async Task SeedMarkedAttachment(Guid uploadId, Guid postId)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -203,7 +179,6 @@ public class EditorSourceShould : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
-    /// <summary>The flag the page offers "Править" by.</summary>
     private async Task<bool> CanEdit(Guid postId, GeneralUser viewer)
     {
         var response = await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, $"/v1/posts/{postId:D}", viewer));
@@ -243,7 +218,6 @@ public class EditorSourceShould : IntegrationTestBase
         return topicId;
     }
 
-    /// <summary>A post of the second user in the test room, without a character.</summary>
     private async Task<Guid> SeedPost(string gameText)
     {
         var postId = Guid.NewGuid();

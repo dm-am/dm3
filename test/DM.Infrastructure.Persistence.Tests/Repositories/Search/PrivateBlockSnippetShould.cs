@@ -4,13 +4,8 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Search;
 
-/// <summary>
-/// What a search preview may show of a post that has private blocks in it.
-/// </summary>
-/// <remarks>
-/// Snippets are built past the viewer-scoped render, so this cut is the lock; PrivateBlockPatternShould
-/// asserts PostgreSQL reads the same pattern the same way.
-/// </remarks>
+// Snippets are built past the viewer-scoped render, so this cut is the lock;
+// PrivateBlockPatternShould asserts PostgreSQL reads the same pattern the same way.
 public class PrivateBlockSnippetShould
 {
     [Theory]
@@ -29,10 +24,8 @@ public class PrivateBlockSnippetShould
         SearchSnippet.StripPrivateBlocks(input).Should().Be(expected);
     }
 
-    /// <summary>
-    /// Only [/private] closes a block, as on the page: a block closed by anything
-    /// else runs to the end of the text, and so does one that was never closed.
-    /// </summary>
+    // Only [/private] closes a block, as on the page: a block closed by anything else runs to the
+    // end of the text, and so does one that was never closed.
     [Theory]
     [InlineData("до [private]тайна[/private=\"x\"] и хвост")]
     [InlineData("до [private]тайна[/pr\u0131vate] и хвост")]
@@ -51,9 +44,6 @@ public class PrivateBlockSnippetShould
         SearchSnippet.StripPrivateBlocks(input).Should().Be(input);
     }
 
-    /// <summary>
-    /// Text standing between two private blocks is public and stays, here and in PostgreSQL.
-    /// </summary>
     [Fact]
     public void KeepPublicTextBetweenTwoBlocks()
     {

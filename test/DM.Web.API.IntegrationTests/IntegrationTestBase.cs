@@ -6,9 +6,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests;
 
-/// <summary>
-/// The shared database fixture and a configured HttpClient over one WebApplicationFactory.
-/// </summary>
 [Collection("Database")]
 public abstract class IntegrationTestBase : IDisposable
 {
@@ -28,10 +25,9 @@ public abstract class IntegrationTestBase : IDisposable
         });
     }
 
-    /// <summary>
-    /// An answer minus its per-request correlation token, fields in order and identifiers as a placeholder,
-    /// so that two refusals compare equal exactly when a caller could not tell them apart.
-    /// </summary>
+    // An answer minus its per-request correlation token, fields in order and identifiers as a
+    // placeholder, so that two refusals compare equal exactly when a caller could not tell them
+    // apart.
     protected static string Masked(string body)
     {
         if (string.IsNullOrWhiteSpace(body))
@@ -54,9 +50,6 @@ public abstract class IntegrationTestBase : IDisposable
             @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "{id}");
     }
 
-    /// <summary>
-    /// A request carrying the test authentication headers of the user.
-    /// </summary>
     protected static HttpRequestMessage CreateAuthenticatedRequest(HttpMethod method, string url, GeneralUser user)
     {
         var request = new HttpRequestMessage(method, url);

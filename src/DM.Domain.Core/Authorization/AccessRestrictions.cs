@@ -23,7 +23,6 @@ public static class AccessRestrictions
     /// <summary>
     /// Whether the user may add content to a discussion surface.
     /// </summary>
-    /// <param name="user">Authorization subject</param>
     /// <param name="inOwnSpace">
     /// True when the surface belongs to the user — a game they lead or were
     /// accepted into, a blog they author or assist. This is what the ordinary

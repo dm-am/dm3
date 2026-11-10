@@ -5,11 +5,7 @@ using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Blog;
 
-/// <summary>
-/// DAL model for blog assistant
-/// </summary>
 /// <remarks>
-/// Unified with GameAssistant structure.
 /// Only stores assistants - readers are in Subscriptions table.
 /// </remarks>
 [Table("BlogAssistants")]
@@ -21,9 +17,6 @@ public class BlogAssistant
     [Key]
     public Guid BlogAssistantId { get; set; }
 
-    /// <summary>
-    /// Blog identifier
-    /// </summary>
     public Guid BlogId { get; set; }
 
     /// <summary>

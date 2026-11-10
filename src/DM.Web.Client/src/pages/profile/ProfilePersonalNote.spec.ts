@@ -22,10 +22,6 @@ import {
   saidOutLoud,
 } from "./ProfilePage.fixtures";
 
-vi.mock("vue-router", async (importOriginal) =>
-  (await import("./ProfilePage.doubles")).vueRouter(importOriginal),
-);
-
 beforeEach(dismissToasts);
 afterEach(() => vi.restoreAllMocks());
 

@@ -18,9 +18,6 @@ public class CreatePoll
     /// </summary>
     public string? Details { get; set; }
 
-    /// <summary>
-    /// Poll start date (UTC)
-    /// </summary>
     public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>

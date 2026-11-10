@@ -8,7 +8,6 @@ import type { Message } from "@/shared/api/models/common";
 import {
   mockGetChatMessages,
   mockMarkChatRoomRead,
-  route,
 } from "./GameChatRoom.doubles";
 import {
   heldRead,
@@ -22,9 +21,6 @@ import {
 
 vi.mock("@/entities/game/api/roomApi", async () =>
   (await import("./GameChatRoom.doubles")).roomApi(),
-);
-vi.mock("vue-router", async () =>
-  (await import("./GameChatRoom.doubles")).vueRouter(),
 );
 
 // jsdom has no IntersectionObserver: the test fires a stand-in by hand.
@@ -53,8 +49,6 @@ describe("GameChatRoom older messages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    route.params.id = "g-1";
-    route.params.num = "1";
     setHidden(false);
     observers.length = 0;
     vi.stubGlobal(

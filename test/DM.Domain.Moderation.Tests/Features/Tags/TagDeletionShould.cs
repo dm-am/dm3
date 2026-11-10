@@ -13,9 +13,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tags;
 
-/// <summary>
-/// A tag is deleted only while no game wears it, by the count the tag is read with.
-/// </summary>
 public class TagDeletionShould : UnitTestBase
 {
     private readonly ITagManagementRepository repository;

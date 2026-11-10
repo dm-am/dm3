@@ -17,7 +17,7 @@ namespace DM.Domain.Community.Features.Icons;
 /// </summary>
 public static class GameIconCatalog
 {
-    /// <summary>Allowed icon names (kebab-case, exactly as the file).</summary>
+    // Allowed icon names (kebab-case, exactly as the file).
     private static readonly IReadOnlySet<string> Names = new HashSet<string>
     {
         "laurels",        // laurel wreath — summer literary contest / top tier

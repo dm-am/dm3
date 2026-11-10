@@ -10,10 +10,6 @@ using DbUsernameChangeRequest = DM.Infrastructure.Persistence.Entities.Account.U
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Expiring an unused approval keeps its explanation, whether or not a moderator
-/// left a comment of their own.
-/// </summary>
 /// <remarks>
 /// Approving takes no comment, so the column is normally null. How a null operand joins an ExecuteUpdate
 /// concatenation is the provider's decision, so a real database.
@@ -38,10 +34,8 @@ public class UsernameChangeExpiryShould : IntegrationTestBase
     public Task KeepTheReasonWhenTheApprovalCarriedNoComment() =>
         ExpireAndRead(null, comment => comment.Should().Be(Reason));
 
-    /// <summary>
-    /// An empty comment is the same case as a missing one, and must not produce a
-    /// text that opens with a separator.
-    /// </summary>
+    // An empty comment is the same case as a missing one, and must not produce a text that opens
+    // with a separator.
     [Fact]
     public Task KeepTheReasonWhenTheStoredCommentIsEmpty() =>
         ExpireAndRead(string.Empty, comment => comment.Should().Be(Reason));
@@ -55,9 +49,8 @@ public class UsernameChangeExpiryShould : IntegrationTestBase
         ExpireAndRead(ModeratorComment, comment =>
             comment.Should().Be(ModeratorComment + ResolutionComment.Separator + Reason));
 
-    /// <summary>
-    /// Expiry when no moderator opened the request leaves the token deadline empty: the reply reads it as "nobody looked".
-    /// </summary>
+    // Expiry when no moderator opened the request leaves the token deadline empty: the reply reads
+    // it as "nobody looked".
     [Fact]
     public async Task LeaveTheTokenDeadlineEmptyWhenNobodyReviewedTheRequest()
     {

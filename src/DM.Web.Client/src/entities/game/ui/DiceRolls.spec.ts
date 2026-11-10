@@ -3,8 +3,7 @@
  */
 
 /**
- * The rolls of a post stand on a grey strip in the old site's words since
- * 4 October 2026: the heading "Результаты бросков:", then one numbered line
+ * The rolls of a post stand on a grey strip in the old site's words: the heading "Результаты бросков:", then one numbered line
  * per roll; the words of a line are diceLine.spec.ts. Every roll there is
  * stands on the strip: the old site never folds the rolls of a post, however
  * many. Where the strip stands in a post is GamePost.spec.ts.

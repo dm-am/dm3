@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { FilterNavPath } from "@/shared/lib/composables/useFilterDropdown";
 import { DateRangePicker, FilterDropdownItem } from "@/shared/ui/Filters";
 import { useGamesFilter } from "../model";
+import type { GamesFilterKey } from "../model";
 import {
   GAME_DATE_RANGES,
   gameDateRange,
@@ -10,7 +11,7 @@ import {
   rangeOf,
 } from "../model/gameDateRanges";
 
-const navPath = defineModel<FilterNavPath | null>("navPath", {
+const navPath = defineModel<FilterNavPath<GamesFilterKey> | null>("navPath", {
   required: true,
 });
 

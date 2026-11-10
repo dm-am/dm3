@@ -6,9 +6,8 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Queries;
 
-/// <summary>
-/// The splicer inlines a stored rule into a projection lambda, recursively; every list projection rides on it.
-/// </summary>
+// The splicer inlines a stored rule into a projection lambda, recursively; every list projection
+// rides on it.
 public class ExpressionSplicerShould
 {
     private static readonly Expression<Func<int, int>> AddOne = x => x + 1;

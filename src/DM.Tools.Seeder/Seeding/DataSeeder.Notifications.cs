@@ -15,22 +15,16 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>The account whose list of notifications the seed fills.</summary>
     private const string NotifiedLogin = "TestUser";
 
-    /// <summary>
-    /// The spelling the store writes a payload in: the web defaults, so camelCase
-    /// keys, as NotificationRepository.MetadataOptions.
-    /// </summary>
+    // The spelling the store writes a payload in: the web defaults, so camelCase keys, as
+    // NotificationRepository.MetadataOptions.
     private static readonly JsonSerializerOptions NotificationMetadataOptions = new(JsonSerializerDefaults.Web)
     {
         DictionaryKeyPolicy = JsonNamingPolicy.CamelCase
     };
 
-    /// <summary>
-    /// What the seeded notifications are about, read out of the content seeded
-    /// above. A fact the fixture does not hold is null, and its row is not written.
-    /// </summary>
+    // A fact the fixture does not hold is null, and its row is not written.
     internal sealed record NotificationFacts(
         CommentFact? TopicComment,
         CharacterFact? AcceptedCharacter,
@@ -40,37 +34,22 @@ internal sealed partial class DataSeeder
         GameFact? NewGame,
         LikeFact? GameCommentLike);
 
-    /// <summary>A comment of somebody else in a topic the reader can open.</summary>
+    // A comment of somebody else in a topic the reader can open.
     internal sealed record CommentFact(Guid CommentId, Guid TopicId, string TopicTitle, string AuthorUsername);
 
-    /// <summary>A character of the reader, accepted into a game somebody else masters.</summary>
+    // A character of the reader, accepted into a game somebody else masters.
     internal sealed record CharacterFact(
         Guid CharacterId, string Name, Guid GameId, string GameTitle, string MasterUsername);
 
-    /// <summary>A game of somebody else the reader does not play in.</summary>
+    // A game of somebody else the reader does not play in.
     internal sealed record GameFact(Guid GameId, string Title, string MasterUsername);
 
-    /// <summary>A blog of somebody else.</summary>
     internal sealed record BlogFact(Guid BlogId, string Title, string AuthorUsername);
 
-    /// <summary>
-    /// A like on a comment of the reader: the topic or the game the comment stands
-    /// in, and who liked it.
-    /// </summary>
     internal sealed record LikeFact(Guid PlaceId, string PlaceTitle, string LikerUsername);
 
-    /// <summary>
-    /// One notification as it goes into the store: the event, the payload as the
-    /// column holds it, when it arrived and whether the reader has read it.
-    /// </summary>
     internal sealed record SeededNotification(EventType EventType, string Metadata, DateTimeOffset CreatedUtc, bool IsRead);
 
-    /// <summary>
-    /// Seeds the list of notifications of TestUser: four unread and three read
-    /// when the fixture holds every fact they are about, and below them the read
-    /// ones of the weeks before. Idempotent: skips when the reader already has
-    /// notifications.
-    /// </summary>
     /// <remarks>
     /// Each payload is the generator's, field for field, which SeededNotificationsShould holds.
     /// After all the content: drawn earlier, the identifiers would move everything drawn after them.
@@ -124,12 +103,6 @@ internal sealed partial class DataSeeder
             $"{notifications.Count(n => !n.IsRead)} of them unread");
     }
 
-    /// <summary>
-    /// The notifications of the reader, newest first, the unread on top as they
-    /// stand in a list nobody has opened for a day.
-    /// </summary>
-    /// <param name="facts">What the notifications are about</param>
-    /// <param name="now">The instant the seed is laid out around</param>
     internal static IReadOnlyList<SeededNotification> NotificationsAbout(NotificationFacts facts, DateTimeOffset now) =>
         Payloads(facts)
             .Where(payload => payload.Metadata != null)
@@ -140,10 +113,6 @@ internal sealed partial class DataSeeder
                 payload.IsRead))
             .ToList();
 
-    /// <summary>
-    /// The payload of every notification of the reader, null for a fact the
-    /// fixture does not hold, with how long ago it arrived and whether it was read.
-    /// </summary>
     /// <remarks>
     /// Written as the generator named beside each writes it: the API mapper reads the members by name.
     /// </remarks>
@@ -249,10 +218,6 @@ internal sealed partial class DataSeeder
         AuthorUsername = comment.AuthorUsername
     };
 
-    /// <summary>
-    /// Comments of somebody else in the topics the reader can open, the newest of each topic and
-    /// newest first, past the topic of the newest row: as many as <see cref="EarlierNotificationCount"/>.
-    /// </summary>
     private async Task<IReadOnlyList<CommentFact>> ReadEarlierTopicComments(Guid readerId, CommentFact? newest)
     {
         var recent = await _dbContext.Comments
@@ -273,10 +238,6 @@ internal sealed partial class DataSeeder
             .ToList();
     }
 
-    /// <summary>
-    /// What the notifications of the reader are about, each picked from the content seeded above,
-    /// newest first and ties broken by identifier.
-    /// </summary>
     /// <remarks>
     /// Only what the reader can open, live accounts only, and no game the reader plays in.
     /// </remarks>
@@ -318,10 +279,6 @@ internal sealed partial class DataSeeder
         return new NotificationFacts(topicComment, character, recruiting, blog, topicLike, newGame, gameLike);
     }
 
-    /// <summary>
-    /// The newest like on a comment of the reader in a topic, and the newest on one
-    /// in the discussion of a game.
-    /// </summary>
     private async Task<(LikeFact? Topic, LikeFact? Game)> ReadLikesOfReaderComments(Guid readerId)
     {
         var likes = _dbContext.Likes
@@ -348,18 +305,15 @@ internal sealed partial class DataSeeder
         return (topic, game);
     }
 
-    /// <summary>The newest of the given games, with the name of its master.</summary>
     private static Task<GameFact?> NewestGame(IQueryable<DbGame> games) => games
         .OrderByDescending(g => g.CreatedUtc)
         .ThenBy(g => g.GameId)
         .Select(g => new GameFact(g.GameId, g.Title, g.Master.Username))
         .FirstOrDefaultAsync();
 
-    /// <summary>Games open to every reader: active and past premoderation.</summary>
     private IQueryable<DbGame> ReadableGames() => _dbContext.Games
         .Where(g => g.Status == ModuleStatus.Active && g.PremoderationStatus == PremoderationStatus.Approved);
 
-    /// <summary>Readable games somebody else masters and the reader has no character in.</summary>
     private IQueryable<DbGame> OthersGames(Guid readerId) => ReadableGames()
         .Where(g => g.MasterId != readerId &&
                     !_dbContext.Characters.Any(c => c.GameId == g.GameId && c.AuthorId == readerId));

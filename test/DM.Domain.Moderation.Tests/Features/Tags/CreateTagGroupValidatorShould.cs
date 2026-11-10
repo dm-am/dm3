@@ -71,10 +71,7 @@ public class CreateTagGroupValidatorShould
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// A group with no number set limits nothing, and that is what an empty
-    /// field means. Zero would mean a group no game can take a tag from.
-    /// </summary>
+    // Zero would mean a group no game can take a tag from.
     [Fact]
     public void PassWhenMaxTagsPerGameIsAbsent()
     {

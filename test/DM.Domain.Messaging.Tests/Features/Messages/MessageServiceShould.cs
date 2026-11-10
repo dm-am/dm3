@@ -181,10 +181,6 @@ public class MessageServiceShould : UnitTestBase
         await eventProducer.DidNotReceive().SendAsync(EventType.NewGlobalChatMessage, Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// An empty chat of the given type, and a message entity the factory builds
-    /// and the repository stores under the same id.
-    /// </summary>
     private (Chat Chat, CreateMessageEntity Entity) ArrangeCreate(ChatType type)
     {
         var chat = new Chat { Id = Guid.NewGuid(), Type = type, Participants = [] };
@@ -196,12 +192,7 @@ public class MessageServiceShould : UnitTestBase
         return (chat, messageEntity);
     }
 
-    /// <summary>
-    /// A deleted message stops being counted.
-    /// </summary>
-    /// <remarks>
-    /// Addressed by the chat's counter identifier, which differs from its own for a game room chat.
-    /// </remarks>
+    // Addressed by the chat's counter identifier, which differs from its own for a game room chat.
     [Fact]
     public async Task TakeTheUnreadCounterDownWithTheDeletedMessage()
     {
@@ -235,13 +226,7 @@ public class MessageServiceShould : UnitTestBase
         intentionManager.Received(1).ThrowIfForbidden(MessageIntention.Delete, message);
     }
 
-    /// <summary>
-    /// A group chat of two is private correspondence, and the block on private
-    /// messages holds there.
-    /// </summary>
-    /// <remarks>
-    /// What makes a conversation private is the two people in it, not its type.
-    /// </remarks>
+    // What makes a conversation private is the two people in it, not its type.
     [Fact]
     public async Task RefuseAMessageToAGroupOfTwoWhoseOtherMemberBlockedTheSender()
     {
@@ -273,13 +258,8 @@ public class MessageServiceShould : UnitTestBase
                 Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A group with a third person in it is not private correspondence, and the
-    /// setting says nothing about it.
-    /// </summary>
-    /// <remarks>
-    /// The setting is about writing to one addressee, the door check in ChatService decides the rest.
-    /// </remarks>
+    // The setting is about writing to one addressee, the door check in ChatService decides the
+    // rest.
     [Fact]
     public async Task StillDeliverToAGroupOfThreeWhereOneMemberBlockedTheSender()
     {
@@ -311,7 +291,6 @@ public class MessageServiceShould : UnitTestBase
                 Arg.Any<CancellationToken>());
     }
 
-    /// <summary>The shape of a chat the field is asked about.</summary>
     public enum Shape
     {
         DirectOpen,
@@ -376,11 +355,6 @@ public class MessageServiceShould : UnitTestBase
         taken.Should().Be(offered, "the field is offered by the answer the message is taken by");
     }
 
-    /// <summary>
-    /// The intention comes first: a reader the chat refuses (not a participant,
-    /// a banned reader of the global chat) is offered no field, whatever the rest
-    /// of the rule would say.
-    /// </summary>
     [Fact]
     public async Task OfferNoFieldWhereTheIntentionRefuses()
     {
@@ -439,14 +413,12 @@ public class MessageServiceShould : UnitTestBase
         Participants = others.Prepend(currentUserId).Select(id => new GeneralUser { UserId = id }).ToArray()
     };
 
-    /// <summary>The user keeps the writer on his list with private messages blocked.</summary>
     private void BlocksTheWriter(Guid ownerId) =>
         userBlacklistChecker
             .GetBlockedUserIdsIfFlagEnabledAsync(
                 ownerId, UserBlacklistSettings.BlockDirectMessages, Arg.Any<CancellationToken>())
             .Returns(new HashSet<Guid> { currentUserId });
 
-    /// <summary>Whether CreateAsync takes a message in the chat or refuses it with 403.</summary>
     private async Task<bool> IsTakenAsync(Chat chat)
     {
         chatService.GetAsync(chat.Id).Returns(chat);

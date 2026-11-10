@@ -10,14 +10,8 @@ public interface IBlogInvitationService
 
     Task<BlogInvitation> InviteReader(Guid blogId, string username);
 
-    /// <summary>
-    /// Accept any invitation by token
-    /// </summary>
     Task AcceptInvitation(Guid tokenId);
 
-    /// <summary>
-    /// Reject any invitation by token
-    /// </summary>
     Task RejectInvitation(Guid tokenId);
 
     /// <summary>

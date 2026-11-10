@@ -9,10 +9,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// Whoever reaches the port reads the health report, so it never carries the message of an exception a
-/// check caught: drivers spell out host, port, database and user.
-/// </summary>
+// Whoever reaches the port reads the health report, so it never carries the message of an exception
+// a check caught: drivers spell out host, port, database and user.
 public class HealthReportWriterShould
 {
     private const string ConnectionDetails = "Host=dm-postgres;Port=5432;Database=dm3;Username=dm_app";

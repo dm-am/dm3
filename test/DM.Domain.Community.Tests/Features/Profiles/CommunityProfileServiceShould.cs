@@ -48,7 +48,6 @@ public class CommunityProfileServiceShould : UnitTestBase
             cache);
     }
 
-    /// <summary>The cache runs the factory it is handed, every time.</summary>
     private void PassThroughCache<T>() =>
         cache.GetOrCreateAsync(Arg.Any<object>(), Arg.Any<Func<Task<T>>>(), Arg.Any<TimeSpan>())
             .Returns(ci => ci.ArgAt<Func<Task<T>>>(1)());
@@ -99,9 +98,6 @@ public class CommunityProfileServiceShould : UnitTestBase
             CachePolicy.Medium);
     }
 
-    /// <summary>
-    /// The count and the page are filtered by one filter.
-    /// </summary>
     [Fact]
     public async Task FilterTheCountAndThePageByTheSameCriteria()
     {

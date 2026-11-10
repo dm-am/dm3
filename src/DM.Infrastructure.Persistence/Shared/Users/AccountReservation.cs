@@ -31,9 +31,6 @@ namespace DM.Infrastructure.Persistence.Shared.Users;
 /// </remarks>
 internal static class AccountReservation
 {
-    /// <summary>
-    /// The address is held by an account, deactivated accounts included
-    /// </summary>
     public static Task<bool> EmailTaken(
         DbSet<User> users,
         string email,

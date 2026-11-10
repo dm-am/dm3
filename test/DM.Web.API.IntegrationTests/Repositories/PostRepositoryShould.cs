@@ -12,19 +12,12 @@ using UpdatePostEntity = DM.Domain.Game.Features.Posts.UpdatePostEntity;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The page of a room and the writes of a post: the order a room is paged in,
-/// the addressee snapshot both writes store, and the rating every read carries.
-/// </summary>
 public class PostRepositoryShould : PostRepositoryTestBase
 {
     public PostRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// Posts written in one instant are spread across the pages, not repeated on them.
-    /// </summary>
     /// <remarks>
     /// A timestamp is not unique (the DM2 import writes rooms under one), so the order ends on the identifier, by the
     /// index (RoomId, CreatedUtc, PostId), as comments and messages do.
@@ -68,10 +61,7 @@ public class PostRepositoryShould : PostRepositoryTestBase
             "one order runs across both pages, and the identifier is what settles it");
     }
 
-    /// <summary>
-    /// The addressee snapshot has to reach its column and come back from it.
-    /// </summary>
-    /// <remarks>A gate on the write itself, on both paths that perform it.</remarks>
+    // A gate on the write itself, on both paths that perform it.
     [Fact]
     public async Task StoreThePrivateAddresseeSnapshotOnBothWritePaths()
     {
@@ -116,10 +106,8 @@ public class PostRepositoryShould : PostRepositoryTestBase
         afterEdit.Should().NotContainKey("Анна");
     }
 
-    /// <summary>
-    /// An edit stays in the history of the post, so "Отредактировано" under it
-    /// survives the next read; a save that changes nothing writes no line.
-    /// </summary>
+    // An edit stays in the history of the post, so "Отредактировано" under it survives the next
+    // read; a save that changes nothing writes no line.
     [Fact]
     public async Task KeepTheEditInTheHistoryOfThePost()
     {
@@ -200,7 +188,7 @@ public class PostRepositoryShould : PostRepositoryTestBase
         post.ReviewCount.Should().Be(4);
     }
 
-    /// <summary>The stored snapshot of a post, read past the change tracker.</summary>
+    // The stored snapshot of a post, read past the change tracker.
     private static Task<string> ReadSnapshotAsync(DmDbContext dbContext, Guid postId) =>
         dbContext.Posts
             .AsNoTracking()

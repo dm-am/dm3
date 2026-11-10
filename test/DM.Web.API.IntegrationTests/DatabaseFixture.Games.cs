@@ -112,10 +112,8 @@ public partial class DatabaseFixture
         });
     }
 
-    /// <summary>
-    /// One post with a positive review in TestGame's main room, so the rated listing has a row whose GameRef shape
-    /// the tests assert.
-    /// </summary>
+    // One post with a positive review in TestGame's main room, so the rated listing has a row whose
+    // GameRef shape the tests assert.
     private static void SeedGamePosts(DmDbContext db)
     {
         if (db.Set<Post>().Any(p => p.PostId == TestConstants.TestGamePostId)) return;
@@ -147,9 +145,7 @@ public partial class DatabaseFixture
         });
     }
 
-    /// <summary>
-    /// Two active player characters in TestGame, so the tooltips' participants have data.
-    /// </summary>
+    // Two active player characters in TestGame, so the tooltips' participants have data.
     private static void SeedCharacters(DmDbContext db)
     {
         if (db.Set<Character>().Any(c => c.CharacterId == TestConstants.TestCharacterId)) return;

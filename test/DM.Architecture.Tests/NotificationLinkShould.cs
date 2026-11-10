@@ -24,18 +24,14 @@ namespace DM.Architecture.Tests;
 public class NotificationLinkShould
 {
 
-    /// <summary>The generators, one file each, named after the type in it.</summary>
     private const string NotifiersDirectory =
         "src/DM.Workers.NotificationDispatcher/Notifiers";
 
-    /// <summary>The notification a generator hands back.</summary>
     private const string EmissionStart = "new CreateNotification";
 
-    /// <summary>The event a generator renames its notification to.</summary>
     private static readonly Regex RenamesTheEvent = new(
         @"^\s*EventType\s*=\s*EventType\.(\w+)", RegexOptions.Compiled);
 
-    /// <summary>The member of the notification that carries the payload.</summary>
     private static readonly Regex WritesThePayload = new(
         @"^\s*Metadata\s*=\s*new\b", RegexOptions.Compiled);
 
@@ -87,9 +83,6 @@ public class NotificationLinkShould
             "stopped halfway or a name that drifted, and nobody is ever sent there");
     }
 
-    /// <summary>
-    /// The field the table reads to build a link, by the event it reads it for.
-    /// </summary>
     private static IReadOnlyDictionary<string, string> FieldsTheTableFollows()
     {
         var followed = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -105,10 +98,6 @@ public class NotificationLinkShould
         return followed;
     }
 
-    /// <summary>
-    /// Every notification the generators hand back: what it carries and what it
-    /// is called by the time it leaves.
-    /// </summary>
     private static IReadOnlyCollection<Emission> Emissions()
     {
         var emissions = new List<Emission>();
@@ -149,7 +138,6 @@ public class NotificationLinkShould
         return emissions;
     }
 
-    /// <summary>The fields of one payload, by the name the generator writes them under.</summary>
     private static IReadOnlyCollection<string> PayloadKeys(Type generator, IEnumerable<string> members)
     {
         var payload = members.SingleOrDefault(member => WritesThePayload.IsMatch(member));
@@ -166,7 +154,6 @@ public class NotificationLinkShould
             .ToArray();
     }
 
-    /// <summary>The file the generator is written in, found by the name of the type.</summary>
     private static string SourceOf(Type generator)
     {
         var files = GeneratorSources
@@ -180,7 +167,6 @@ public class NotificationLinkShould
         return files[0];
     }
 
-    /// <summary>One notification a generator hands back.</summary>
     private sealed record Emission(
         string Generator,
         IReadOnlyCollection<string> Events,

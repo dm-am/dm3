@@ -17,10 +17,6 @@ import ProfileStats from "./ProfileStats.vue";
 import ProfileUsername from "./ProfileUsername.vue";
 import { button, dismissToasts, ok, render } from "./ProfilePage.fixtures";
 
-vi.mock("vue-router", async (importOriginal) =>
-  (await import("./ProfilePage.doubles")).vueRouter(importOriginal),
-);
-
 beforeEach(dismissToasts);
 afterEach(() => vi.restoreAllMocks());
 
@@ -73,6 +69,24 @@ describe("ProfilePage edit mode, opened", () => {
     expect(update).toHaveBeenCalledWith({
       visibility: { showBirthday: false, showRating: false },
     });
+  });
+
+  it("saves the contacts the editor hands over as they are", async () => {
+    const update = vi
+      .spyOn(personalApi, "updateMyProfile")
+      .mockResolvedValue(ok({}));
+    const wrapper = await render({ own: true, ownProfile: OWN });
+    await edit(wrapper);
+    const contacts = [{ contactType: "Telegram", value: "@reader" }];
+
+    wrapper
+      .getComponent(ProfilePersonalInfo)
+      .vm.$emit("updateContacts", contacts);
+    await flushPromises();
+    await button(wrapper, "Сохранить").trigger("click");
+    await flushPromises();
+
+    expect(update).toHaveBeenCalledWith({ contacts });
   });
 
   it("asks whether a change of name waits only when the edit mode opens", async () => {

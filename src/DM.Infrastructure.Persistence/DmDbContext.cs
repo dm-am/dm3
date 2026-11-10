@@ -85,7 +85,6 @@ public class DmDbContext : DbContext
         PersonalModel.Configure(modelBuilder, isPostgres);
         SharedModel.Configure(modelBuilder);
 
-        // Global Query Filter: automatically exclude soft-deleted entities.
         // UnreadCounters opts out on purpose: its write path has to see tombstone
         // rows, because an upsert over one revives the marker for a re-added
         // participant, so each of its reads owns its IsRemoved predicate
@@ -279,9 +278,6 @@ public class DmDbContext : DbContext
 
     public DbSet<CharacterAttribute> CharacterAttributes { get; set; }
 
-    /// <summary>
-    /// Game rooms
-    /// </summary>
     public DbSet<Room> Rooms { get; set; }
 
     /// <summary>
@@ -375,9 +371,6 @@ public class DmDbContext : DbContext
 
     #region Notepads
 
-    /// <summary>
-    /// Notepad entries
-    /// </summary>
     public DbSet<NotepadEntry> NotepadEntries { get; set; }
 
     #endregion

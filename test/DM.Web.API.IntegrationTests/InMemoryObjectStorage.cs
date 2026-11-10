@@ -3,9 +3,6 @@ using DM.Domain.Core.Uploads;
 
 namespace DM.Web.API.IntegrationTests;
 
-/// <summary>
-/// The object store, as a dictionary.
-/// </summary>
 /// <remarks>
 /// Nothing here asserts S3's behaviour, only who reaches bytes that exist. Static: the host is shared across the
 /// collection.
@@ -14,11 +11,9 @@ public sealed class InMemoryObjectStorage : IObjectStorage
 {
     private static readonly ConcurrentDictionary<string, (byte[] Content, string ContentType)> Objects = new();
 
-    /// <summary>Put bytes under a key without going through an upload.</summary>
     public static void Seed(string key, byte[] content, string contentType) =>
         Objects[key] = (content, contentType);
 
-    /// <summary>Whether the store still holds the key.</summary>
     public static bool Holds(string key) => Objects.ContainsKey(key);
 
     /// <inheritdoc />

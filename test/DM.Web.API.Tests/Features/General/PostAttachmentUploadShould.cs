@@ -16,15 +16,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// The rules a post attachment answers to that an avatar does not: its own size
-/// ceiling, a limit on how many one post carries, and a removal right the file's
-/// own ownership rule does not reach.
-/// </summary>
-/// <remarks>
-/// Both limits are asserted with the pipeline and the bucket untouched: the orphan sweeper walks rows, and a
-/// refused request writes none.
-/// </remarks>
+// Both limits are asserted with the pipeline and the bucket untouched: the orphan sweeper walks
+// rows, and a refused request writes none.
 public class PostAttachmentUploadShould : UnitTestBase
 {
     private readonly Guid _userId = Guid.NewGuid();
@@ -61,10 +54,7 @@ public class PostAttachmentUploadShould : UnitTestBase
         VerifyNothingWasProcessedOrStored();
     }
 
-    /// <summary>
-    /// The same file as an avatar, where the ceiling is the request one. The
-    /// limit belongs to the type, not to the endpoint.
-    /// </summary>
+    // The limit belongs to the type, not to the endpoint.
     [Fact]
     public async Task StillAcceptTheSameSizeAsAnAvatar()
     {
@@ -99,10 +89,8 @@ public class PostAttachmentUploadShould : UnitTestBase
         await act.Should().NotThrowAsync();
     }
 
-    /// <summary>
-    /// The count is a question about one post, so it is never asked about a type
-    /// that has no such limit.
-    /// </summary>
+    // The count is a question about one post, so it is never asked about a type that has no such
+    // limit.
     [Fact]
     public async Task NotCountAnythingForAnAvatar()
     {
@@ -113,10 +101,8 @@ public class PostAttachmentUploadShould : UnitTestBase
         await _repository.DidNotReceive().CountPostAttachmentsAsync(Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// The object lands under the prefix of its type and nothing before it: the
-    /// bucket policy grants anonymous reads by that prefix.
-    /// </summary>
+    // The object lands under the prefix of its type and nothing before it: the bucket policy grants
+    // anonymous reads by that prefix.
     [Fact]
     public async Task StoreTheFileUnderThePrefixOfItsType()
     {
@@ -130,11 +116,7 @@ public class PostAttachmentUploadShould : UnitTestBase
             Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// No public address for a prefix the bucket answers to nobody, and the
-    /// content endpoint in its place.
-    /// </summary>
-    /// <remarks>A URL here would be a link that answers 403.</remarks>
+    // A URL here would be a link that answers 403.
     [Fact]
     public async Task AnswerWithNoPublicUrlAndWithTheContentEndpoint()
     {
@@ -147,11 +129,8 @@ public class PostAttachmentUploadShould : UnitTestBase
         _objectStorage.DidNotReceive().BuildPublicUrl(Arg.Any<string>());
     }
 
-    /// <summary>
-    /// The master of a game did not upload the file and is not a site moderator,
-    /// so the upload's own delete rule refuses them. The post they may edit is
-    /// what grants it.
-    /// </summary>
+    // The master of a game did not upload the file and is not a site moderator, so the upload's own
+    // delete rule refuses them.
     [Fact]
     public async Task LetAnEditorOfThePostRemoveTheFileTheyDoNotOwn()
     {
@@ -187,10 +166,8 @@ public class PostAttachmentUploadShould : UnitTestBase
         await _repository.DidNotReceive().SoftDeleteAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<DateTimeOffset>());
     }
 
-    /// <summary>
-    /// The owner and Moderator+ keep the right they already had, and the entity's
-    /// rule is not even consulted for them.
-    /// </summary>
+    // The owner and Moderator+ keep the right they already had, and the entity's rule is not even
+    // consulted for them.
     [Fact]
     public async Task LetTheOwnerRemoveTheirOwnFileWithoutAskingThePost()
     {

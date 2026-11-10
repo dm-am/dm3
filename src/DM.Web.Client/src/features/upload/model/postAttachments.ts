@@ -129,12 +129,7 @@ export function reserveAttachmentImageBoxes(
 ): string {
   if (!html || !attachments?.length) return html;
 
-  const sizes = new Map<string, { width: number; height: number }>();
-  for (const attachment of attachments) {
-    const box = attachmentImageBox(attachment);
-    if (!box) continue;
-    sizes.set(attachment.id.toLowerCase(), box);
-  }
+  const sizes = attachmentImageBoxes(attachments);
   if (!sizes.size) return html;
 
   // A detached <template>: the live DOM is never touched.
@@ -156,6 +151,19 @@ export function reserveAttachmentImageBoxes(
   }
 
   return changed ? template.innerHTML : html;
+}
+
+// Keyed by the lowercased id, the form a content URL is matched in.
+function attachmentImageBoxes(
+  attachments: readonly PostAttachment[],
+): Map<string, { width: number; height: number }> {
+  const sizes = new Map<string, { width: number; height: number }>();
+  for (const attachment of attachments) {
+    const box = attachmentImageBox(attachment);
+    if (!box) continue;
+    sizes.set(attachment.id.toLowerCase(), box);
+  }
+  return sizes;
 }
 
 function widthCap(size: { width: number; height: number }): string {

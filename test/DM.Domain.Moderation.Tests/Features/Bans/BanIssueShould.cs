@@ -15,10 +15,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Bans;
 
-/// <summary>
-/// The issue of a ban by a senior moderator or by the user himself: its term,
-/// its kind and its announcement.
-/// </summary>
 public class BanIssueShould : BanServiceTestBase
 {
     [Fact]
@@ -142,9 +138,6 @@ public class BanIssueShould : BanServiceTestBase
         await eventProducer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// The scope is written as asked, and an unset one falls to the DTO default.
-    /// </summary>
     [Theory]
     [InlineData(AccessPolicy.DemocraticBan, AccessPolicy.DemocraticBan)]
     [InlineData(null, AccessPolicy.FullBan)]
@@ -169,10 +162,8 @@ public class BanIssueShould : BanServiceTestBase
         capturedEntity!.AccessRestrictionPolicy.Should().Be(written);
     }
 
-    /// <summary>
-    /// A scope that is neither of the two would be a ban that forbids nothing, and the
-    /// validator is what refuses it; its other bounds are CreateBanValidatorShould's.
-    /// </summary>
+    // A scope that is neither of the two would be a ban that forbids nothing, and the validator is
+    // what refuses it; its other bounds are CreateBanValidatorShould's.
     [Fact]
     public async Task ValidateTheBanBeforeIssuingIt()
     {

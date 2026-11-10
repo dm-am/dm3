@@ -9,20 +9,15 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A parameter written as a table row lives in one document.
-/// </summary>
-/// <remarks>A row of parameters gets changed in one copy and read from the other. Heading rows are left alone.</remarks>
+// A row of parameters gets changed in one copy and read from the other.
 public class DocumentedTablesShould
 {
-    /// <summary>The line that stands under the heading of a table.</summary>
     private static readonly Regex Separator = new(@"^\|[\s:|-]+\|$", RegexOptions.Compiled);
 
 
     private static bool IsRow(string line) =>
         line.StartsWith('|') && line.EndsWith('|') && !Separator.IsMatch(line);
 
-    /// <summary>The heading of a table: the separator is the line under it.</summary>
     private static bool IsHeading(IReadOnlyList<string> lines, int index) =>
         index + 1 < lines.Count && Separator.IsMatch(lines[index + 1]);
 

@@ -17,7 +17,6 @@ namespace DM.Web.API.Tests.Shared;
 /// </remarks>
 public class PubliclyCacheableActionsShould
 {
-    /// <summary>The same rows for an anonymous caller and for a moderator.</summary>
     private static readonly string[] Catalogues =
     [
         "AchievementController.GetAchievementCategories",
@@ -27,9 +26,6 @@ public class PubliclyCacheableActionsShould
         "GameController.GetTags",
     ];
 
-    /// <summary>
-    /// Every controller action with the cache policy in force for it, the action's own winning as in MVC.
-    /// </summary>
     private static (string Name, ResponseCacheAttribute? Policy)[] Actions() => ApiSurface.RoutedActions()
         .Select(m => (
             Name: ApiSurface.Named(m),
@@ -37,7 +33,7 @@ public class PubliclyCacheableActionsShould
                     ?? m.DeclaringType!.GetCustomAttribute<ResponseCacheAttribute>()))
         .ToArray();
 
-    /// <summary>Location Any is the one value that puts "public" on the wire.</summary>
+    // Location Any is the one value that puts "public" on the wire.
     private static bool StoredByASharedCache(ResponseCacheAttribute? policy) =>
         policy is { NoStore: false, Location: ResponseCacheLocation.Any };
 
@@ -58,10 +54,8 @@ public class PubliclyCacheableActionsShould
             "field makes the first caller's answer everyone's, see the class remarks");
     }
 
-    /// <summary>
-    /// And nothing caches privately either.
-    /// </summary>
-    /// <remarks>Location.Client keeps a badge in the browser past the request that clears it; an impersonal response belongs above.</remarks>
+    // Location.Client keeps a badge in the browser past the request that clears it; an impersonal
+    // response belongs above.
     [Fact]
     public void NotCacheInTheBrowserEither()
     {

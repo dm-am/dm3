@@ -68,11 +68,9 @@ public class ReverseProxySupportShould
         context.GetClientAddress().Should().Be(ProxyAddress);
     }
 
-    /// <summary>
-    /// The session cookie is marked Secure exactly when the request is https, and
-    /// behind nginx this header is the only thing that says so: dropped from the
-    /// flags, a stand on TLS looks like plain http to the API.
-    /// </summary>
+    // The session cookie is marked Secure exactly when the request is https, and behind nginx this
+    // header is the only thing that says so: dropped from the flags, a stand on TLS looks like
+    // plain http to the API.
     [Fact]
     public async Task TakeForwardedSchemeAppendedByTrustedProxy()
     {
@@ -107,14 +105,8 @@ public class ReverseProxySupportShould
 
     private const string PointOfPresenceAddress = "198.51.100.4";
 
-    /// <summary>
-    /// A second edge in front of the first is a second hop, and both halves of that
-    /// have to be written down.
-    /// </summary>
-    /// <remarks>
-    /// Behind two proxies the visitor is two entries from the end; the trusted entry is that second edge's
-    /// address, not a range.
-    /// </remarks>
+    // Behind two proxies the visitor is two entries from the end; the trusted entry is that second
+    // edge's address, not a range.
     [Fact]
     public async Task ReadThroughEveryEdgeThatWasDeclared()
     {

@@ -10,9 +10,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Switching the factor on and issuing its recovery set is one change or none.
-/// </summary>
 /// <remarks>
 /// The recovery set exists only in the reply to the confirmation, so the stamp and the set are one transaction.
 /// Against the real database: only the rows show a rollback.
@@ -43,10 +40,7 @@ public class TwoFactorConfirmationShould : IntegrationTestBase
             .Should().Be(10);
     }
 
-    /// <summary>
-    /// A failure part-way through leaves the factor off, not on and empty-handed.
-    /// </summary>
-    /// <remarks>The set is poisoned with a row the column refuses, after the stamp is written.</remarks>
+    // The set is poisoned with a row the column refuses, after the stamp is written.
     [Fact]
     public async Task LeaveTheFactorOffWhenTheSetCannotBeStored()
     {
@@ -90,10 +84,8 @@ public class TwoFactorConfirmationShould : IntegrationTestBase
     private static List<byte[]> Hashes(int count) =>
         Enumerable.Range(0, count).Select(_ => RandomNumberGenerator.GetBytes(32)).ToList();
 
-    /// <summary>
-    /// An account with a secret issued and not yet confirmed, and the moment it
-    /// was issued at - which the confirmation has to name to be accepted.
-    /// </summary>
+    // An account with a secret issued and not yet confirmed, and the moment it was issued at -
+    // which the confirmation has to name to be accepted.
     private static async Task<(Guid UserId, DateTimeOffset CreatedUtc)> SeedUnconfirmedFactor(
         IServiceScope scope)
     {

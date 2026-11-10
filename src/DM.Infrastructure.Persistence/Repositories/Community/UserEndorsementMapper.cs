@@ -7,15 +7,8 @@ using DbUserEndorsement = DM.Infrastructure.Persistence.Entities.Community.UserE
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 
-/// <summary>
-/// Projection formula for user endorsements: both sides of the endorsement
-/// render through the shared <see cref="GeneralUserProjections"/> formula.
-/// </summary>
 internal static class UserEndorsementMapper
 {
-    /// <summary>
-    /// EF projection to the domain DTO
-    /// </summary>
     public static IQueryable<UserEndorsement> ProjectToUserEndorsement(
         this IQueryable<DbUserEndorsement> query) =>
         query.Select(ExpressionSplicer.Expand<Func<DbUserEndorsement, UserEndorsement>>(

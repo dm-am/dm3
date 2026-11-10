@@ -6,10 +6,6 @@ using System.Text.RegularExpressions;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The documents a person writes, read the way the rules for their text read them:
-/// by line, with each line knowing whether it is prose or a block of code.
-/// </summary>
 /// <remarks>
 /// Every markdown file a commit carries, less docs/STATUS.md (a script's output) and an audit report at
 /// the root. A register is held to the tree from both ends and only shrinks, as SizeRatchetShould's.
@@ -21,15 +17,12 @@ internal static class HandwrittenDocuments
 
     private const string AuditReport = "AUDIT-";
 
-    /// <summary>A fence that opens or closes a block of code, with the language it names.</summary>
     private static readonly Regex Fence = new(@"^\s*(?:```|~~~)\s*(?<language>[\w#+-]*)", RegexOptions.Compiled);
 
-    /// <summary>A code span: one or more backticks, the text, the same number of backticks.</summary>
     private static readonly Regex CodeSpan = new(@"(`+)[^`\n]*?\1", RegexOptions.Compiled);
 
     private static readonly Lazy<IReadOnlyList<Document>> Read = new(ReadAll);
 
-    /// <summary>A document, by its path from the root, with its lines.</summary>
     internal sealed record Document(string Path, string FullPath, IReadOnlyList<DocumentLine> Lines);
 
     /// <summary>
@@ -44,7 +37,6 @@ internal static class HandwrittenDocuments
 
     public static IReadOnlyList<Document> All() => Read.Value;
 
-    /// <summary>The text of a line with its code spans cut out.</summary>
     public static string WithoutCodeSpans(string line) => CodeSpan.Replace(line, " ");
 
     /// <summary>Path from the repository root, forward slashes.</summary>
@@ -55,9 +47,7 @@ internal static class HandwrittenDocuments
     /// One line per key on which a register and the tree disagree, the register
     /// held to equality from both ends.
     /// </summary>
-    /// <param name="recorded">The register, by key.</param>
     /// <param name="measured">What the tree holds, by key; zero counts left out.</param>
-    /// <param name="entryFor">The register entry that records a key at its measure.</param>
     public static List<string> Disagreements(
         IReadOnlyDictionary<string, int> recorded,
         IReadOnlyDictionary<string, int> measured,
@@ -94,7 +84,6 @@ internal static class HandwrittenDocuments
         .Select(file => new Document(file.Path, file.FullPath, Lines(File.ReadAllText(file.FullPath))))
         .ToList();
 
-    /// <summary>The lines of a text, each with the block of code it stands in, if any.</summary>
     internal static IReadOnlyList<DocumentLine> Lines(string text)
     {
         var lines = new List<DocumentLine>();

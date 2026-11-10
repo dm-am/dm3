@@ -41,7 +41,7 @@ public static class PermissionFilter
         return IsPrivateVisible(tagNode, ctx);
     }
 
-    /// <summary>Whether the address an [img] or a [link] holds names a file the viewer does not read.</summary>
+    // Whether the address an [img] or a [link] holds names a file the viewer does not read.
     private static bool NamesWithheldUpload(TagNode node, RenderContext ctx) =>
         (ctx.WithholdsEveryUpload || ctx.WithheldUploadIds.Count > 0) &&
         node.Children.OfType<TextNode>().Any(text => ctx.WithholdsEveryUpload
@@ -73,17 +73,13 @@ public static class PermissionFilter
             ctx.RoomViewPrivateText);
     }
 
-    /// <summary>
-    /// The attribute value the tag templates substitute, per audience: the
-    /// recipients on a page, the attribute as written elsewhere.
-    /// </summary>
+    // The attribute value the tag templates substitute, per audience: the recipients on a page, the
+    // attribute as written elsewhere.
     private static string Transform(Node node, string rendered, RenderContext ctx) =>
         ctx.Audience == RenderAudience.Display ? Recipients(node, rendered, ctx) : rendered;
 
-    /// <summary>
-    /// The recipients of a [private] block for its tooltip: the frozen addressees,
-    /// which survive a rename, else the text of the tag.
-    /// </summary>
+    // The recipients of a [private] block for its tooltip: the frozen addressees, which survive a
+    // rename, else the text of the tag.
     private static string Recipients(Node node, string rendered, RenderContext ctx)
     {
         if (node is not TagNode { Tag.Hides: true } tagNode || tagNode.IsBroken) return rendered;

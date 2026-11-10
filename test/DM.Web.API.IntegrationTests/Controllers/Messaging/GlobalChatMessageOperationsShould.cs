@@ -7,14 +7,7 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 
-/// <summary>
-/// A single reply of the global chat is read, edited, liked and deleted through
-/// the routes of the global chat itself.
-/// </summary>
-/// <remarks>
-/// The global chat has no participants, so the private-correspondence routes refuse everybody. Over HTTP: the
-/// refusal lived in a query predicate.
-/// </remarks>
+// The global chat has no participants, so the private-correspondence routes refuse everybody.
 public class GlobalChatMessageOperationsShould : IntegrationTestBase
 {
     public GlobalChatMessageOperationsShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -25,7 +18,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
     private static GeneralUser Reader => CustomWebApplicationFactory.CreateSecondUser();
     private static GeneralUser Moderator => CustomWebApplicationFactory.CreateModeratorUser();
 
-    /// <summary>Sends a line to the global chat and returns its identifier.</summary>
     private async Task<Guid> Say(GeneralUser author, string text)
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Post, "/v1/global-chat/messages", author);
@@ -45,14 +37,12 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         return document.RootElement.GetProperty("resource").GetProperty("text").GetString()!;
     }
 
-    /// <summary>Names on the likes of the single reply an answer carries.</summary>
     private static async Task<string[]> LikersOf(HttpResponseMessage response)
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return Names(document.RootElement.GetProperty("resource"));
     }
 
-    /// <summary>Names on the likes of one reply of a listed page.</summary>
     private static async Task<string[]> LikersOfListed(HttpResponseMessage response, Guid messageId)
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -85,10 +75,7 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         (await TextOf(response)).Should().Contain("Одна реплика глобального чата");
     }
 
-    /// <summary>
-    /// Reading the global chat needs no account, and one line of it is part of
-    /// the same page.
-    /// </summary>
+    // Reading the global chat needs no account, and one line of it is part of the same page.
     [Fact]
     public async Task ReadOneReplyWithoutAnAccount()
     {
@@ -99,12 +86,7 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// The author asks for their own line the way the editor opens it: with the
-    /// audience header that returns the BBCode as typed instead of the display
-    /// render.
-    /// </summary>
-    /// <remarks>Authored by a moderator, whose [mod] stays.</remarks>
+    // Authored by a moderator, whose [mod] stays.
     [Fact]
     public async Task HandTheAuthorTheSourceOfTheirOwnReply()
     {
@@ -125,10 +107,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
             "the source is the author's own view, and reading it is the ordinary render");
     }
 
-    /// <summary>
-    /// Moderation edits somebody else's line, and gets it for editing as it was
-    /// typed; a reader without the right gets the render.
-    /// </summary>
     [Fact]
     public async Task HandAModeratorTheSourceOfSomebodyElsesReply()
     {
@@ -159,9 +137,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         (await TextOf(response)).Should().Contain("Вторая редакция");
     }
 
-    /// <summary>
-    /// A second like of the same line is refused as a duplicate.
-    /// </summary>
     [Fact]
     public async Task LetAReaderLikeSomebodyElsesReply()
     {
@@ -177,10 +152,8 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         again.StatusCode.Should().Be(HttpStatusCode.Conflict, "the like landed and is still there");
     }
 
-    /// <summary>
-    /// Taking back a like that was never left is refused, so the 204 below is
-    /// itself the proof that the like was there to take back.
-    /// </summary>
+    // Taking back a like that was never left is refused, so the 204 below is itself the proof that
+    // the like was there to take back.
     [Fact]
     public async Task LetAReaderTakeTheirLikeBack()
     {
@@ -199,11 +172,7 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         again.StatusCode.Should().Be(HttpStatusCode.Conflict, "there is nothing left to take back");
     }
 
-    /// <summary>
-    /// The answer to the like carries the line it was left on, and that line
-    /// carries the like.
-    /// </summary>
-    /// <remarks>The client replaces its message with the one the answer brings.</remarks>
+    // The client replaces its message with the one the answer brings.
     [Fact]
     public async Task HandBackTheReplyCarryingTheLikeJustLeft()
     {
@@ -217,9 +186,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
             "the answer replaces the message on the page, and the like has to be on it");
     }
 
-    /// <summary>
-    /// A like left earlier is on the line when the page is read again.
-    /// </summary>
     [Fact]
     public async Task ShowAStandingLikeOnTheListedReply()
     {
@@ -234,9 +200,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         (await LikersOfListed(listing, messageId)).Should().Contain(Reader.Username);
     }
 
-    /// <summary>
-    /// And on the single read of that same line.
-    /// </summary>
     [Fact]
     public async Task ShowAStandingLikeOnTheReplyReadOnItsOwn()
     {
@@ -265,9 +228,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         (await LikersOf(response)).Should().BeEmpty();
     }
 
-    /// <summary>
-    /// Nobody likes their own line, on the global chat as anywhere else.
-    /// </summary>
     [Fact]
     public async Task RefuseTheAuthorTheLikeOfTheirOwnReply()
     {
@@ -295,9 +255,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
             "a deleted line is gone from the read, the way it is in a private chat");
     }
 
-    /// <summary>
-    /// Somebody else's line is not an ordinary reader's to rewrite: <c>MessageIntention.Edit</c>.
-    /// </summary>
     [Fact]
     public async Task RefuseAnOrdinaryReaderTheEditOfSomebodyElsesReply()
     {
@@ -322,9 +279,8 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// Moderation deletes somebody else's line: <c>MessageIntentionResolver.CanEditOrDelete</c> lets Moderator and above through.
-    /// </summary>
+    // Moderation deletes somebody else's line: MessageIntentionResolver.CanEditOrDelete lets
+    // Moderator and above through.
     [Fact]
     public async Task LetModerationDeleteSomebodyElsesReply()
     {
@@ -349,10 +305,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// And the global chat routes accept nothing but global chat lines: a private
-    /// message addressed through them is not found, whoever asks.
-    /// </summary>
     [Fact]
     public async Task RefuseAPrivateMessageOnTheGlobalChatRoute()
     {

@@ -2,18 +2,19 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
-import { createPinia, setActivePinia } from "pinia";
 import { accountApi } from "@/entities/user";
 import { Api } from "@/shared/api";
 import AccessRecoveryForm from "./AccessRecoveryForm.vue";
-import { push, toast } from "./authForms.doubles";
-import { AuthDialogStub, expectWaitRunsDown } from "./authForms.fixtures";
+import { toast } from "./authForms.doubles";
+import {
+  address,
+  AuthDialogStub,
+  expectWaitRunsDown,
+  mountAuthForm,
+} from "./authForms.fixtures";
 
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
-);
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
 );
@@ -22,16 +23,13 @@ enableAutoUnmount(afterEach);
 
 // Attached to the document, because focus is only observable there.
 const mountForm = (prefillEmail?: string) =>
-  mount(AccessRecoveryForm, {
+  mountAuthForm(AccessRecoveryForm, {
     props: prefillEmail === undefined ? {} : { prefillEmail },
     attachTo: document.body,
-    global: {
-      plugins: [createPinia()],
-      stubs: { AuthDialog: AuthDialogStub },
-    },
+    stubs: { AuthDialog: AuthDialogStub },
   });
 
-type Wrapper = ReturnType<typeof mountForm>;
+type Wrapper = Awaited<ReturnType<typeof mountForm>>;
 
 const control = (wrapper: Wrapper, caption: string) =>
   wrapper.findAll("button").find((button) => button.text() === caption);
@@ -57,13 +55,11 @@ async function submit(wrapper: Wrapper, email = "reader@dm.am") {
 
 describe("the recovery request", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     vi.restoreAllMocks();
-    push.mockClear();
   });
 
-  it("asks for one address and names what the button will do", () => {
-    const wrapper = mountForm();
+  it("asks for one address and names what the button will do", async () => {
+    const wrapper = await mountForm();
 
     expect(wrapper.text()).toContain("Восстановление доступа");
     expect(wrapper.find("#recovery-email").exists()).toBe(true);
@@ -72,7 +68,7 @@ describe("the recovery request", () => {
 
   it("opens the button on anything typed and names the format on the press", async () => {
     const send = answered("PasswordResetSent");
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     const button = () => wrapper.find("button[type='submit']");
 
     expect(button().attributes("disabled")).toBeDefined();
@@ -92,7 +88,7 @@ describe("the recovery request", () => {
 
   describe("the open dialog", () => {
     it("puts the caret in the field", async () => {
-      const wrapper = mountForm();
+      const wrapper = await mountForm();
       await flushPromises();
 
       expect(document.activeElement).toBe(
@@ -101,7 +97,7 @@ describe("the recovery request", () => {
     });
 
     it("keeps the caret there when the address was handed over", async () => {
-      const wrapper = mountForm("lex@dm.am");
+      const wrapper = await mountForm("lex@dm.am");
       await flushPromises();
 
       const field = wrapper.find("#recovery-email").element as HTMLInputElement;
@@ -112,20 +108,22 @@ describe("the recovery request", () => {
 
   describe("no access to the mailbox either", () => {
     it("closes the dialog and opens support on the recovery category", async () => {
-      const wrapper = mountForm();
+      const wrapper = await mountForm();
 
       await control(wrapper, "Нет доступа к почте?")?.trigger("click");
       await flushPromises();
 
-      expect(wrapper.emitted("cancel")).toHaveLength(1);
-      expect(push).toHaveBeenCalledWith("/support?subtype=AccessRecovery");
+      expect(
+        wrapper.findComponent(AccessRecoveryForm).emitted("cancel"),
+      ).toHaveLength(1);
+      expect(address()).toBe("/support?subtype=AccessRecovery");
     });
   });
 
   describe("the three answers", () => {
     it("names the reset letter it sent", async () => {
       answered("PasswordResetSent");
-      const wrapper = await submit(mountForm());
+      const wrapper = await submit(await mountForm());
 
       expect(wrapper.text()).toContain("Проверьте почту");
       expect(wrapper.text()).toContain("со ссылкой для сброса пароля");
@@ -133,7 +131,7 @@ describe("the recovery request", () => {
 
     it("names the activation letter instead when that is what went out", async () => {
       answered("ActivationResent");
-      const wrapper = await submit(mountForm());
+      const wrapper = await submit(await mountForm());
 
       expect(wrapper.text()).toContain("со ссылкой для активации");
     });
@@ -141,27 +139,27 @@ describe("the recovery request", () => {
     // Hours other than the default: the receipt says what the answer named.
     it("gives each letter the lifetime its answer names", async () => {
       answered("PasswordResetSent", 21);
-      const reset = await submit(mountForm());
+      const reset = await submit(await mountForm());
       expect(reset.text()).toContain("Ссылка действительна 21 час");
 
       answered("ActivationResent", 30);
-      const activation = await submit(mountForm());
+      const activation = await submit(await mountForm());
       expect(activation.text()).toContain("Ссылка действительна 30 часов");
     });
 
     it("leaves no button on either receipt", async () => {
       answered("PasswordResetSent");
-      const reset = await submit(mountForm());
+      const reset = await submit(await mountForm());
       expect(reset.findAll("button")).toHaveLength(0);
 
       answered("ActivationResent");
-      const activation = await submit(mountForm());
+      const activation = await submit(await mountForm());
       expect(activation.findAll("button")).toHaveLength(0);
     });
 
     it("says there is no such account and offers the field back", async () => {
       answered("NotFound");
-      const wrapper = await submit(mountForm());
+      const wrapper = await submit(await mountForm());
 
       expect(wrapper.text()).toContain("Аккаунт не найден");
 
@@ -183,7 +181,7 @@ describe("the recovery request", () => {
 
       it("stands under the field, shuts the button, and runs down", async () => {
         refused(429, "Слишком много запросов", 3);
-        const wrapper = await submit(mountForm());
+        const wrapper = await submit(await mountForm());
 
         expect(wrapper.text()).not.toContain("Проверьте почту");
         expect(toast.warning).not.toHaveBeenCalled();
@@ -193,7 +191,7 @@ describe("the recovery request", () => {
       // The modal keeps the component mounted, so a running interval would outlive it.
       it("drops the wait when the dialog closes", async () => {
         refused(429, "Слишком много запросов", 30);
-        const wrapper = await submit(mountForm());
+        const wrapper = await submit(await mountForm());
         expect(vi.getTimerCount()).toBe(1);
 
         wrapper.findComponent({ name: "AuthDialog" }).vm.$emit("beforeClose");
@@ -205,7 +203,7 @@ describe("the recovery request", () => {
 
       it("drops the wait when the card leaves the page", async () => {
         refused(429, "Слишком много запросов", 30);
-        const wrapper = await submit(mountForm());
+        const wrapper = await submit(await mountForm());
         expect(vi.getTimerCount()).toBe(1);
 
         wrapper.unmount();
@@ -216,7 +214,7 @@ describe("the recovery request", () => {
 
     it("says under the field what the server said", async () => {
       refused(400, "Неверный формат почты");
-      const wrapper = await submit(mountForm());
+      const wrapper = await submit(await mountForm());
 
       expect(wrapper.text()).not.toContain("Проверьте почту");
       const strip = wrapper.find(".auth-message");
@@ -226,7 +224,7 @@ describe("the recovery request", () => {
 
     it("says under the field that the letter did not go out", async () => {
       refused(500, "Ошибка сервера");
-      const wrapper = await submit(mountForm());
+      const wrapper = await submit(await mountForm());
 
       expect(wrapper.text()).not.toContain("Проверьте почту");
       const strip = wrapper.find(".auth-message");
@@ -236,7 +234,7 @@ describe("the recovery request", () => {
 
     it("says the same thing when nothing readable came back", async () => {
       refused(0, "");
-      const wrapper = await submit(mountForm());
+      const wrapper = await submit(await mountForm());
 
       expect(wrapper.find(".auth-message").text()).toBe("Ошибка сервера");
       expect(wrapper.text()).not.toContain("Попробуйте позже");
@@ -247,7 +245,7 @@ describe("the recovery request", () => {
         data: null,
         error: null,
       } as never);
-      const wrapper = await submit(mountForm());
+      const wrapper = await submit(await mountForm());
 
       expect(wrapper.text()).not.toContain("Проверьте почту");
       expect(wrapper.find(".auth-message").text()).toBe("Ошибка сервера");
@@ -259,7 +257,7 @@ describe("the recovery request", () => {
         .spyOn(Api, "post")
         .mockResolvedValue({ data: null, error: null } as never);
 
-      await submit(mountForm());
+      await submit(await mountForm());
 
       expect(post).toHaveBeenCalledWith(
         "account/recovery",

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -20,22 +19,13 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// The page offers the comment form by <c>viewer.canComment</c> of the game, the
-/// blog, the publication and the topic, and the flag is false exactly when the
-/// comment it stands for is refused.
-/// </summary>
-/// <remarks>
-/// What the user may not do is not offered. Every row reads the flag as the page does and sends the comment
-/// the form would, as the same viewer, against an expected value.
-/// </remarks>
-public class CanCommentFlagShould : IntegrationTestBase
+// The flag is false exactly when the comment it stands for is refused.
+public class CanCommentFlagShould : ViewerRequestTestBase
 {
     public CanCommentFlagShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>The record whose discussion is asked about.</summary>
     public enum Surface
     {
         Game,
@@ -44,22 +34,17 @@ public class CanCommentFlagShould : IntegrationTestBase
         Topic
     }
 
-    /// <summary>Who reads the record and writes the comment.</summary>
     public enum Who
     {
         Guest,
 
-        /// <summary>A user with no part in the record.</summary>
         Stranger,
 
-        /// <summary>The master of the game, the owner of the blog, the author of the topic.</summary>
         Owner,
 
-        /// <summary>A reader (subscriber) of the game.</summary>
         Reader
     }
 
-    /// <summary>What the record is like.</summary>
     [Flags]
     public enum State
     {
@@ -149,9 +134,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The PATCH that closes a topic answers with the flag the closing leaves.
-    /// </summary>
     [Fact]
     public async Task AnswerTheClosingOfATopicWithTheFlagItLeaves()
     {
@@ -176,9 +158,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The read of a topic answers whether the reader may add a comment, closed topic and ban included.
-    /// </summary>
     [Theory]
     [InlineData(State.Open, false, true)]
     [InlineData(State.Closed, false, false)]
@@ -196,9 +175,7 @@ public class CanCommentFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A list offers no comment form, so it carries no flag at all.
-    /// </summary>
+    // A list offers no comment form, so it carries no flag at all.
     [Fact]
     public async Task LeaveTheFlagOffTheLists()
     {
@@ -232,10 +209,7 @@ public class CanCommentFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The records of a case and the people around them. Everything is made
-    /// whatever the surface, so one drop takes any case back out.
-    /// </summary>
+    // Everything is made whatever the surface, so one drop takes any case back out.
     private sealed record Seed(GeneralUser Owner, GeneralUser Stranger, GeneralUser Reader)
     {
         public Guid GameId { get; } = Guid.NewGuid();
@@ -268,7 +242,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         return seed;
     }
 
-    /// <summary>The owner's game with its sheet, and the reader's subscription to it.</summary>
     private static void AddGame(DmDbContext db, Seed seed, State state, DateTimeOffset now)
     {
         db.Set<DbGame>().Add(new DbGame
@@ -297,7 +270,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         });
     }
 
-    /// <summary>The owner's blog and his publication in it.</summary>
     private static void AddBlog(DmDbContext db, Seed seed, DateTimeOffset now)
     {
         db.Set<DbBlog>().Add(new DbBlog
@@ -327,7 +299,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         });
     }
 
-    /// <summary>The stranger on the game's list and on the blog's list.</summary>
     private static void AddLists(DmDbContext db, Seed seed, DateTimeOffset now)
     {
         db.Set<DbGameBlacklist>().Add(new DbGameBlacklist
@@ -348,7 +319,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         });
     }
 
-    /// <summary>A board of the case's own and the owner's topic in it.</summary>
     private static void AddTopic(DmDbContext db, Seed seed, State state, DateTimeOffset now)
     {
         db.Set<DbBoard>().Add(new DbBoard
@@ -446,28 +416,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         _ => $"/v1/topics/{seed.TopicId}/comments"
     };
 
-    /// <summary>A request as the viewer, under an ordinary ban when asked; a guest sends none.</summary>
-    private Task<HttpResponseMessage> Send(
-        GeneralUser? user, bool banned, HttpMethod method, string url, object? body = null)
-    {
-        var request = user is null
-            ? new HttpRequestMessage(method, url)
-            : CreateAuthenticatedRequest(method, url, user);
-        if (user is not null && banned)
-        {
-            request.Headers.Add(TestAuthenticationMiddleware.TestUserAccessPolicyHeader,
-                AccessPolicy.DemocraticBan.ToString());
-        }
-
-        if (body is not null)
-        {
-            request.Content = JsonContent.Create(body);
-        }
-
-        return Client.SendAsync(request);
-    }
-
-    /// <summary>The flag the page reads, off the record it reads.</summary>
     private async Task<bool> FlagAsync(GeneralUser? user, bool banned, string url)
     {
         var response = await Send(user, banned, HttpMethod.Get, url);

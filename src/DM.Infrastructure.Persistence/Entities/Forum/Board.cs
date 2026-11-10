@@ -74,9 +74,6 @@ public class Board
     /// </summary>
     public DateTimeOffset? LastTopicCreatedUtc { get; set; }
 
-    /// <summary>
-    /// Board moderators
-    /// </summary>
     [InverseProperty(nameof(BoardModerator.Board))]
     public virtual ICollection<BoardModerator> Moderators { get; set; } = [];
 

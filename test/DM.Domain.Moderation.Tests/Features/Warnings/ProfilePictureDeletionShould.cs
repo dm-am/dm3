@@ -11,9 +11,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
-/// <summary>
-/// The deletion of the picture a warning on a profile pinned.
-/// </summary>
 public class ProfilePictureDeletionShould : WarningServiceTestBase
 {
     /// <summary>
@@ -52,17 +49,8 @@ public class ProfilePictureDeletionShould : WarningServiceTestBase
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A moderator does not take the picture out of a warning issued to himself,
-    /// before his promotion or by a higher rank: a party does not rule on his own
-    /// case, as with tickets, and nothing is marked.
-    /// </summary>
-    /// <remarks>
-    /// The picture is his own avatar. Marked in his name, the deletion reads as
-    /// the owner's own doing to the log and to the orphan sweeper, so the picture
-    /// stayed in the log while the request succeeded, and his current avatar, if
-    /// it was still that file, left his profile.
-    /// </remarks>
+    // Marked in his name, the deletion reads as the owner's own doing to the log and to the orphan
+    // sweeper
     [Fact]
     public async Task RefuseAModeratorThePictureOfAWarningIssuedToHimself()
     {
@@ -77,10 +65,6 @@ public class ProfilePictureDeletionShould : WarningServiceTestBase
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A warning nobody issued is answered with 404, the code the change of
-    /// points gives for it, before anything is written.
-    /// </summary>
     [Fact]
     public async Task AnswerTheDeletionOfAPictureOfAMissingWarningWithNotFound()
     {
@@ -94,9 +78,6 @@ public class ProfilePictureDeletionShould : WarningServiceTestBase
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// So is a warning that is gone by the time of the write.
-    /// </summary>
     [Fact]
     public async Task AnswerTheDeletionOfAPictureOfAWarningGoneByTheWriteWithNotFound()
     {

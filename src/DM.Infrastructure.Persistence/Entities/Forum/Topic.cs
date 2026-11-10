@@ -103,9 +103,6 @@ public class Topic : ISoftDeletable
     [InverseProperty(nameof(TopicEdit.Topic))]
     public virtual ICollection<TopicEdit> Edits { get; set; } = [];
 
-    /// <summary>
-    /// Comments
-    /// </summary>
     [InverseProperty(nameof(Comment.Topic))]
     public virtual ICollection<Comment> Comments { get; set; } = [];
 }

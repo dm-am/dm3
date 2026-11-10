@@ -39,22 +39,44 @@ namespace BBCodeParser.Nodes
 
             if (atTextStart && atTextEnd && IsOnlyWhiteSpaceAround(children, shown))
             {
-                var nothing = new Dictionary<int, TextNode>();
-                for (var i = 0; i < children.Count; i++)
-                {
-                    if (children[i] is TextNode)
-                    {
-                        nothing[i] = null;
-                    }
-                }
-
-                return nothing;
+                return EveryTextLeftWithNothing(children);
             }
 
-            // For each line: whether it holds anything drawn and anything erased.
-            var breaks = new List<(int Child, int At, int Length)>();
-            var content = new List<bool> { false };
-            var erased = new List<bool> { false };
+            var lines = ScanLines(children, shown);
+            var dropped = DroppedBreaks(lines, atTextStart, atTextEnd);
+            return dropped == null ? null : WithoutDroppedBreaks(children, lines.Breaks, dropped);
+        }
+
+        /// <summary>
+        /// The line breaks among the children, and for each line between them
+        /// whether it holds anything drawn and anything erased.
+        /// </summary>
+        private sealed class Lines
+        {
+            public List<(int Child, int At, int Length)> Breaks { get; } = new List<(int, int, int)>();
+            public List<bool> Content { get; } = new List<bool> { false };
+            public List<bool> Erased { get; } = new List<bool> { false };
+        }
+
+        private static Dictionary<int, TextNode> EveryTextLeftWithNothing(IReadOnlyList<Node> children)
+        {
+            var nothing = new Dictionary<int, TextNode>();
+            for (var i = 0; i < children.Count; i++)
+            {
+                if (children[i] is TextNode)
+                {
+                    nothing[i] = null;
+                }
+            }
+
+            return nothing;
+        }
+
+        private static Lines ScanLines(IReadOnlyList<Node> children, bool[] shown)
+        {
+            var lines = new Lines();
+            var content = lines.Content;
+            var erased = lines.Erased;
 
             for (var i = 0; i < children.Count; i++)
             {
@@ -72,35 +94,50 @@ namespace BBCodeParser.Nodes
                     continue;
                 }
 
-                var value = text.Text;
-                for (var at = 0; at < value.Length; at++)
-                {
-                    var length = value[at] switch
-                    {
-                        '\n' => 1,
-                        '\r' when at + 1 < value.Length && value[at + 1] == '\n' => 2,
-                        _ => 0
-                    };
-                    if (length == 0)
-                    {
-                        content[content.Count - 1] = true;
-                        continue;
-                    }
-
-                    breaks.Add((i, at, length));
-                    content.Add(false);
-                    erased.Add(false);
-                    at += length - 1;
-                }
+                ScanText(i, text.Text, lines);
             }
 
-            var lines = content.Count;
-            var dropped = new bool[breaks.Count];
+            return lines;
+        }
+
+        private static void ScanText(int child, string value, Lines lines)
+        {
+            var content = lines.Content;
+            for (var at = 0; at < value.Length; at++)
+            {
+                var length = value[at] switch
+                {
+                    '\n' => 1,
+                    '\r' when at + 1 < value.Length && value[at + 1] == '\n' => 2,
+                    _ => 0
+                };
+                if (length == 0)
+                {
+                    content[content.Count - 1] = true;
+                    continue;
+                }
+
+                lines.Breaks.Add((child, at, length));
+                content.Add(false);
+                lines.Erased.Add(false);
+                at += length - 1;
+            }
+        }
+
+        /// <summary>
+        /// By break, whether it goes with an erased line. Null when none goes.
+        /// </summary>
+        private static bool[] DroppedBreaks(Lines lines, bool atTextStart, bool atTextEnd)
+        {
+            var content = lines.Content;
+            var erased = lines.Erased;
+            var count = content.Count;
+            var dropped = new bool[lines.Breaks.Count];
             var any = false;
-            for (var line = 0; line < lines; line++)
+            for (var line = 0; line < count; line++)
             {
                 if (content[line] || !erased[line] ||
-                    (line == 0 && !atTextStart) || (line == lines - 1 && !atTextEnd))
+                    (line == 0 && !atTextStart) || (line == count - 1 && !atTextEnd))
                 {
                     continue;
                 }
@@ -112,18 +149,21 @@ namespace BBCodeParser.Nodes
                     dropped[before] = true;
                     any = true;
                 }
-                else if (after < breaks.Count && !dropped[after])
+                else if (after < lines.Breaks.Count && !dropped[after])
                 {
                     dropped[after] = true;
                     any = true;
                 }
             }
 
-            if (!any)
-            {
-                return null;
-            }
+            return any ? dropped : null;
+        }
 
+        private static Dictionary<int, TextNode> WithoutDroppedBreaks(
+            IReadOnlyList<Node> children,
+            List<(int Child, int At, int Length)> breaks,
+            bool[] dropped)
+        {
             var trimmed = new Dictionary<int, TextNode>();
             var builders = new Dictionary<int, (StringBuilder Text, int From)>();
             for (var b = 0; b < breaks.Count; b++)

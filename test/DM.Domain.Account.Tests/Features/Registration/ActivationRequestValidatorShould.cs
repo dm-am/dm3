@@ -56,9 +56,6 @@ public class ActivationRequestValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Empty);
     }
 
-    /// <summary>
-    /// Forbidden characters, one letter, twenty-one letters, a space at either end.
-    /// </summary>
     [Theory]
     [InlineData("User<Script>")]
     [InlineData("U")]

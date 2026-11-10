@@ -16,18 +16,12 @@ using DtoListValue = DM.Domain.Game.Features.AttributeSchemas.ListValue;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
-/// <summary>
-/// The document of attribute specifications, in both directions.
-/// </summary>
 /// <remarks>
 /// The schema of a game and the shared template row read and write it alike: the
 /// constraint subclass carries the type of a specification and its limits.
 /// </remarks>
 internal static class AttributeSpecificationDocument
 {
-    /// <summary>
-    /// Stored specifications to the domain shape.
-    /// </summary>
     public static IEnumerable<DtoSpecification> ToSpecifications(
         IEnumerable<DbSpecification> specifications) =>
         specifications.Select(ToSpecification).ToList();
@@ -50,9 +44,6 @@ internal static class AttributeSpecificationDocument
             Constraints = BuildConstraints(specification, specification.Required)
         }).ToList();
 
-    /// <summary>
-    /// Build strongly-typed persistence constraints from a write-side specification
-    /// </summary>
     /// <remarks>
     /// Public rather than private so the round trip of an absent limit can be
     /// asserted end to end. The absence is written here and read back by

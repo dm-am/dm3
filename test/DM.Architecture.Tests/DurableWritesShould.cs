@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A repository method that writes twice writes both times or neither.
-/// </summary>
 /// <remarks>
 /// Two bare writes are two transactions with a nameless state between them. The API host retries on
 /// failure, and the retrying strategy refuses a hand-opened transaction. Asserted on the text: the
@@ -18,7 +15,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class DurableWritesShould
 {
-    /// <summary>Calls that reach the database and cannot be taken back afterwards.</summary>
     private static readonly string[] Writes =
     [
         "SaveChangesAsync(",
@@ -34,9 +30,6 @@ public class DurableWritesShould
         "MarkWhere(",
     ];
 
-    /// <summary>
-    /// The two spellings of "this block runs inside an execution strategy".
-    /// </summary>
     /// <remarks>The strategy taken by hand, and <c>RetryableWrite.Run</c>, which takes it and clears the tracker.</remarks>
     private static readonly string[] Strategy =
     [
@@ -67,14 +60,10 @@ public class DurableWritesShould
             "or touched zero rows - there is no half-done state to protect",
     };
 
-    /// <summary>
-    /// The whole persistence project, and not the Repositories folder of it.
-    /// </summary>
-    /// <remarks>Four repositories live outside the Repositories folder.</remarks>
+    // Four repositories live outside the Repositories folder.
     private static string PersistenceRoot => Path.Combine(
         DM.Testing.RepositoryLayout.Root, "src", "DM.Infrastructure.Persistence");
 
-    /// <summary>Directories with nothing anybody wrote by hand in them.</summary>
     private static readonly string[] NotAuthored = ["obj", "bin", "Migrations"];
 
     private static IEnumerable<string> PersistenceSources() => Directory
@@ -113,9 +102,6 @@ public class DurableWritesShould
     private static bool UnderStrategy(SourceText.Member member) =>
         Strategy.Any(call => member.Body.Contains(call, StringComparison.Ordinal));
 
-    /// <summary>
-    /// Whether every method of the file that calls this one is wrapped.
-    /// </summary>
     /// <remarks>
     /// A helper's writes land inside its caller's transaction. A helper nothing in the file calls is
     /// not trusted.
@@ -211,9 +197,7 @@ public class DurableWritesShould
             "so this throws on the first attempt rather than on the first retry");
     }
 
-    /// <summary>
-    /// An exemption that outlived its reason is a hole with a comment over it.
-    /// </summary>
+    // An exemption that outlived its reason is a hole with a comment over it.
     [Fact]
     public void ExemptOnlyWhatStillExists()
     {

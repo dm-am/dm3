@@ -4,16 +4,10 @@ using System.Linq;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// The keys the game list is cached under
-/// </summary>
 internal static class GamesQueryCacheKey
 {
     private const string GamesByStatusCacheKeyPrefix = "GamesByStatus_";
 
-    /// <summary>
-    /// Whether an anonymous listing may be served from the shared cache.
-    /// </summary>
     /// <remarks>
     /// What may be cached is exactly what the key below tells apart; a test walks the query's properties.
     /// </remarks>
@@ -36,9 +30,6 @@ internal static class GamesQueryCacheKey
         && !query.ClosedFromUtc.HasValue && !query.ClosedToUtc.HasValue
         && !query.RecruitmentStartedFromUtc.HasValue && !query.RecruitmentStartedToUtc.HasValue;
 
-    /// <summary>
-    /// The key one anonymous listing is stored under.
-    /// </summary>
     /// <remarks>
     /// Normalised the way the repository reads the fields, so two listings never share an entry.
     /// </remarks>

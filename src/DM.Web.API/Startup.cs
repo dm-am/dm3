@@ -12,6 +12,7 @@ using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Persistence;
 using DM.Web.API.Features.General.Upload;
+using DM.Web.API.Features.Personal.Webhooks;
 using DM.Web.API.Notifications;
 using DM.Web.API.Shared.Binding;
 using DM.Web.API.Shared.Configuration;
@@ -89,7 +90,8 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AddDmLogging("DM.API", configuration, environment)
             .RequireGeneratedLinks()
             .RequireRelationalStorage()
-            .RequireObjectStorage();
+            .RequireObjectStorage()
+            .ValidateDiscordPublicKey();
 
         AddSiteAddresses(services);
 

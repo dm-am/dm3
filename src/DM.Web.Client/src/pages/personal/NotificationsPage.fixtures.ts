@@ -77,7 +77,7 @@ export async function render(
   if (pageSize)
     useAuthStore().user = {
       username: "reader",
-      settings: { pageSize: pageSize },
+      settings: { pageSize },
     } as never;
   const store = useNotificationStore();
   // Before the mount: the page re-reads its list when the count grows.

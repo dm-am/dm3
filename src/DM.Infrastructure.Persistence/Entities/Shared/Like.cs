@@ -22,9 +22,6 @@ public class Like : ISoftDeletable
     /// <inheritdoc />
     public DateTimeOffset? DeletedUtc { get; set; }
 
-    /// <summary>
-    /// Like identifier
-    /// </summary>
     [Key]
     public Guid LikeId { get; set; }
 

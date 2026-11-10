@@ -8,9 +8,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
-/// <summary>
-/// Repository for finding first unread posts and comments in games
-/// </summary>
 internal class FirstUnreadRepository : IFirstUnreadRepository
 {
     private readonly DmDbContext _dbContext;
@@ -218,7 +215,6 @@ internal class FirstUnreadRepository : IFirstUnreadRepository
         return rows.ToDictionary(row => row.RoomId);
     }
 
-    /// <summary>The first of the rooms, in the given order, that holds a counted post.</summary>
     private static RoomPostSummary? FirstHolding(
         IEnumerable<Guid> roomIds, Dictionary<Guid, RoomPostSummary> summaries) =>
         roomIds.Select(id => summaries.GetValueOrDefault(id)).FirstOrDefault(summary => summary != null);
@@ -238,10 +234,6 @@ internal class FirstUnreadRepository : IFirstUnreadRepository
     private IQueryable<Entities.Shared.Comment> GameComments(Guid gameId) =>
         _dbContext.Comments.Where(c => c.EntityId == gameId);
 
-    /// <summary>
-    /// What one room contributes to the answer: how many posts, and the edges of
-    /// the range they occupy.
-    /// </summary>
     private sealed class RoomPostSummary
     {
         public Guid RoomId { get; init; }

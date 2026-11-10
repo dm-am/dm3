@@ -10,9 +10,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The Node that writes the lock file is the Node that reads it back.
-/// </summary>
 /// <remarks>
 /// A Node release carries one npm, and `npm ci` refuses a lock file its npm would not have written,
 /// so the pin is exact to the patch. package.json is the source; the workflow and the Dockerfile
@@ -20,11 +17,9 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class FrontendToolchainShould
 {
-    /// <summary>A node-version a workflow asks setup-node to install.</summary>
     private static readonly Regex NodeVersion = new(
         @"node-version:\s*'?(?<version>[^'\s]+)'?", RegexOptions.Compiled);
 
-    /// <summary>The tag of a Node base image, without the variant suffix.</summary>
     private static readonly Regex NodeImage = new(
         @"FROM\s+node:(?<version>[0-9][^\s-]*)", RegexOptions.Compiled);
 
@@ -89,10 +84,8 @@ public class FrontendToolchainShould
             pinned);
     }
 
-    /// <summary>
-    /// The npm named next to it is the npm that Node actually carries.
-    /// </summary>
-    /// <remarks>Without engines.npm npm reports nothing when the machine drifts; its value cannot be derived here.</remarks>
+    // Without engines.npm npm reports nothing when the machine drifts; its value cannot be derived
+    // here.
     [Fact]
     public void NameTheNpmThatComesWithThatNode()
     {

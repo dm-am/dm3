@@ -75,10 +75,8 @@ public class BlogCommentServiceShould : UnitTestBase
             eventProducer);
     }
 
-    /// <summary>
-    /// The gate carries the same rule and would refuse in its generic words; the
-    /// list is asked first, so the refusal says why.
-    /// </summary>
+    // The gate carries the same rule and would refuse in its generic words; the list is asked
+    // first, so the refusal says why.
     [Fact]
     public async Task RefuseABlacklistedUserInTheWordsOfTheList()
     {
@@ -97,9 +95,7 @@ public class BlogCommentServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromBlog);
     }
 
-    /// <summary>
-    /// Rewriting one's comment publishes text exactly as writing it did.
-    /// </summary>
+    // Rewriting one's comment publishes text exactly as writing it did.
     [Fact]
     public async Task RefuseABlacklistedAuthorTheEditOfHisComment()
     {
@@ -124,10 +120,8 @@ public class BlogCommentServiceShould : UnitTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdateBlogCommentEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A blog the user may not open takes no comment, and answers as a blog that
-    /// is not there: the visible read refuses before anything is asked of it.
-    /// </summary>
+    // A blog the user may not open takes no comment, and answers as a blog that is not there: the
+    // visible read refuses before anything is asked of it.
     [Fact]
     public async Task RefuseACommentInABlogTheUserMayNotSeeAsNoBlogAtAll()
     {
@@ -166,7 +160,8 @@ public class BlogCommentServiceShould : UnitTestBase
         intentionManager.Received(1).ThrowIfForbidden(BlogIntention.CreateComment, blog);
     }
 
-    /// <summary>The text is stored as typed, the spaces around it included (BBCODE_RENDERING.md, "Регистр имен").</summary>
+    // The text is stored as typed, the spaces around it included (BBCODE_RENDERING.md, "Регистр
+    // имен").
     [Fact]
     public async Task StoreTheTextAsTyped()
     {
@@ -282,9 +277,6 @@ public class BlogCommentServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// The removal that went through pays the unread counters and announces itself.
-    /// </summary>
     [Fact]
     public async Task PayTheCountersForTheRemovalThatWentThrough()
     {

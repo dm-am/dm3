@@ -17,7 +17,6 @@ const props = withDefaults(
   defineProps<{
     review: GameReview;
     showGame?: boolean;
-    searchQuery?: string;
     /** The reader may warn the author for the text: decided by the page, which knows the ranks. */
     canWarn?: boolean;
   }>(),
@@ -131,12 +130,7 @@ async function deleteReview() {
     <ActionResult :result="saveResult" class="edit-refusal" />
   </div>
 
-  <GameReviewCard
-    v-else
-    :review="review"
-    :show-game="showGame"
-    :search-query="searchQuery"
-  >
+  <GameReviewCard v-else :review="review" :show-game="showGame">
     <template
       v-if="review.viewer.canEdit || review.viewer.canDelete || canWarn"
       #actions

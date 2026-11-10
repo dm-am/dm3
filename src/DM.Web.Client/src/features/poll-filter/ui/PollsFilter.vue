@@ -1,28 +1,26 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { vClickOutside } from "@/shared/directives";
 import {
   usePollsFilter,
   SORT_OPTIONS,
   STATUS_OPTIONS,
   POLL_TYPE_OPTIONS,
 } from "../model";
+import type { PollsFilterKey, PollTypeFilter } from "../model";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import { formatDateRangeForDisplay } from "@/shared/lib/filters";
 import {
   FilterSearchInput,
-  FilterButton,
-  FilterDropdown,
-  FilterDropdownHeader,
-  FilterDropdownItem,
+  FilterMenu,
   OptionsList,
   DateRangePicker,
   SortButton,
   FilterBubble,
   BubblesRow,
 } from "@/shared/ui/Filters";
-import type { PollStatus } from "@/entities/poll";
+import type { PollSortBy, PollStatus } from "@/entities/poll";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 const {
   filterState,
@@ -44,7 +42,7 @@ const { localInput, handleInput, applySearch } = useFilterSearch(
 );
 
 const { showDropdown, navPath, closeDropdown, toggleDropdown, navigateBack } =
-  useFilterDropdown();
+  useFilterDropdown<PollsFilterKey>();
 
 const filterOptions = [
   { key: "status", label: "Статус", hint: "Активные или завершенные" },
@@ -56,10 +54,6 @@ const filterOptions = [
     hint: "Фильтр по дате окончания",
   },
 ];
-
-function selectRootItem(key: string) {
-  navPath.value = { filter: key };
-}
 
 function getDropdownTitle(): string | null {
   if (!navPath.value) return null;
@@ -78,8 +72,8 @@ const sortOptions = SORT_OPTIONS.map((o) => ({
 }));
 
 // The cast is safe: SortButton only ever reports back a value it was given.
-function handleSortSelect(value: string, direction?: "asc" | "desc") {
-  setSort(value as "starts" | "ends" | "status", direction);
+function handleSortSelect(value: string, direction?: SortDirection) {
+  setSort(value as PollSortBy, direction);
 }
 
 function handleStatusSelect(value: string) {
@@ -97,7 +91,7 @@ const statusLabel = computed(() => {
 });
 
 function handlePollTypeSelect(value: string) {
-  setPollType(value as "anonymous" | "public" | "");
+  setPollType(value as PollTypeFilter);
   closeDropdown();
 }
 
@@ -132,27 +126,27 @@ function handleEndsClear() {
   closeDropdown();
 }
 
-const hasStartsFilter = computed(() => {
-  return !!filterState.value.startsFromUtc || !!filterState.value.startsToUtc;
-});
+const hasStartsFilter = computed(
+  () => !!filterState.value.startsFromUtc || !!filterState.value.startsToUtc,
+);
 
-const startsFilterLabel = computed(() => {
-  return formatDateRangeForDisplay({
+const startsFilterLabel = computed(() =>
+  formatDateRangeForDisplay({
     from: filterState.value.startsFromUtc || null,
     to: filterState.value.startsToUtc || null,
-  });
-});
+  }),
+);
 
-const hasEndsFilter = computed(() => {
-  return !!filterState.value.endsFromUtc || !!filterState.value.endsToUtc;
-});
+const hasEndsFilter = computed(
+  () => !!filterState.value.endsFromUtc || !!filterState.value.endsToUtc,
+);
 
-const endsFilterLabel = computed(() => {
-  return formatDateRangeForDisplay({
+const endsFilterLabel = computed(() =>
+  formatDateRangeForDisplay({
     from: filterState.value.endsFromUtc || null,
     to: filterState.value.endsToUtc || null,
-  });
-});
+  }),
+);
 
 // A non-default sort alone must not show a row with a lone "Сбросить".
 const hasBubbles = computed(() => {
@@ -209,64 +203,47 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton
-          :active="showDropdown"
-          @click="toggleDropdown"
-          @close="closeDropdown"
+      <FilterMenu
+        v-model:nav-path="navPath"
+        :open="showDropdown"
+        :title="getDropdownTitle()"
+        :options="filterOptions"
+        @toggle="toggleDropdown"
+        @close="closeDropdown"
+        @back="navigateBack"
+      >
+        <OptionsList
+          v-if="navPath?.filter === 'status'"
+          :options="statusOptions"
+          @select="handleStatusSelect"
         />
 
-        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <FilterDropdownHeader
-            v-if="navPath"
-            :title="getDropdownTitle() ?? ''"
-            @back="navigateBack"
-          />
+        <OptionsList
+          v-if="navPath?.filter === 'pollType'"
+          :options="pollTypeOptions"
+          @select="handlePollTypeSelect"
+        />
 
-          <template v-if="!navPath">
-            <FilterDropdownItem
-              v-for="item in filterOptions"
-              :key="item.key"
-              :label="item.label"
-              :hint="item.hint"
-              has-sub-options
-              @item-select="selectRootItem(item.key)"
-            />
-          </template>
+        <DateRangePicker
+          v-if="navPath?.filter === 'startsRange'"
+          :from-value="filterState.startsFromUtc || null"
+          :to-value="filterState.startsToUtc || null"
+          :show-clear-button="hasStartsFilter"
+          allow-future
+          @apply="handleStartsApply"
+          @clear="handleStartsClear"
+        />
 
-          <OptionsList
-            v-if="navPath?.filter === 'status'"
-            :options="statusOptions"
-            @select="handleStatusSelect"
-          />
-
-          <OptionsList
-            v-if="navPath?.filter === 'pollType'"
-            :options="pollTypeOptions"
-            @select="handlePollTypeSelect"
-          />
-
-          <DateRangePicker
-            v-if="navPath?.filter === 'startsRange'"
-            :from-value="filterState.startsFromUtc || null"
-            :to-value="filterState.startsToUtc || null"
-            :show-clear-button="hasStartsFilter"
-            allow-future
-            @apply="handleStartsApply"
-            @clear="handleStartsClear"
-          />
-
-          <DateRangePicker
-            v-if="navPath?.filter === 'endsRange'"
-            :from-value="filterState.endsFromUtc || null"
-            :to-value="filterState.endsToUtc || null"
-            :show-clear-button="hasEndsFilter"
-            allow-future
-            @apply="handleEndsApply"
-            @clear="handleEndsClear"
-          />
-        </FilterDropdown>
-      </div>
+        <DateRangePicker
+          v-if="navPath?.filter === 'endsRange'"
+          :from-value="filterState.endsFromUtc || null"
+          :to-value="filterState.endsToUtc || null"
+          :show-clear-button="hasEndsFilter"
+          allow-future
+          @apply="handleEndsApply"
+          @clear="handleEndsClear"
+        />
+      </FilterMenu>
 
       <SortButton
         :options="sortOptions"
@@ -315,7 +292,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
   gap: $small
 
   +filter-bar
-  +filter-button
 
 +filter-dropdown-base
 </style>

@@ -8,27 +8,25 @@
 // reading.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { defineComponent, h, watchEffect } from "vue";
-import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia, setActivePinia, type Pinia } from "pinia";
 import {
   blogApi,
   useBlogDetailsStore,
-  type Blog,
   type Publication,
 } from "@/entities/blog";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { useAuthStore } from "@/entities/user";
 import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
 import PublicationPage from "./PublicationPage.vue";
 
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({
-    params: { id: "the-blog", pubId: "pub-readable" },
-    query: {},
-    hash: "",
-  }),
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-}));
+/** The publication's own address, which names the one the page reads. */
+const at = (page: object, pinia?: Pinia) =>
+  mountPage(page, "/blogs/the-blog/feed/pub-readable", {
+    routes: [["blog-publication", "/blogs/:id/feed/:pubId"]],
+    pinia,
+  });
 
 // The card has its own spec; here only the publication reaching it matters.
 vi.mock("@/features/publication", () => ({
@@ -81,7 +79,7 @@ const PUBLICATION: Publication = {
   viewer: { canComment: true },
 } as unknown as Publication;
 
-function render({
+async function render({
   publication = PUBLICATION,
   username = null as string | null,
   blacklisted = false,
@@ -91,9 +89,9 @@ function render({
   useAuthStore().user = username ? ({ username } as never) : null;
   // The blog the shell has loaded: its blacklist is the publication's too.
   useBlogDetailsStore().blog = {
-    id: "blog-guid",
+    ...createMockBlog("blog-guid", "Записки"),
     viewerBlacklisted: blacklisted,
-  } as unknown as Blog;
+  };
 
   vi.spyOn(blogApi, "getPublication").mockResolvedValue({
     data: { resource: publication },
@@ -116,14 +114,12 @@ function render({
     },
   });
 
-  const wrapper = mount(host, {
-    global: { plugins: [pinia], stubs: { RouterLink: RouterLinkStub } },
-  });
+  const { wrapper } = await at(host, pinia);
   return { wrapper, announced };
 }
 
 /** The discussion's props, as the page handed them over. */
-const discussion = (wrapper: ReturnType<typeof render>["wrapper"]) =>
+const discussion = (wrapper: Awaited<ReturnType<typeof render>>["wrapper"]) =>
   wrapper.findComponent({ name: "DiscussionSection" }).props() as Record<
     string,
     unknown
@@ -136,7 +132,7 @@ describe("PublicationPage", () => {
   });
 
   it("reads the publication named in the address and draws its card", async () => {
-    const { wrapper, announced } = render();
+    const { wrapper, announced } = await render();
     await flushPromises();
 
     // The address alone; how the refusal is carried is checked below.
@@ -152,7 +148,7 @@ describe("PublicationPage", () => {
   });
 
   it("runs the discussion against the publication, not the blog", async () => {
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
 
     const props = discussion(wrapper);
@@ -172,7 +168,7 @@ describe("PublicationPage", () => {
   });
 
   it("offers no composer to a guest", async () => {
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
 
     const props = discussion(wrapper);
@@ -182,7 +178,7 @@ describe("PublicationPage", () => {
   });
 
   it("offers the composer to a signed-in reader of a published text", async () => {
-    const { wrapper } = render({ username: "gamer" });
+    const { wrapper } = await render({ username: "gamer" });
     await flushPromises();
 
     expect(discussion(wrapper).canComment).toBe(true);
@@ -190,7 +186,7 @@ describe("PublicationPage", () => {
 
   // A ban is only the server's answer, and it is enough.
   it("offers nothing where the publication takes no comment from the reader", async () => {
-    const { wrapper } = render({
+    const { wrapper } = await render({
       username: "gamer",
       publication: { ...PUBLICATION, viewer: { canComment: false } },
     });
@@ -203,7 +199,7 @@ describe("PublicationPage", () => {
 
   // A feed carries no answer, and no answer is no "yes".
   it("offers nothing on a publication that says nothing about the viewer", async () => {
-    const { wrapper } = render({
+    const { wrapper } = await render({
       username: "gamer",
       publication: { ...PUBLICATION, viewer: undefined },
     });
@@ -214,7 +210,7 @@ describe("PublicationPage", () => {
 
   // The answer is about whoever held the session; a sign-in asks again.
   it("reads the publication again when the viewer changes", async () => {
-    const { wrapper } = render({
+    const { wrapper } = await render({
       publication: { ...PUBLICATION, viewer: { canComment: false } },
     });
     await flushPromises();
@@ -233,7 +229,7 @@ describe("PublicationPage", () => {
 
   // The one on the blacklist reads the discussion and the line says why he cannot write.
   it("says the blog's blacklist under the discussion", async () => {
-    const { wrapper } = render({
+    const { wrapper } = await render({
       username: "gamer",
       blacklisted: true,
       publication: { ...PUBLICATION, viewer: { canComment: false } },
@@ -249,14 +245,12 @@ describe("PublicationPage", () => {
   });
 
   it("says a failed load failed instead of drawing an empty page", async () => {
-    const pinia = createPinia();
-    setActivePinia(pinia);
     vi.spyOn(blogApi, "getPublication").mockResolvedValue({
       data: null,
       error: { type: "", title: "Публикация не найдена", status: 404 },
     } as never);
 
-    const wrapper = mount(PublicationPage, { global: { plugins: [pinia] } });
+    const { wrapper } = await at(PublicationPage);
     await flushPromises();
 
     expect(wrapper.text()).toContain("Публикация не найдена");
@@ -266,14 +260,12 @@ describe("PublicationPage", () => {
   // The card is the whole page when the read fails, so the read owns the 5xx;
   // asserted on the flags, since the client is behind the mocked service.
   it("takes a 5xx over from the interceptor and says it in the card", async () => {
-    const pinia = createPinia();
-    setActivePinia(pinia);
     const read = vi.spyOn(blogApi, "getPublication").mockResolvedValue({
       data: null,
       error: { type: "", title: "Ошибка сервера", status: 500, traceId: "t" },
     } as never);
 
-    const wrapper = mount(PublicationPage, { global: { plugins: [pinia] } });
+    const { wrapper } = await at(PublicationPage);
     await flushPromises();
 
     expect(read).toHaveBeenCalledWith(
@@ -285,8 +277,6 @@ describe("PublicationPage", () => {
 
   it("says the wait in the card, with the seconds the server asked for", async () => {
     // The 429 title carries no number, so the card says the seconds itself.
-    const pinia = createPinia();
-    setActivePinia(pinia);
     vi.spyOn(blogApi, "getPublication").mockResolvedValue({
       data: null,
       error: {
@@ -298,7 +288,7 @@ describe("PublicationPage", () => {
       },
     } as never);
 
-    const wrapper = mount(PublicationPage, { global: { plugins: [pinia] } });
+    const { wrapper } = await at(PublicationPage);
     await flushPromises();
 
     expect(wrapper.text()).toContain(

@@ -10,10 +10,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The game module of the model: games and what links to them, rooms, posts,
-/// characters, the reviews of games and posts, and the character sheets.
-/// </summary>
 internal static class GameModel
 {
     internal static void Configure(ModelBuilder modelBuilder, bool isPostgres)

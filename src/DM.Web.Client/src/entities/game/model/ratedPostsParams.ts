@@ -1,10 +1,11 @@
 // The rated-posts request of every surface that asks it, so one filter bar answers alike.
-import type { RatedPostsQuery } from "./postTypes";
+import type { RatedPostSortBy, RatedPostsQuery } from "./postTypes";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 /** The filter state the shared pulse filter keeps in the URL. */
 export interface PulseSearchParams {
-  sortBy?: "rating" | "lastreview" | "reviewcount" | "created";
-  sortOrder?: "asc" | "desc";
+  sortBy?: RatedPostSortBy;
+  sortOrder?: SortDirection;
   search?: string;
   minRating?: number;
   maxRating?: number;
@@ -40,12 +41,12 @@ export function buildRatedPostsParams(
   if (params.authorUsernames)
     apiParams.authorUsernames = params.authorUsernames;
   if (params.createdFrom) {
-    const createdFromUtc = new Date(params.createdFrom + "T00:00:00Z");
+    const createdFromUtc = new Date(`${params.createdFrom}T00:00:00Z`);
     if (!isNaN(createdFromUtc.getTime()))
       apiParams.createdFromUtc = createdFromUtc.toISOString();
   }
   if (params.createdTo) {
-    const createdToUtc = new Date(params.createdTo + "T23:59:59.999Z");
+    const createdToUtc = new Date(`${params.createdTo}T23:59:59.999Z`);
     if (!isNaN(createdToUtc.getTime()))
       apiParams.createdToUtc = createdToUtc.toISOString();
   }

@@ -43,9 +43,6 @@ public class TopicClosingShould : IntegrationTestBase
         Title(reopened.Body).Should().Be("Reopened by the author");
     }
 
-    /// <summary>
-    /// What a moderator closed stays closed to the author until the moderator reopens it.
-    /// </summary>
     [Fact]
     public async Task KeepATopicAModeratorClosedShutToItsAuthor()
     {
@@ -108,9 +105,8 @@ public class TopicClosingShould : IntegrationTestBase
         siteModerator.Status.Should().Be(HttpStatusCode.Forbidden, siteModerator.Body);
     }
 
-    /// <summary>
-    /// Reopening is not asked the edit rule of the closed topic, so the closing rule is the only gate.
-    /// </summary>
+    // Reopening is not asked the edit rule of the closed topic, so the closing rule is the only
+    // gate.
     [Theory]
     [InlineData(9304, false, true)]
     [InlineData(9306, true, false)]

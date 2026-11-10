@@ -16,8 +16,8 @@ const SFC = join(
 );
 
 describe("MonthYearPicker", () => {
-  const mountComponent = (props: Record<string, unknown> = {}) => {
-    return mount(MonthYearPicker, {
+  const mountComponent = (props: Record<string, unknown> = {}) =>
+    mount(MonthYearPicker, {
       attachTo: document.body,
       props: {
         year: 2026,
@@ -28,7 +28,6 @@ describe("MonthYearPicker", () => {
         ...props,
       },
     });
-  };
 
   const open = async (wrapper: ReturnType<typeof mountComponent>) => {
     await wrapper.find(".myp-trigger").trigger("click");

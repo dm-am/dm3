@@ -206,8 +206,8 @@ describe("useUiStore text switches", () => {
   }
 
   /**
-   * The owner's word: justification is always on, and the switch is gone. A
-   * device that turned it off before keeps the key, and the key is no answer
+   * Justification is always on and has no switch. A device that turned it off
+   * before keeps the key, and the key is no answer
    * to anything any more: the store has nothing that reads it.
    */
   it("carries no justification switch", () => {

@@ -10,13 +10,11 @@ import { FilterDropdownItem } from "../primitives";
 import type { ListOption, OptionsListProps } from "../types";
 
 const props = withDefaults(defineProps<OptionsListProps>(), {
-  highlightedIndex: -1,
   filterQuery: "",
 });
 
 const emit = defineEmits<{
   select: [value: string, hasSubOptions: boolean];
-  highlight: [index: number];
 }>();
 
 // Filter options by query
@@ -41,14 +39,12 @@ function handleSelect(option: ListOption) {
       {{ NOTHING_FOUND }}
     </div>
     <FilterDropdownItem
-      v-for="(option, index) in filteredOptions"
+      v-for="option in filteredOptions"
       :key="option.value"
       :label="option.label"
       :hint="option.hint"
-      :highlighted="index === highlightedIndex"
       :has-sub-options="option.hasSubOptions"
       @item-select="handleSelect(option)"
-      @mouseenter="emit('highlight', index)"
     />
   </div>
 </template>

@@ -6,16 +6,11 @@
 // heading while some comment is unread (shared/ui/UnreadLine holds the line).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
-import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { forumApi, useBoardsStore } from "@/entities/forum";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import ForumIndexPage from "./ForumIndexPage.vue";
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: {}, query: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  RouterLink: { template: "<a><slot /></a>" },
-}));
 
 const board = (id: string, unreadCommentsCount: number) => ({
   id,
@@ -60,12 +55,15 @@ async function render(unread: number[], signedIn = true) {
   const Shell = defineComponent({
     setup: () => () => h("main", [h("h1", "Форум"), h(ForumIndexPage)]),
   });
-  const wrapper = mount(Shell, {
+  const { wrapper } = await mountPage(Shell, "/forum", {
+    routes: [
+      ["forum-index", "/forum"],
+      ["forum", "/forum/:alias"],
+      ["topic", "/forum/:alias/:num"],
+    ],
+    pinia,
     attachTo: document.body,
-    global: {
-      plugins: [pinia],
-      stubs: { DataTable: true, Tooltip: true },
-    },
+    stubs: { DataTable: true, Tooltip: true },
   });
   mounted = wrapper;
   await flushPromises();

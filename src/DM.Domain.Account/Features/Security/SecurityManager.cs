@@ -8,24 +8,14 @@ namespace DM.Domain.Account.Features.Security;
 /// <inheritdoc />
 internal class SecurityManager : ISecurityManager
 {
-    /// <summary>
-    /// Output key length in bytes (256 bits)
-    /// </summary>
+    // Output key length in bytes (256 bits)
     private const int KeyLength = 32;
 
-    /// <summary>
-    /// Argon2id memory size in KB (19 MiB = OWASP 2025 primary recommendation)
-    /// </summary>
+    // Argon2id memory size in KB (19 MiB = OWASP 2025 primary recommendation)
     private const int Argon2MemorySize = 19 * 1024;
 
-    /// <summary>
-    /// Argon2id iterations (time cost)
-    /// </summary>
     private const int Argon2Iterations = 2;
 
-    /// <summary>
-    /// Argon2id parallelism (degree of parallelism)
-    /// </summary>
     private const int Argon2Parallelism = 1;
 
     /// <inheritdoc />

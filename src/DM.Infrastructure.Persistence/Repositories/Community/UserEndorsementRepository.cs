@@ -53,12 +53,6 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
             .ToArrayAsync();
     }
 
-    /// <summary>
-    /// Shared predicate block: filtering by author / recipient plus
-    /// substring search. Search ILIKEs over the text, author name and
-    /// recipient name at once — three SQL conditions joined by OR. This is
-    /// the equivalent of "find where X is mentioned" without separate search buckets.
-    /// </summary>
     private static IQueryable<DbUserEndorsement> ApplyFilter(
         IQueryable<DbUserEndorsement> query, UserEndorsementFilter? filter)
     {

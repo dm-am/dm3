@@ -126,7 +126,6 @@ internal class PostAttachmentUploadAuthorizer : IUploadTargetAuthorizer
         return post != null && HiddenFrom(guest, post, [upload]).Count == 0;
     }
 
-    /// <summary>The files of one post it keeps from the reader.</summary>
     private IReadOnlySet<Guid> HiddenFrom(IAuthorizationSubject reader, Post post, IReadOnlyCollection<StoredUpload> uploads) =>
         PostAttachmentVisibility.HiddenFrom(
             _privateBlockReading, reader, post, uploads.ToDictionary(u => u.Id, u => u.AddresseesJson));

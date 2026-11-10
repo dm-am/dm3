@@ -41,10 +41,8 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
         response.RootElement.ToString().Should().NotContain("42P01").And.NotContain("secret");
     }
 
-    /// <summary>
-    /// Messages of domain-authored exceptions are written for the caller and stay
-    /// visible — the leak is specific to exceptions nobody wrote a message for.
-    /// </summary>
+    // Messages of domain-authored exceptions are written for the caller and stay visible — the leak
+    // is specific to exceptions nobody wrote a message for.
     [Fact]
     public async Task KeepDomainAuthoredMessage()
     {
@@ -54,9 +52,8 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
         response.RootElement.GetProperty("title").GetString().Should().Be("Topic is closed");
     }
 
-    /// <summary>
-    /// The interface is Russian, and several call sites read the title of a 400 straight out of the problem document.
-    /// </summary>
+    // The interface is Russian, and several call sites read the title of a 400 straight out of the
+    // problem document.
     [Fact]
     public async Task TitleAValidationFailureInRussian()
     {
@@ -67,10 +64,8 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
         response.RootElement.GetProperty("title").GetString().Should().Be("Некорректные данные");
     }
 
-    /// <summary>
-    /// A refusal that names its reason only in general carries the mark the
-    /// client tells it by: its words are the same for every call it refuses.
-    /// </summary>
+    // A refusal that names its reason only in general carries the mark the client tells it by: its
+    // words are the same for every call it refuses.
     [Fact]
     public async Task MarkTheUnhandledFailureGeneral()
     {
@@ -106,10 +101,8 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
         response.RootElement.TryGetProperty("general", out _).Should().BeFalse();
     }
 
-    /// <summary>
-    /// A refusal of fields written by hand is titled by its message, as one from
-    /// the validator is: without it the framework titled the document in English.
-    /// </summary>
+    // A refusal of fields written by hand is titled by its message, as one from the validator is:
+    // without it the framework titled the document in English.
     [Fact]
     public async Task TitleAHandWrittenFieldRefusalByItsMessage()
     {

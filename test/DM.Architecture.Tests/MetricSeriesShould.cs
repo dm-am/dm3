@@ -10,27 +10,18 @@ using static DM.Architecture.Tests.MeterSources;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every rule and every panel written about a series names a series something
-/// actually publishes.
-/// </summary>
 /// <remarks>
 /// A rule over a series nobody exports is as silent as a healthy one. Names are derived as the
 /// exporter derives them: dots to underscores, _total on a counter, a non-UCUM unit appended verbatim.
 /// </remarks>
 public class MetricSeriesShould
 {
-    /// <summary>A series of this project, as an expression spells it.</summary>
     private static readonly Regex Series = new(@"\bdm_[a-z0-9_]+", RegexOptions.Compiled);
 
-    /// <summary>Any series name, whoever exports it.</summary>
-    /// <remarks>Wider than the one above: a rule over an exporter's series is as silent over a typo.</remarks>
+    // Wider than the one above: a rule over an exporter's series is as silent over a typo.
     private static readonly Regex AnySeries = new(
         @"(?<![\w.""])[a-z][a-z0-9]*_[a-z0-9_]+", RegexOptions.Compiled);
 
-    /// <summary>
-    /// The prefix of a series nobody here declares, and the scrape job that brings it in; both halves asserted.
-    /// </summary>
     private static readonly (string Prefix, string Job)[] Exporters =
     [
         // The .NET hosts: ASP.NET Core and the runtime instrument themselves, and the
@@ -46,9 +37,6 @@ public class MetricSeriesShould
         ("prometheus_", "prometheus"),
     ];
 
-    /// <summary>
-    /// Words that look like a series and are not: PromQL functions, label names and the plugin name in prose.
-    /// </summary>
     private static readonly HashSet<string> NotASeries = new(StringComparer.Ordinal)
     {
         "histogram_quantile", "label_replace", "label_join", "clamp_max", "clamp_min",
@@ -56,7 +44,6 @@ public class MetricSeriesShould
         "static_configs", "rabbitmq_prometheus", "rule_files", "metrics_path",
     };
 
-    /// <summary>What the Prometheus exporter appends to a name of its own accord.</summary>
     private static readonly string[] Suffixes =
         ["_total", "_bucket", "_sum", "_count", "_seconds", "_bytes", "_ratio"];
 
@@ -78,9 +65,6 @@ public class MetricSeriesShould
                 "returns nothing is quiet in exactly the way a healthy system is");
     }
 
-    /// <summary>
-    /// A series this project does not export comes from a job it scrapes.
-    /// </summary>
     /// <remarks>
     /// Without a running stack only the pairing is asserted: the name belongs to an exporter and that
     /// exporter is scraped. A misspelt series inside a scraped prefix still passes.
@@ -128,21 +112,14 @@ public class MetricSeriesShould
         published.Should().NotBeEmpty("this project exports series of its own too");
     }
 
-    /// <summary>An instrument declaration with its unit argument.</summary>
     private static readonly Regex InstrumentWithUnit = new(
         @"Create(?<kind>Counter|Histogram|UpDownCounter|ObservableGauge|ObservableCounter|Gauge)<[^>]+>\(\s*""(?<name>dm\.[a-z0-9._]+)""\s*,\s*(?<unit>null|""[^""]*"")",
         RegexOptions.Compiled);
 
-    /// <summary>
-    /// Units the Prometheus exporter knows how to turn into a suffix.
-    /// </summary>
-    /// <remarks>The exporter maps the UCUM table and appends anything else verbatim.</remarks>
+    // The exporter maps the UCUM table and appends anything else verbatim.
     private static readonly HashSet<string> Units = new(StringComparer.Ordinal) { "s", "By" };
 
-    /// <summary>
-    /// A measurement carries its unit and a count carries none.
-    /// </summary>
-    /// <remarks>A wrong unit gives a name nobody would write from the declaration.</remarks>
+    // A wrong unit gives a name nobody would write from the declaration.
     [Fact]
     public void DeclareOnlyUnitsTheExporterUnderstands()
     {
@@ -181,10 +158,7 @@ public class MetricSeriesShould
         }
     }
 
-    /// <summary>
-    /// Every histogram of this project has boundaries somebody chose.
-    /// </summary>
-    /// <remarks>The SDK's default ladder tops out at ten seconds, picked for nothing measured here.</remarks>
+    // The SDK's default ladder tops out at ten seconds, picked for nothing measured here.
     [Fact]
     public void ChooseTheBucketsOfEveryHistogram()
     {
@@ -217,9 +191,6 @@ public class MetricSeriesShould
         return fromCode.Concat(FromTextfileCollector()).ToHashSet(StringComparer.Ordinal);
     }
 
-    /// <summary>
-    /// Series a maintenance script writes for node-exporter to pick up.
-    /// </summary>
     /// <remarks>
     /// The nightly backup check leaves its verdict in the textfile collector's directory. Read from the
     /// scripts and keyed on the stem, as a C# instrument is declared without its unit suffix.
@@ -233,7 +204,6 @@ public class MetricSeriesShould
     private static readonly Regex TextfileSeries = new(
         @"#\s*HELP\s+(dm_\w+)", RegexOptions.Compiled);
 
-    /// <summary>Series named by the rule file and the boards.</summary>
     private static IReadOnlyCollection<(string File, string Series)> Referenced() =>
         new[] { Path.Combine("docker", "prometheus", "alerts.yml") }
             .Concat(Directory
@@ -245,7 +215,6 @@ public class MetricSeriesShould
             .Distinct()
             .ToArray();
 
-    /// <summary>Every series-shaped name in the rules and the boards.</summary>
     private static IReadOnlyCollection<(string File, string Series)> ReferencedAnywhere() =>
         MonitoringFiles()
             .SelectMany(relative => AnySeries
@@ -261,7 +230,6 @@ public class MetricSeriesShould
                 .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "docker", "grafana", "dashboards"), "*.json")
                 .Select(RepositoryFiles.Relative));
 
-    /// <summary>Strips whatever the exporter appended, down to the instrument name.</summary>
     private static string Base(string series)
     {
         var trimmed = series;

@@ -9,9 +9,6 @@ using System.Threading.Tasks;
 
 namespace DM.Domain.Account.Features.Registration;
 
-/// <summary>
-/// Registration confirmation email sender for email-first flow
-/// </summary>
 internal class RegistrationMailSender(
     ITemplateRenderer renderer,
     IMailSender mailSender,

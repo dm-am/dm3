@@ -10,10 +10,8 @@ using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 
-/// <summary>
-/// Private correspondence is not moderated: a moderator outside it reads none of it, and a removed message
-/// of it reaches nobody, the moderator included.
-/// </summary>
+// Private correspondence is not moderated: a moderator outside it reads none of it, and a removed
+// message of it reaches nobody, the moderator included.
 public class ModeratorCorrespondenceShould : IntegrationTestBase
 {
     private const string LiveText = "A live private message.";
@@ -79,10 +77,6 @@ public class ModeratorCorrespondenceShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A group chat of the test user and the second user, with the moderator in it when asked; one live
-    /// message and one its author removed.
-    /// </summary>
     private async Task<(Guid ChatId, Guid LiveId, Guid RemovedId)> CreateCorrespondence(bool withModerator = false)
     {
         var chatId = Guid.NewGuid();

@@ -7,10 +7,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A log store that stops accepting has to be findable by something other than the
-/// logs it is refusing.
-/// </summary>
 /// <remarks>
 /// A sink reports nothing about itself by contract, and Loki drops silently after retrying. The
 /// diagnostic stream, a scrape target on the store and a rule close that; the guide's queries are
@@ -36,7 +32,6 @@ public class LogDeliveryVisibilityShould
     private static readonly Regex StreamSelector = new(
         @"^\{([^}]*)\}", RegexOptions.Compiled | RegexOptions.Multiline);
 
-    /// <summary>One matcher inside a selector: the key and nothing else.</summary>
     private static readonly Regex SelectorKey = new(
         @"([\w-]+)\s*(?:=~|!~|!=|=)", RegexOptions.Compiled);
 
@@ -45,10 +40,7 @@ public class LogDeliveryVisibilityShould
     /// </summary>
     private const string LevelLabel = "level";
 
-    /// <summary>
-    /// Every line says which build wrote it.
-    /// </summary>
-    /// <remarks>Workflow, build and logger each hand the commit on, and none fails visibly alone.</remarks>
+    // Workflow, build and logger each hand the commit on, and none fails visibly alone.
     [Fact]
     public void NameTheBuildEveryLineCameFrom()
     {

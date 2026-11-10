@@ -88,9 +88,7 @@ internal class RoomService : IRoomService
 
     #region Read
 
-    /// <summary>
-    /// As in GameService: the game and its rooms are one page for the premoderation judge.
-    /// </summary>
+    // As in GameService: the game and its rooms are one page for the premoderation judge.
     private bool MayJudgePremoderation =>
         _intentionManager.IsAllowed(GameIntention.SetStatusModeration);
 
@@ -118,9 +116,7 @@ internal class RoomService : IRoomService
         return rooms;
     }
 
-    /// <summary>
-    /// The grant is the whole test, whatever became of the character since, as on the old site.
-    /// </summary>
+    // The grant is the whole test, whatever became of the character since, as on the old site.
     private static string[] WriterNames(Room room) => room.Accesses
         .Where(a => a.TargetType == RoomAccessTargetType.Character
                     && a.Policy == RoomAccessPolicy.Full)
@@ -223,9 +219,7 @@ internal class RoomService : IRoomService
         return result;
     }
 
-    /// <summary>
-    /// Any id but a room of the same game is refused: taken silently, the move would change nothing.
-    /// </summary>
+    // Any id but a room of the same game is refused: taken silently, the move would change nothing.
     private async Task ThrowIfNotAPlaceInGame(Room room, Guid previousRoomId)
     {
         var previous = previousRoomId == room.Id

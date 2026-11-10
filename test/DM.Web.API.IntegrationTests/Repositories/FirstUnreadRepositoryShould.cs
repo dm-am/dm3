@@ -11,9 +11,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Where "go to first unread" puts the reader down, and how much it says is left.
-/// </summary>
 /// <remarks>
 /// Against the container Postgres: the reads are a union of per-room aggregates from each room's last-read moment.
 /// The assertions state what the reader sees, independent of how the rooms are asked.
@@ -145,9 +142,6 @@ public class FirstUnreadRepositoryShould : IntegrationTestBase
         (await repository.GetLastPostInRooms(none)).Should().BeNull();
     }
 
-    /// <summary>
-    /// The rooms are walked in the menu's order: by place, and of two sharing one, the room created first.
-    /// </summary>
     [Fact]
     public async Task WalkTheRoomsInTheOrderTheMenuListsThem()
     {
@@ -229,10 +223,8 @@ public class FirstUnreadRepositoryShould : IntegrationTestBase
         return new GameRooms(userId, gameId, roomIds);
     }
 
-    /// <summary>
-    /// Posts a minute apart, so every moment in a game is distinct and the order
-    /// under test is the one the data states rather than an insertion accident.
-    /// </summary>
+    // Posts a minute apart, so every moment in a game is distinct and the order under test is the
+    // one the data states rather than an insertion accident.
     private static async Task<IReadOnlyList<DateTimeOffset>> AddPostsAsync(
         DmDbContext dbContext, Guid roomId, int count, int minuteOffset)
     {

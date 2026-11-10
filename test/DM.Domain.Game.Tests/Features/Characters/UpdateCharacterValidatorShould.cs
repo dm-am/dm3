@@ -79,11 +79,8 @@ public class UpdateCharacterValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// A sheet with no specifications in it accepts no value: the identifier
-    /// submitted answers to nothing, which is the same refusal an unknown one
-    /// earns in a game whose sheet is full.
-    /// </summary>
+    // A sheet with no specifications in it accepts no value: the identifier submitted answers to
+    // nothing, which is the same refusal an unknown one earns in a game whose sheet is full.
     [Fact]
     public async Task RefuseAValueWhenTheSheetHoldsNoSpecifications()
     {
@@ -105,11 +102,8 @@ public class UpdateCharacterValidatorShould : UnitTestBase
             .WithErrorMessage(AttributeValidationError.InvalidSpecification);
     }
 
-    /// <summary>
-    /// The same invariant as on create: the character holds one value per
-    /// specification, so a repeated identifier is a caller's mistake and not a
-    /// failed save.
-    /// </summary>
+    // The same invariant as on create: the character holds one value per specification, so a
+    // repeated identifier is a caller's mistake and not a failed save.
     [Fact]
     public async Task FailWhenOneSpecificationIsSubmittedTwice()
     {

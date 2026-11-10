@@ -7,9 +7,10 @@
 // guest keeps the invitation to sign in.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { nextTick } from "vue";
-import { flushPromises, mount, enableAutoUnmount } from "@vue/test-utils";
+import { flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia, type Pinia } from "pinia";
 import { useAuthStore } from "@/shared/stores";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 
 const { api } = vi.hoisted(() => ({
   api: {
@@ -34,15 +35,6 @@ vi.mock("@/shared/lib/composables/useSignalR", async () => {
     }),
   };
 });
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: {}, query: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}));
-
-vi.mock("vue-final-modal", () => ({
-  useModal: () => ({ open: vi.fn(), close: vi.fn() }),
-}));
 
 import GlobalChatPage from "./GlobalChatPage.vue";
 
@@ -82,10 +74,29 @@ const details = (participants: string[]) => ({
   error: null,
 });
 
+/** Every child but the feed, as a shallow mount would leave them. */
+const stubs = {
+  PageTitle: true,
+  ChatSearchRow: true,
+  ChatEventsPanel: true,
+  LoginPrompt: true,
+  ChatComposer: true,
+  ChatStrip: true,
+  FeedEdge: true,
+  MessageToolbar: true,
+  ChatMessage: true,
+  ChatMessageSkeleton: true,
+  ErrorState: true,
+  DashSeparator: true,
+  ActionResult: true,
+  SvgIcon: true,
+};
+
 async function openChat() {
-  const wrapper = mount(GlobalChatPage, {
-    shallow: true,
-    global: { plugins: [pinia], stubs: { ChatFeed: false } },
+  const { wrapper } = await mountPage(GlobalChatPage, "/global-chat", {
+    routes: [["global-chat", "/global-chat"]],
+    pinia,
+    stubs,
   });
   await flushPromises();
   await nextTick();

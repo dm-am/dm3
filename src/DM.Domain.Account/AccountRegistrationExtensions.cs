@@ -23,8 +23,6 @@ public static class AccountRegistrationExtensions
     /// <summary>
     /// Registers the account types whose lifetimes the scan default cannot serve.
     /// </summary>
-    /// <param name="services">Service collection.</param>
-    /// <returns>Service collection for chaining.</returns>
     public static IServiceCollection AddDmAccount(this IServiceCollection services)
     {
         // The setter and the provider have to be the same object within a request:

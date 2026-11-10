@@ -5,6 +5,7 @@ import type { Character } from "./characterTypes";
 import type { DiceRoll, DiceRollInput } from "./diceTypes";
 import type { Room } from "./roomTypes";
 import type { ReviewSignName } from "@/shared/api/models/game/reviews";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 interface PostEditInfo {
   id: string;
@@ -104,7 +105,7 @@ export interface FirstUnreadRoomPostResult {
 /** The rated posts the posts endpoint is asked for. */
 export type RatedPostsQuery = {
   sortBy?: "rating" | "lastreview" | "reviewcount" | "created";
-  sortOrder?: "asc" | "desc";
+  sortOrder?: SortDirection;
   hasReviews?: boolean;
   lastReviewedFromUtc?: string;
   search?: string;
@@ -121,12 +122,18 @@ export type RatedPostsQuery = {
   number?: number;
 };
 
+/**
+ * The orders the posts endpoint sorts rated posts by. The union stays written out
+ * in each query: ClientWireNamesShould reads it there against the server's query.
+ */
+export type RatedPostSortBy = NonNullable<RatedPostsQuery["sortBy"]>;
+
 /** The pulse filters under the pulse names, plus the characters. */
 export interface RoomPostsFilter {
   search?: string;
   /** The server's default is created, the order the room is written in. */
   sortBy?: "created" | "rating" | "reviewcount" | "lastreview";
-  sortOrder?: "asc" | "desc";
+  sortOrder?: SortDirection;
   authorUsernames?: string[];
   characterIds?: string[];
   /** Alone: only posts without a character; with characterIds: those too. */

@@ -9,10 +9,8 @@ namespace DM.Domain.Game.Tests.Features.Games;
 
 public class GameRoleExtensionsShould
 {
-    /// <summary>
-    /// The roles the ordinary ban's exemption is meant to cover: the two that
-    /// lead the game, the mentor curating it, and a player already accepted.
-    /// </summary>
+    // The roles the ordinary ban's exemption is meant to cover: the two that lead the game, the
+    // mentor curating it, and a player already accepted.
     [Theory]
     [InlineData(GameRole.Master)]
     [InlineData(GameRole.Assistant)]
@@ -23,11 +21,8 @@ public class GameRoleExtensionsShould
         new[] { role }.IsOwnGame().Should().BeTrue();
     }
 
-    /// <summary>
-    /// Written as "anything that is not a Reader", the predicate answered true
-    /// for None, and the exemption widened on its own with every role added to
-    /// the enum after it.
-    /// </summary>
+    // Written as "anything that is not a Reader", the predicate answered true for None, and the
+    // exemption widened on its own with every role added to the enum after it.
     [Theory]
     [InlineData(GameRole.None)]
     [InlineData(GameRole.Reader)]
@@ -36,11 +31,8 @@ public class GameRoleExtensionsShould
         new[] { role }.IsOwnGame().Should().BeFalse();
     }
 
-    /// <summary>
-    /// Every role has a name on the wire. Three of the seven collapsed into
-    /// "unknown", and the mentor is returned by the roster query, so the client
-    /// got a value its own union type does not contain.
-    /// </summary>
+    // Three of the seven collapsed into "unknown", and the mentor is returned by the roster query,
+    // so the client got a value its own union type does not contain.
     [Fact]
     public void RenderEveryRoleUnderItsOwnName()
     {

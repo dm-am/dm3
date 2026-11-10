@@ -13,11 +13,8 @@ using DbUserBlacklist = DM.Infrastructure.Persistence.Entities.Account.UserBlack
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// One user is on one game's blacklist once, and taking them off it is a
-/// statement about the pair rather than about a row that was just read.
-/// </summary>
-/// <remarks>Adding is check-then-insert, so the rule lives in the schema, and the repository answers its refusal in the domain's terms.</remarks>
+// Adding is check-then-insert, so the rule lives in the schema, and the repository answers its
+// refusal in the domain's terms.
 public class GameBlacklistUniquenessShould : IntegrationTestBase
 {
     public GameBlacklistUniquenessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -52,10 +49,7 @@ public class GameBlacklistUniquenessShould : IntegrationTestBase
             .Should().Be(1);
     }
 
-    /// <summary>
-    /// Taking a pair off the list that is not on it is not an error.
-    /// </summary>
-    /// <remarks>The delete names the pair and accepts zero rows: the row can be gone by the time it runs.</remarks>
+    // The delete names the pair and accepts zero rows: the row can be gone by the time it runs.
     [Fact]
     public async Task RemoveAPairThatIsNotOnTheList()
     {
@@ -78,11 +72,8 @@ public class GameBlacklistUniquenessShould : IntegrationTestBase
             .Should().Be(0);
     }
 
-    /// <summary>
-    /// The master's personal list lands on the game once, however many copies of it
-    /// run at the same time.
-    /// </summary>
-    /// <remarks>The copies stand in for any write landing between the read and the insert; each ends without an error.</remarks>
+    // The copies stand in for any write landing between the read and the insert; each ends without
+    // an error.
     [Fact]
     public async Task CopyThePersonalListOnceWhenCopiesRunTogether()
     {
@@ -127,10 +118,8 @@ public class GameBlacklistUniquenessShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
     {
         var userId = Guid.NewGuid();
@@ -148,7 +137,6 @@ public class GameBlacklistUniquenessShould : IntegrationTestBase
         return userId;
     }
 
-    /// <summary>A game with the master it needs to exist.</summary>
     private static async Task<(Guid MasterId, Guid GameId)> AddGameAsync(DmDbContext dbContext)
     {
         var masterId = await AddUserAsync(dbContext);

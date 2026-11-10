@@ -5,10 +5,9 @@
  * has a card of its own, worded by the page from the server's code.
  */
 import { ref, onMounted } from "vue";
-import { useRouter } from "vue-router";
 import { readConfirmationToken } from "@/shared/lib/utils/confirmationToken";
 import { accountApi, useAuthStore, fetchUser } from "@/entities/user";
-import Button from "@/shared/ui/Button/Button.vue";
+import HomeButton from "./HomeButton.vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
 import { supportFor } from "@/entities/ticket";
@@ -19,7 +18,6 @@ type PageState = "loading" | "confirmed" | "taken" | "failed";
 /** The code the server refuses an address in use with. */
 const TAKEN = "Taken";
 
-const router = useRouter();
 const auth = useAuthStore();
 
 // A phase from the start: a `loading` flag starting false drew the failure card first.
@@ -53,10 +51,6 @@ onMounted(async () => {
   await fetchUser();
   newEmail.value = auth.user?.email ?? "";
 });
-
-function goHome() {
-  router.push("/");
-}
 </script>
 
 <template>
@@ -104,15 +98,7 @@ function goHome() {
       </template>
 
       <!-- One way on for everybody, signed in or not. -->
-      <Button
-        v-if="pageState !== 'loading'"
-        type="button"
-        variant="primary"
-        class="auth-button auth-button--spaced"
-        @click="goHome"
-      >
-        На главную
-      </Button>
+      <HomeButton v-if="pageState !== 'loading'" />
 
       <!-- No help while the link is checked, nor once the address is changed. -->
       <p

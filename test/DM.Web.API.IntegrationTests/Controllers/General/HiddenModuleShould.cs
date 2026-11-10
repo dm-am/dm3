@@ -14,21 +14,14 @@ using DbRoomAccess = DM.Infrastructure.Persistence.Entities.Game.Links.RoomAcces
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A game or a blog the reader may not see is not there to him, with everything in it: every address into it
-/// answers as over identifiers that are nothing, and every list leaves it out.
-/// </summary>
-/// <remarks>
-/// Each case runs under a private draft and under premoderation, and beside every hidden module stands an open
-/// twin, on which the stranger has to get something else.
-/// </remarks>
+// Each case runs under a private draft and under premoderation, and beside every hidden module
+// stands an open twin, on which the stranger has to get something else.
 public partial class HiddenModuleShould : IntegrationTestBase
 {
     public HiddenModuleShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>What hides the module from somebody holding no role in it.</summary>
     public enum Hiding
     {
         PrivateDraft,
@@ -37,7 +30,6 @@ public partial class HiddenModuleShould : IntegrationTestBase
 
     public static TheoryData<Hiding> Hidings => new() { Hiding.PrivateDraft, Hiding.AwaitingEdits };
 
-    /// <summary>Everything a game holds that has an address of its own.</summary>
     private sealed record GameContent(
         Guid Game,
         Guid Character,
@@ -54,7 +46,6 @@ public partial class HiddenModuleShould : IntegrationTestBase
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
     }
 
-    /// <summary>Everything a blog holds that has an address of its own.</summary>
     private sealed record BlogContent(
         Guid Blog,
         Guid Publication,
@@ -66,7 +57,6 @@ public partial class HiddenModuleShould : IntegrationTestBase
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
     }
 
-    /// <summary>One address into a module, and whether the open twin serves it to anybody.</summary>
     private sealed record Route<T>(string Name, HttpMethod Method, Func<T, string> Url, bool OpenToAll = false);
 
     private static readonly Route<GameContent>[] GameRoutes =
@@ -145,11 +135,6 @@ public partial class HiddenModuleShould : IntegrationTestBase
         await SweepAsync(BlogRoutes, world.Hidden, world.Open, BlogContent.Nothing, world.Stranger);
     }
 
-    /// <summary>
-    /// The lists that name what a game holds: the reviews on the profiles of its
-    /// master and of their author, the posts, the ratings of a post, the search of
-    /// messages. The open twin is on each of them.
-    /// </summary>
     [Theory]
     [MemberData(nameof(Hidings))]
     public async Task LeaveAHiddenGameOutOfEveryListThatNamesWhatItHolds(Hiding hiding)
@@ -175,9 +160,6 @@ public partial class HiddenModuleShould : IntegrationTestBase
             "the search finds a post the stranger may read and no other");
     }
 
-    /// <summary>
-    /// A closed room is named with its writers to whoever sees the game; of a hidden game the room list answers as of nothing.
-    /// </summary>
     [Theory]
     [MemberData(nameof(Hidings))]
     public async Task NameTheWritersOfAClosedRoomOnlyInAGameTheReaderSees(Hiding hiding)
@@ -235,9 +217,8 @@ public partial class HiddenModuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The boards of a past month leave a hidden game or blog out, even when it outwrote the open one.
-    /// </summary>
+    // The boards of a past month leave a hidden game or blog out, even when it outwrote the open
+    // one.
     [Theory]
     [MemberData(nameof(Hidings))]
     public async Task LeaveHiddenModulesOffTheLeaderboards(Hiding hiding)
@@ -262,10 +243,8 @@ public partial class HiddenModuleShould : IntegrationTestBase
         Entities(boards, "topBlogsByRating").Should().Contain(blogs.Open.Blog).And.NotContain(blogs.Hidden.Blog);
     }
 
-    /// <summary>
-    /// The best post of the week is a post a guest can read: the hidden one is
-    /// rated higher and still is not named.
-    /// </summary>
+    // The best post of the week is a post a guest can read: the hidden one is rated higher and
+    // still is not named.
     [Theory]
     [MemberData(nameof(Hidings))]
     public async Task NameAsTheBestPostOfTheWeekOnlyAPostAGuestCanRead(Hiding hiding)
@@ -296,9 +275,6 @@ public partial class HiddenModuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The draft visibility closes a blog while it is a draft and nothing after.
-    /// </summary>
     [Fact]
     public async Task OpenABlogStartedFromAPrivateDraftToEverybody()
     {
@@ -356,10 +332,8 @@ public partial class HiddenModuleShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Status and body together: the body is what tells two 404s apart, and two
-    /// lists that both answer 200, one of them with what the hidden module holds.
-    /// </summary>
+    // Status and body together: the body is what tells two 404s apart, and two lists that both
+    // answer 200, one of them with what the hidden module holds.
     private sealed record Answer(HttpStatusCode Status, string Body);
 
     private async Task<Answer> Send(HttpMethod method, string url, GeneralUser? caller)

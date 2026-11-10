@@ -8,18 +8,13 @@
  * page answered "Нет переписок" for the length of the request and then shoved
  * the answer in underneath.
  */
-withDefaults(
-  defineProps<{
-    /** Number of skeleton rows to show */
-    count?: number;
-  }>(),
-  { count: 5 },
-);
+/** Conversation rows shown while the list loads. */
+const ROWS = 5;
 </script>
 
 <template>
   <div class="chat-skeleton-list" aria-hidden="true">
-    <div v-for="i in count" :key="i" class="skeleton-chat">
+    <div v-for="i in ROWS" :key="i" class="skeleton-chat">
       <div class="skeleton-avatar" />
       <div class="skeleton-body">
         <div class="skeleton-header">

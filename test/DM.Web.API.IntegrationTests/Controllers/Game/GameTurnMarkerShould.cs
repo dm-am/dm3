@@ -16,10 +16,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// A game in the participation list says whether it is waiting for a post from
-/// the reader of the list.
-/// </summary>
 /// <remarks>
 /// The list answers from the selection the room list uses, so a starred game has a starred room. Through the
 /// HTTP list: the marker passes a viewer-scoped enrichment, a per-user cache and two mappings.
@@ -32,15 +28,10 @@ public class GameTurnMarkerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// The expectation names the viewer's own character, so his list marks the game
-    /// and names who is being waited for.
-    /// </summary>
     [Fact]
     public async Task MarkAGameWaitingForTheViewer()
     {
-        var world = await Seed("wtura", Awaited.Viewer);
-        try
+        await WithWorld("wtura", Awaited.Viewer, async world =>
         {
             var game = await ReadGame(world);
 
@@ -48,85 +39,35 @@ public class GameTurnMarkerShould : IntegrationTestBase
             game.GetProperty("awaitedCharacterNames").EnumerateArray()
                 .Select(n => n.GetString())
                 .Should().Equal(world.ViewerCharacterName);
-        }
-        finally
-        {
-            await Drop(world);
-        }
+        });
     }
 
-    /// <summary>
-    /// The same game, the same room, the same master — the turn is another
-    /// player's. The viewer plays in the game and sees it in his list, unmarked.
-    /// </summary>
     [Fact]
     public async Task LeaveAGameWaitingForSomebodyElseUnmarked()
     {
-        var world = await Seed("wturb", Awaited.OtherPlayer);
-        try
-        {
-            var game = await ReadGame(world);
-
-            game.GetProperty("awaitsViewerTurn").GetBoolean().Should().BeFalse();
-            game.GetProperty("awaitedCharacterNames").EnumerateArray().Should().BeEmpty();
-        }
-        finally
-        {
-            await Drop(world);
-        }
+        await ExpectUnmarked("wturb", Awaited.OtherPlayer);
     }
 
-    /// <summary>
-    /// The post that answered the expectation has landed. The row stays in the
-    /// table and the marker goes out — the same moment the room's star does.
-    /// </summary>
+    // The row stays in the table and the marker goes out — the same moment the room's star does.
     [Fact]
     public async Task LeaveAGameWithAFulfilledExpectationUnmarked()
     {
-        var world = await Seed("wturc", Awaited.ViewerFulfilled);
-        try
-        {
-            var game = await ReadGame(world);
-
-            game.GetProperty("awaitsViewerTurn").GetBoolean().Should().BeFalse();
-            game.GetProperty("awaitedCharacterNames").EnumerateArray().Should().BeEmpty();
-        }
-        finally
-        {
-            await Drop(world);
-        }
+        await ExpectUnmarked("wturc", Awaited.ViewerFulfilled);
     }
 
-    /// <summary>
-    /// Nobody is expected to post at all — the plain case, and the one that would
-    /// hide a marker stuck on for every row.
-    /// </summary>
+    // Nobody is expected to post at all — the plain case, and the one that would hide a marker
+    // stuck on for every row.
     [Fact]
     public async Task LeaveAGameWithoutExpectationsUnmarked()
     {
-        var world = await Seed("wturd", Awaited.Nobody);
-        try
-        {
-            var game = await ReadGame(world);
-
-            game.GetProperty("awaitsViewerTurn").GetBoolean().Should().BeFalse();
-            game.GetProperty("awaitedCharacterNames").EnumerateArray().Should().BeEmpty();
-        }
-        finally
-        {
-            await Drop(world);
-        }
+        await ExpectUnmarked("wturd", Awaited.Nobody);
     }
 
-    /// <summary>
-    /// The marked game and the room inside it name the same expectation.
-    /// </summary>
     /// <remarks>Both answers come from one selection.</remarks>
     [Fact]
     public async Task AgreeWithTheRoomListOfTheSameGame()
     {
-        var world = await Seed("wture", Awaited.Viewer);
-        try
+        await WithWorld("wture", Awaited.Viewer, async world =>
         {
             (await ReadGame(world)).GetProperty("awaitsViewerTurn").GetBoolean()
                 .Should().BeTrue();
@@ -145,12 +86,29 @@ public class GameTurnMarkerShould : IntegrationTestBase
             pendencies.Should().ContainSingle()
                 .Which.GetProperty("characterName").GetString()
                 .Should().Be(world.ViewerCharacterName);
+        });
+    }
+
+    private async Task WithWorld(string publicId, Awaited awaited, Func<World, Task> test)
+    {
+        var world = await Seed(publicId, awaited);
+        try
+        {
+            await test(world);
         }
         finally
         {
             await Drop(world);
         }
     }
+
+    private Task ExpectUnmarked(string publicId, Awaited awaited) => WithWorld(publicId, awaited, async world =>
+    {
+        var game = await ReadGame(world);
+
+        game.GetProperty("awaitsViewerTurn").GetBoolean().Should().BeFalse();
+        game.GetProperty("awaitedCharacterNames").EnumerateArray().Should().BeEmpty();
+    });
 
     private enum Awaited
     {
@@ -168,9 +126,6 @@ public class GameTurnMarkerShould : IntegrationTestBase
         string ViewerCharacterName,
         Guid OtherPlayerId);
 
-    /// <summary>
-    /// Read the seeded game out of the viewer's own participation list.
-    /// </summary>
     /// <remarks>The whole list: the marker belongs to a row among the shared fixture's rows.</remarks>
     private async Task<JsonElement> ReadGame(World world)
     {
@@ -194,10 +149,6 @@ public class GameTurnMarkerShould : IntegrationTestBase
         Role = UserRole.RegularUser,
     };
 
-    /// <summary>
-    /// An active game with one room, a master, the viewer with a character, a
-    /// second player with his own, and at most one expectation.
-    /// </summary>
     /// <remarks>Both players hold room access: an expectation shows only while its person takes part.</remarks>
     private async Task<World> Seed(string publicId, Awaited awaited)
     {
@@ -228,10 +179,8 @@ public class GameTurnMarkerShould : IntegrationTestBase
         return new World(gameId, masterId, viewerId, viewerUsername, viewerCharacterName, otherPlayerId);
     }
 
-    /// <summary>A player's character in the game, and the player it belongs to.</summary>
     private sealed record Seat(Guid CharacterId, Guid PlayerId, string Name);
 
-    /// <summary>The game, active and approved, and its one room of posts.</summary>
     private static void AddGameWithRoom(
         DmDbContext dbContext, string publicId, Guid gameId, Guid roomId, Guid masterId, DateTimeOffset now)
     {
@@ -270,7 +219,6 @@ public class GameTurnMarkerShould : IntegrationTestBase
         });
     }
 
-    /// <summary>The characters of the viewer and of the second player, both let into the room.</summary>
     private static void AddCharacters(
         DmDbContext dbContext, Guid gameId, Guid roomId, DateTimeOffset now, Seat viewer, Seat other)
     {
@@ -295,7 +243,6 @@ public class GameTurnMarkerShould : IntegrationTestBase
             });
     }
 
-    /// <summary>The expectation the case names, if any: of the viewer or of the second player.</summary>
     private static void AddPendencies(
         DmDbContext dbContext, Guid roomId, Guid masterId, Awaited awaited, Seat viewer, Seat other, DateTimeOffset now)
     {

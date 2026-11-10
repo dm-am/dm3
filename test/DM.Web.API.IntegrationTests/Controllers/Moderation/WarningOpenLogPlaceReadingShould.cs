@@ -15,26 +15,12 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// The open log of warnings over a place a guest cannot read: whoever the read of the place lets in gets the
-/// text the warning was given for, the title and the address, and everyone else one row of restricted access.
-/// </summary>
-/// <remarks>
-/// The places are a game, a private room of a game, and a blog with its publications. The rest of the log is
-/// <see cref="WarningOpenLogShould"/>.
-/// </remarks>
 public class WarningOpenLogPlaceReadingShould : WarningOpenLogTestBase
 {
     public WarningOpenLogPlaceReadingShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// A text where a guest cannot read it is in the open log by its reader: whoever reads the game by the game's
-    /// own read gets the text, the title and the address, and whoever does not, a guest, a member outside the game
-    /// and a moderator a private draft is closed to, one row of restricted access with nothing of the place, as for
-    /// a place that is not found. The moderation list has all of it. A hidden block is erased there too.
-    /// </summary>
     [Fact]
     public async Task ShowTheTextOfAHiddenGameToItsReadersAloneInTheOpenLog()
     {
@@ -125,11 +111,6 @@ public class WarningOpenLogPlaceReadingShould : WarningOpenLogTestBase
         }
     }
 
-    /// <summary>
-    /// A review of a post in a private room is read where its post is: in the open log the player whose character is
-    /// let into the room gets the text, the title of the game and the address, and a guest, a user outside the game and
-    /// a moderator the room is closed to get one row of restricted access, though the game is open to all of them.
-    /// </summary>
     [Fact]
     public async Task ShowTheReviewOfAPostInAPrivateRoomToItsReadersAloneInTheOpenLog()
     {
@@ -161,11 +142,6 @@ public class WarningOpenLogPlaceReadingShould : WarningOpenLogTestBase
         }
     }
 
-    /// <summary>
-    /// A comment of a blog a guest cannot open, in its discussion or under one of its publications, is in the open log
-    /// by the read of its place: a reader of the blog gets the text, the title and the address, and a guest, a user
-    /// outside the blog and a moderator a private draft is closed to get one row of restricted access.
-    /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -220,10 +196,6 @@ public class WarningOpenLogPlaceReadingShould : WarningOpenLogTestBase
         row.GetProperty("user").GetProperty("username").GetString().Should().Be(TestConstants.SecondUserLogin);
     }
 
-    /// <summary>
-    /// The row a guest, a user with no role in the place and a moderator the place is closed to read in the open log:
-    /// restricted access for each.
-    /// </summary>
     private async Task AssertRestrictedToOutsiders(string url, Guid warningId)
     {
         HttpRequestMessage[] outsiders =
@@ -242,9 +214,6 @@ public class WarningOpenLogPlaceReadingShould : WarningOpenLogTestBase
 
     private const string PrivateDraftTitle = "Игра в оформлении";
 
-    /// <summary>
-    /// A game a guest cannot open, by default a private draft, of a master of its own; fresh identifiers.
-    /// </summary>
     private async Task<(Guid GameId, Guid MasterId)> SeedPrivateDraftGame(
         ModuleStatus status = ModuleStatus.Draft,
         PremoderationStatus premoderationStatus = PremoderationStatus.Approved,
@@ -271,10 +240,6 @@ public class WarningOpenLogPlaceReadingShould : WarningOpenLogTestBase
         return (game.GameId, master.UserId);
     }
 
-    /// <summary>
-    /// A review by the warned user of a post in a private room of an open game, the character of the game's player let
-    /// into the room; fresh identifiers.
-    /// </summary>
     private async Task<(Guid ReviewId, GeneralUser Player)> SeedReviewInAPrivateRoom(string text)
     {
         var room = await RoomPostsTestHelper.AddGameWithRoomAsync(DatabaseFixture, RoomAccessType.Private);
@@ -308,10 +273,6 @@ public class WarningOpenLogPlaceReadingShould : WarningOpenLogTestBase
 
     private const string HiddenPublicationTitle = "Первая публикация";
 
-    /// <summary>
-    /// A blog a guest cannot open, a private draft of an owner of its own, with one publication and one reader by
-    /// subscription; fresh identifiers.
-    /// </summary>
     private async Task<(Guid BlogId, string PublicId, Guid PublicationId, GeneralUser Reader)> SeedPrivateDraftBlog()
     {
         await using var db = DatabaseFixture.CreateDbContext();

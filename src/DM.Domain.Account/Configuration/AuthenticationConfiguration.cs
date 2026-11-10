@@ -66,8 +66,5 @@ public class AuthenticationConfiguration
     /// </summary>
     public int AccountLockoutThreshold { get; set; } = 15;
 
-    /// <summary>
-    /// Account lockout duration in minutes.
-    /// </summary>
     public int AccountLockoutDurationMinutes { get; set; } = 30;
 }

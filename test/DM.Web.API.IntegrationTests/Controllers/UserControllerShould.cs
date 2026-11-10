@@ -23,10 +23,7 @@ public class UserControllerShould : IntegrationTestBase
         content.Should().Contain("resources");
     }
 
-    /// <summary>
-    /// The per-category subscriber counts reach the wire.
-    /// </summary>
-    /// <remarks>The counts are UserSubscriberSummaryShould's; a missing object would read as three zeroes.</remarks>
+    // The counts are UserSubscriberSummaryShould's; a missing object would read as three zeroes.
     [Fact]
     public async Task GetUserCarriesTheSubscriberCountsPerCategory()
     {
@@ -53,10 +50,7 @@ public class UserControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// Filtering the roster by role is the paged listing, and only that.
-    /// </summary>
-    /// <remarks>API_DESIGN.md gives GET /v1/users?role=moderator for this and forbids a specialised address.</remarks>
+    // API_DESIGN.md gives GET /v1/users?role=moderator for this and forbids a specialised address.
     [Fact]
     public async Task FilterTheRosterByRoleThroughThePagedListing()
     {
@@ -70,9 +64,7 @@ public class UserControllerShould : IntegrationTestBase
         gone.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// Users named by a prefix unique to this instance: the tier shares one database.
-    /// </summary>
+    // Users named by a prefix unique to this instance: the tier shares one database.
     private readonly string Prefix = $"ucs{Guid.NewGuid():N}"[..10];
 
     private async Task<string[]> AddUsersAsync(int count)
@@ -101,7 +93,6 @@ public class UserControllerShould : IntegrationTestBase
         return names;
     }
 
-    /// <summary>Usernames of a /v1/users page, in the order the endpoint returned them.</summary>
     private async Task<string[]> UsernamesAsync(string query)
     {
         var response = await Client.GetAsync($"/v1/users?{query}");
@@ -113,10 +104,7 @@ public class UserControllerShould : IntegrationTestBase
             .ToArray();
     }
 
-    /// <summary>
-    /// The search filter narrows the list to the users it names.
-    /// </summary>
-    /// <remarks>An unknown query parameter is ignored, so what each parameter does to the answer is asserted.</remarks>
+    // An unknown query parameter is ignored, so what each parameter does to the answer is asserted.
     [Fact]
     public async Task GetUsersWithSearchNarrowsTheListToTheMatches()
     {
@@ -155,10 +143,8 @@ public class UserControllerShould : IntegrationTestBase
             "parameter that refuses a wrong value is a parameter the binder actually reads");
     }
 
-    /// <summary>
-    /// Name ascending and name descending are each other's reverse, which is the
-    /// cheapest proof that the pair of sort parameters reaches the query.
-    /// </summary>
+    // Name ascending and name descending are each other's reverse, which is the cheapest proof that
+    // the pair of sort parameters reaches the query.
     [Fact]
     public async Task GetUsersWithSortOrderReversesTheList()
     {

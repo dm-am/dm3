@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The body of a refusal has one author: ErrorHandlingMiddleware.
-/// </summary>
 /// <remarks>
 /// API_DESIGN states the rule. Textual: an ObjectResult with an anonymous body is a legal return
 /// from any action.

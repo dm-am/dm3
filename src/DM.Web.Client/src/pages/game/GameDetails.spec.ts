@@ -6,43 +6,37 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { useGameDetailsStore, type Character } from "@/entities/game";
 import {
-  useGameDetailsStore,
-  type Character,
-  type Game,
-} from "@/entities/game";
+  createMockCharacter,
+  createMockGame,
+} from "@/entities/game/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import GameDetails from "./GameDetails.vue";
 
 enableAutoUnmount(afterEach);
 
-const author = { id: "u-1", username: "игрок", role: "Player" };
+const author = createMockUser("u-1", "игрок");
 
 const character = (
   over: Partial<Record<keyof Character, unknown>>,
-): Character =>
-  ({
-    id: "c-1",
-    name: "Ронин",
-    status: "Active",
-    isNpc: false,
-    isDead: false,
-    isPlayerLeft: false,
-    isPlayerExiled: false,
-    author,
-    totalPostsCount: 3,
-    ...over,
-  }) as unknown as Character;
+): Character => ({
+  ...createMockCharacter("c-1", "Ронин"),
+  author: asServed(author),
+  totalPostsCount: asServed(3),
+  ...(over as Partial<Character>),
+});
 
 async function render(characters: Character[]) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useGameDetailsStore();
   store.game = {
-    id: "g-1",
-    publicId: "the-game",
-    status: "Active",
-    schema: { specifications: [] },
-  } as unknown as Game;
+    ...createMockGame("g-1", "Игра"),
+    publicId: asServed("the-game"),
+    schema: { specifications: [], version: 0 },
+  };
   store.characters = characters;
 
   const wrapper = mount(GameDetails, {

@@ -13,10 +13,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
-/// <summary>
-/// Writing a post and removing it: who may, the unread counters of the room and
-/// the events that go out.
-/// </summary>
 public class PostServiceShould : PostServiceTestBase
 {
     [Fact]
@@ -117,10 +113,6 @@ public class PostServiceShould : PostServiceTestBase
         await unreadCountersRepository.Received(1).DecrementAsync(roomId, UnreadEntryType.Message, createdUtc);
     }
 
-    /// <summary>
-    /// A removal that found the post already gone leaves the counter and the
-    /// event to the removal that took it.
-    /// </summary>
     /// <remarks>
     /// The write reports whether it is the one that removed the post, and the
     /// unread counter of the room is a stored number that nothing recomputes:

@@ -11,10 +11,8 @@ using DomainPostReview = DM.Domain.Game.Features.PostReviews.PostReview;
 
 namespace DM.Web.API.Tests.Features.Game;
 
-/// <summary>
-/// Both review texts are edited in place with X-Dm-Audience: author_edit, honored only when the envelope
-/// names the author.
-/// </summary>
+// Both review texts are edited in place with X-Dm-Audience: author_edit, honored only when the
+// envelope names the author.
 public class ReviewMapperShould : UnitTestBase
 {
     private static readonly Guid AuthorId = Guid.Parse("00000000-0000-0000-0000-00000000000a");

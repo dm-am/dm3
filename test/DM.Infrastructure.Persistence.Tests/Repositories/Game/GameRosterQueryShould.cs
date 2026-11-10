@@ -12,13 +12,8 @@ using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subs
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 
-/// <summary>
-/// The roster is a list of roles, and one of them is deduplicated.
-/// </summary>
-/// <remarks>
-/// Readers are deduplicated against everyone on the list, nobody else is: an assistant who plays holds two
-/// roles and his character hangs off the second. Against the query, where both halves live.
-/// </remarks>
+// Readers are deduplicated against everyone on the list, nobody else is: an assistant who plays
+// holds two roles and his character hangs off the second.
 public class GameRosterQueryShould
 {
     private static readonly DateTimeOffset Created = new(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
@@ -43,10 +38,6 @@ public class GameRosterQueryShould
         CreatedUtc = Created,
     };
 
-    /// <summary>
-    /// A master, an assistant who also plays, a player with two active characters
-    /// and a reader who is also that player.
-    /// </summary>
     private DmDbContext Seeded()
     {
         var context = Context();

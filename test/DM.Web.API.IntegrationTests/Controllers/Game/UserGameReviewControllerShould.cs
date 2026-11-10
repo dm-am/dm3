@@ -10,22 +10,14 @@ using DbGameReview = DM.Infrastructure.Persistence.Entities.Game.GameReview;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// The game reviews and the two profile counters they back.
-/// </summary>
-/// <remarks>
-/// TestGame is mastered by TestUser and SecondGame by SecondUser. Counters are asserted as deltas off the
-/// repository: the profile endpoint answers out of a cache.
-/// </remarks>
+// Counters are asserted as deltas off the repository: the profile endpoint answers out of a cache.
 public class UserGameReviewControllerShould : IntegrationTestBase
 {
     public UserGameReviewControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// Seed a review directly: the create endpoint's gates are too heavy to arrange through the API.
-    /// </summary>
+    // Seed a review directly: the create endpoint's gates are too heavy to arrange through the API.
     private async Task SeedReview(Guid id, Guid authorId, Guid gameId, string text)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -53,7 +45,6 @@ public class UserGameReviewControllerShould : IntegrationTestBase
             .Where(r => idList.Contains(r.GameReviewId)).ExecuteDeleteAsync();
     }
 
-    /// <summary>Review ids the listing at <paramref name="url" /> returned.</summary>
     private async Task<List<Guid>> ReviewIdsAt(string url)
     {
         var response = await Client.GetAsync(url);
@@ -65,10 +56,7 @@ public class UserGameReviewControllerShould : IntegrationTestBase
             .ToList();
     }
 
-    /// <summary>
-    /// The counted user, straight off the repository the profile is built from.
-    /// Uncached, so a second read after a write sees the write.
-    /// </summary>
+    // Uncached, so a second read after a write sees the write.
     private async Task<GeneralUser> Counted(string username)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -241,9 +229,6 @@ public class UserGameReviewControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The profile endpoint publishes both counters.
-    /// </summary>
     [Fact]
     public async Task PublishBothCountersOnTheProfile()
     {

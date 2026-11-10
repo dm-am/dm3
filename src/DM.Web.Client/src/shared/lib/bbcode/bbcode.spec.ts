@@ -99,8 +99,8 @@ describe("BBCode Code Blocks", () => {
       expectRoundTrip(bbcode);
     });
 
-    // [code] changes the font and nothing else, as on DM2: the markup inside
-    // it works. It used to be an example, which showed the tags as typed.
+    // [code] changes the font and nothing else, as on DM2: the markup inside it
+    // works.
     it("draws the markup inside it, as [b] does", () => {
       const bbcode = "[code][b]bold[/b] [i]italic[/i][/code]";
       expect(bbcodeToHtml(bbcode)).toBe(

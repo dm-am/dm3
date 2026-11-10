@@ -10,10 +10,6 @@ using DbUserAward = DM.Infrastructure.Persistence.Entities.Community.UserAward;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// Everyone awarded in a contest series, with the recipient on the wire for the revoke; revoked grants and other
-/// series stay out.
-/// </summary>
 public class ContestSeriesAwardsShould : IntegrationTestBase
 {
     // The series and the award types the listing seeds. xUnit builds the class
@@ -86,9 +82,6 @@ public class ContestSeriesAwardsShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// Two series of one contest type and the two award types they share.
-    /// </summary>
     private async Task SeedSeriesAsync()
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -139,10 +132,6 @@ public class ContestSeriesAwardsShould : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// The awards: a silver and a gold granted in the series, a gold revoked in
-    /// it, and a gold granted in the other series.
-    /// </summary>
     private async Task SeedAwardsAsync()
     {
         var grantedId = Guid.NewGuid();
@@ -192,9 +181,6 @@ public class ContestSeriesAwardsShould : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// Drops every row the two seeds wrote, the revoked award included.
-    /// </summary>
     private async Task DropSeriesAsync()
     {
         await using var db = DatabaseFixture.CreateDbContext();

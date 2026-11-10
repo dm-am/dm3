@@ -20,7 +20,6 @@ namespace DM.Infrastructure.Core.Tests;
 /// </remarks>
 internal static class BbGrammarExpectedHtml
 {
-    /// <summary>What the pieces stand in: no list, a list, or an item of one.</summary>
     private enum Around
     {
         Nothing,
@@ -46,20 +45,14 @@ internal static class BbGrammarExpectedHtml
         return output.ToString();
     }
 
-    /// <summary>The blocks that end their line: the break typed after one is in no piece.</summary>
+    // The blocks that end their line: the break typed after one is in no piece.
     private static readonly HashSet<string> EndsItsLine = ["quote", "spoiler", "nsfw", "mod", "ul", "ol", "li"];
 
-    /// <summary>The leads, as the recipients of every block name them first.</summary>
+    // The leads, as the recipients of every block name them first.
     private static readonly string[] Leads = ["DungeonMaster", "Assistant"];
 
-    /// <summary>
-    /// The pieces as the reader gets them, less every line that held nothing but
-    /// pieces erased for that reader, each with one of the line breaks around it.
-    /// </summary>
-    /// <remarks>
-    /// The break before a dropped line goes, else the one after; a block ending its line holds no break, so
-    /// the one after goes.
-    /// </remarks>
+    // The break before a dropped line goes, else the one after; a block ending its line holds no
+    // break, so the one after goes.
     private static List<JsonObject> WithoutErasedLines(JsonArray pieces, GrammarReader reader, bool atTextEdges)
     {
         var objects = pieces.Select(piece => piece!.AsObject()).ToList();
@@ -67,14 +60,7 @@ internal static class BbGrammarExpectedHtml
         return WithoutBreaks(objects, lines, DroppedBreaks(lines, atTextEdges));
     }
 
-    /// <summary>
-    /// The lines of a row: the line breaks, as (piece, index), and for each
-    /// line whether it holds content and whether it holds an erased piece.
-    /// </summary>
-    /// <remarks>
-    /// An index of -1 is the end of a line no piece holds a break for, and
-    /// cannot be dropped.
-    /// </remarks>
+    // An index of -1 is the end of a line no piece holds a break for, and cannot be dropped.
     private sealed record Lines(List<(int Piece, int At)> Breaks, List<bool> Content, List<bool> Erased);
 
     private static Lines LinesOf(List<JsonObject> objects, GrammarReader reader)
@@ -126,7 +112,6 @@ internal static class BbGrammarExpectedHtml
         return new Lines(breaks, content, erased);
     }
 
-    /// <summary>Which line breaks go with the erased lines.</summary>
     private static bool[] DroppedBreaks(Lines lines, bool atTextEdges)
     {
         var (breaks, content, erased) = lines;
@@ -144,7 +129,6 @@ internal static class BbGrammarExpectedHtml
         return dropped;
     }
 
-    /// <summary>The pieces of a row without the line breaks that went.</summary>
     private static List<JsonObject> WithoutBreaks(List<JsonObject> objects, Lines lines, bool[] dropped)
     {
         var breaks = lines.Breaks;
@@ -296,7 +280,6 @@ internal static class BbGrammarExpectedHtml
         }
     }
 
-    /// <summary>The head of a spoiler and the opening of its body.</summary>
     private static string SpoilerHead(string? given)
     {
         // A caption stays on the open head as well; the words of a
@@ -307,7 +290,6 @@ internal static class BbGrammarExpectedHtml
                "</a><div class=\"spoiler\">";
     }
 
-    /// <summary>The head of an nsfw block and the opening of its body.</summary>
     private const string NsfwHead =
         "<a href=\"#\" class=\"nsfw-head\" data-swaptext=\"Скрыть шокирующий контент\">" +
         "Показать шокирующий контент</a><div class=\"nsfw-spoiler\">";
@@ -398,11 +380,6 @@ internal static class BbGrammarExpectedHtml
     private static bool Sees(JsonObject hidden, GrammarReader reader) =>
         hidden["seenBy"]!.AsArray().Select(kind => (string)kind!).Contains(reader.ToString().ToLowerInvariant());
 
-    /// <summary>
-    /// Whether the piece is a tag that holds, for this reader, hidden blocks
-    /// they do not see (or tags that hold nothing else) and nothing but white
-    /// space besides: such a tag is not drawn for them at all.
-    /// </summary>
     private static bool Erased(JsonObject piece, GrammarReader reader)
     {
         if (piece["hidden"] is JsonObject hidden) return !Sees(hidden, reader);

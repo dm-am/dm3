@@ -12,11 +12,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { nextTick } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { api, clearSpy, nav, toolbar } from "./ChatView.doubles";
+import { api, clearSpy, toolbar } from "./ChatView.doubles";
 import {
   closeChat,
   heldAnswer,
   messagePage,
+  moveTo,
   openChat,
   resetChatView,
   shownIds,
@@ -33,9 +34,6 @@ vi.mock("@/shared/ui/BBCodeEditor", async () =>
   (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeComposer(
     (await import("./ChatView.doubles")).clearSpy,
   ),
-);
-vi.mock("vue-router", async () =>
-  (await import("./ChatView.doubles")).vueRouter(),
 );
 vi.mock("@/shared/lib/composables/useMessageToolbar", async (original) =>
   (await import("./ChatView.doubles")).messageToolbar(await original()),
@@ -113,10 +111,7 @@ describe("ChatView, the correspondence in the global chat's dress", () => {
     const strip = wrapper.get(".chat-strip");
     expect(strip.text().replace(/\s+/g, " ")).toBe("Bob [offline] | поиск | …");
     const name = strip.get("a.line-name");
-    expect(JSON.parse(name.attributes("data-to")!)).toEqual({
-      name: "profile",
-      params: { username: "Bob" },
-    });
+    expect(name.attributes("href")).toBe("/users/Bob");
     expect(strip.find(".chat-search-row").exists()).toBe(false);
   });
 
@@ -195,10 +190,7 @@ describe("ChatView, the correspondence in the global chat's dress", () => {
     const back = wrapper.get("a");
     expect(back.text()).toBe("Все переписки");
     // The list beside it stays on its page; the address here names none.
-    expect(JSON.parse(back.attributes("data-to")!)).toEqual({
-      name: "messenger",
-      query: {},
-    });
+    expect(back.attributes("href")).toBe("/messenger");
     expect(wrapper.find(".chat-feed__list").exists()).toBe(false);
   });
 
@@ -379,7 +371,7 @@ describe("ChatView, the field by the server's answer", () => {
 
     const next = heldAnswer<unknown>();
     api.getChat.mockReturnValueOnce(next.answer);
-    nav.route.params = { id: "c2" };
+    await moveTo("/messenger/c/c2");
     await flushPromises();
 
     // The answer about the correspondence left behind is not this one's.
@@ -412,9 +404,8 @@ describe("ChatView, the link of a message", () => {
   });
 
   it("keeps the page of the list beside the correspondence", async () => {
-    nav.route.query = { number: "2" };
     api.getMessages.mockResolvedValue(messagePage(["m1"]));
-    const wrapper = await openChat();
+    const wrapper = await openChat({ address: "/messenger/c/c1?number=2" });
 
     const linkTo = wrapper
       .findComponent({ name: "ChatFeed" })

@@ -126,10 +126,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
         logger.At(LogLevel.Warning).Should().ContainSingle();
     }
 
-    /// <summary>
-    /// The site says it too, not only the letter.
-    /// </summary>
-    /// <remarks>The Security category the settings offer counts this event.</remarks>
+    // The Security category the settings offer counts this event.
     [Fact]
     public async Task AnnounceASuspiciousLoginOnTheSiteAsWell()
     {

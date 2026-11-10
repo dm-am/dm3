@@ -15,19 +15,12 @@ export interface FlipReorderOptions {
   itemSelector: string;
   /** Refocused when the patch dropped focus out of root; omit to skip. */
   focusSelector?: string;
-  /** Animation duration in ms. */
-  durationMs?: number;
-  /** Animation easing. */
-  easing?: string;
 }
 
-const DEFAULT_DURATION_MS = 280;
-const DEFAULT_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
+const DURATION_MS = 280;
+const EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 export function useFlipReorder(options: FlipReorderOptions): void {
-  const duration = options.durationMs ?? DEFAULT_DURATION_MS;
-  const easing = options.easing ?? DEFAULT_EASING;
-
   // Rects before the patch in onBeforeUpdate, after it in onUpdated.
   let prevRects: Map<HTMLElement, DOMRect> | null = null;
 
@@ -80,18 +73,16 @@ export function useFlipReorder(options: FlipReorderOptions): void {
       const dy = oldRect.top - newRect.top;
       if (dx === 0 && dy === 0) continue;
 
-      // Cancel any animation still running on this element from a previous
-      // rapid reorder. Otherwise we'd stack interpolations.
+      // A rapid reorder cancels the flight still running, or offsets would stack.
       activeAnims.get(el)?.cancel();
 
-      // The element is at its NEW logical position after Vue's patch; play
-      // it FROM the inverted offset TO identity.
+      // Already at its new place after the patch: play from the old offset to none.
       const anim = el.animate(
         [
           { transform: `translate(${dx}px, ${dy}px)` },
           { transform: "translate(0, 0)" },
         ],
-        { duration, easing, fill: "none" },
+        { duration: DURATION_MS, easing: EASING, fill: "none" },
       );
       activeAnims.set(el, anim);
       anim.finished

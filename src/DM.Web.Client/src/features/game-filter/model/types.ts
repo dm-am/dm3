@@ -1,3 +1,6 @@
+import type { SortDirection } from "@/shared/lib/filters/types";
+import type { ClosedReason } from "@/shared/api/models/common";
+
 export type RecruitmentFilter =
   | "any"
   | "open"
@@ -5,9 +8,12 @@ export type RecruitmentFilter =
   | "subsequent"
   | "closed";
 
-export type ClosedReasonFilter = "any" | "None" | "Finished" | "Frozen";
+export type ClosedReasonFilter = "any" | ClosedReason;
 
 export type StatusValue = "Draft" | "Active" | "Closed";
+
+/** The filters the menu of the bar offers. */
+export type GamesFilterKey = "status" | "host" | "dates" | "tag" | "excludeTag";
 
 export interface GamesFilterState {
   search: string;
@@ -49,7 +55,7 @@ export interface GamesFilterState {
 
   sortBy: string;
 
-  sortOrder: "asc" | "desc";
+  sortOrder: SortDirection;
 }
 
 // The entity's own shape: what the filter never sets stays absent.

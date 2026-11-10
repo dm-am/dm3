@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 
@@ -26,10 +27,6 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// The three ways a blog is hidden from a stranger, plus the alias nobody has
-    /// taken, answered by one and the same refusal.
-    /// </summary>
     [Fact]
     public async Task AnswerAStrangerOnEveryHiddenBlogTheWayItAnswersOnNoBlogAtAll()
     {
@@ -47,10 +44,8 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         onAwaitingApproval.Should().Be(onMissing, "and neither is the other premoderation status");
     }
 
-    /// <summary>
-    /// The owner's own move keeps working on the blog only the owner can see —
-    /// which is the whole reason the endpoint was opened past Mentor+.
-    /// </summary>
+    // The owner's own move keeps working on the blog only the owner can see — which is the whole
+    // reason the endpoint was opened past Mentor+.
     [Fact]
     public async Task KeepTheOwnersMoveOpenOnTheBlogOnlyTheOwnerCanSee()
     {
@@ -61,9 +56,7 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         status.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// The verdict reads past visibility: a blog in AwaitingEdits has no curator recorded.
-    /// </summary>
+    // The verdict reads past visibility: a blog in AwaitingEdits has no curator recorded.
     [Theory]
     [InlineData(UserRole.Mentor)]
     [InlineData(UserRole.SeniorModerator)]
@@ -80,11 +73,8 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// The refusal is about what the caller may see and not about the endpoint
-    /// being shut: a blog anybody can open answers on its own terms, and the
-    /// illegal move on it is the 400 it always was.
-    /// </summary>
+    // The refusal is about what the caller may see and not about the endpoint being shut: a blog
+    // anybody can open answers on its own terms
     [Fact]
     public async Task StillRefuseAnIllegalMoveOnAPubliclyVisibleBlogWithBadRequest()
     {
@@ -96,10 +86,6 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         status.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// The plain read of a blog by its alias, which is the same oracle reached
-    /// without any transition at all — and reachable by a guest.
-    /// </summary>
     /// <remarks>Whole bodies, not statuses: a different title or problem type would name the blog as loudly.</remarks>
     [Fact]
     public async Task AnswerAReadOfAHiddenAliasTheWayItAnswersAnUnclaimedOne()
@@ -170,10 +156,6 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         (await BodyWithoutTrace(onPremoderated, premoderatedOwner.Username)).Should().Be(expected);
     }
 
-    /// <summary>
-    /// What must not change: a blog the caller can see refuses an action the
-    /// caller has no right to with a 403, which is what a 403 is for.
-    /// </summary>
     /// <remarks>The rule above is about visibility alone, not "every refusal is a 404".</remarks>
     [Fact]
     public async Task StillRefuseEditingSomebodyElsesVisibleBlogWithForbidden()
@@ -196,10 +178,6 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
     private async Task<HttpResponseMessage> Read(string publicId, GeneralUser caller) =>
         await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, ReadUrl(publicId), caller));
 
-    /// <summary>
-    /// The response body with the one field that differs between any two
-    /// requests removed, and optionally the caller's login masked.
-    /// </summary>
     private static async Task<string> BodyWithoutTrace(HttpResponseMessage response, string? login = null)
     {
         var payload = await response.Content.ReadAsStringAsync();
@@ -217,7 +195,6 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         return response.StatusCode;
     }
 
-    /// <summary>A caller holding the given site-wide role and no role in any blog.</summary>
     private async Task<GeneralUser> UserAsync(UserRole role)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -227,9 +204,7 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         return new GeneralUser { UserId = user.UserId, Username = user.Username, Role = role };
     }
 
-    /// <summary>
-    /// A fresh user owning exactly one blog: the owner route answers with the first blog it finds.
-    /// </summary>
+    // A fresh user owning exactly one blog: the owner route answers with the first blog it finds.
     private async Task<GeneralUser> OwnerOfOneBlogAsync(
         PremoderationStatus premoderationStatus, DraftVisibility draftVisibility)
     {
@@ -257,9 +232,6 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         string AwaitingApprovalPublicId,
         string PublicPublicId);
 
-    /// <summary>
-    /// Four blogs of one owner, differing only in what hides them, under fresh identifiers.
-    /// </summary>
     private async Task<SeededBlogs> SeedAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -294,21 +266,8 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
             publicBlog.PublicId);
     }
 
-    private static DbUser AddUser(DmDbContext dbContext, string prefix)
-    {
-        var userId = Guid.NewGuid();
-        var user = new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id pads the prefix.
-            Username = $"{prefix}{userId:N}"[..20],
-            Email = $"{userId:N}@blogpremoderation.example",
-            PasswordHash = "hash",
-            Salt = "salt"
-        };
-        dbContext.Users.Add(user);
-        return user;
-    }
+    private static DbUser AddUser(DmDbContext dbContext, string prefix) =>
+        UserRows.Add(dbContext, prefix, "blogpremoderation.example");
 
     private static DbBlog AddBlog(
         DmDbContext dbContext,

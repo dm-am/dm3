@@ -169,12 +169,7 @@ public class RoomServiceShould : UnitTestBase
         await producer.Received(1).SendAsync(EventType.ChangedRoom, roomId);
     }
 
-    /// <summary>
-    /// Every patch field the caller sends reaches the repository.
-    /// </summary>
-    /// <remarks>
-    /// The service copies the fields by hand, so the captured entity is compared field by field.
-    /// </remarks>
+    // The service copies the fields by hand, so the captured entity is compared field by field.
     [Fact]
     public async Task CarryEveryPatchFieldThroughToTheRepository()
     {
@@ -294,10 +289,8 @@ public class RoomServiceShould : UnitTestBase
         await repository.Received(1).GetAllVisible(gameId, CurrentUserId, mayJudge);
     }
 
-    /// <summary>
-    /// The same rank on the point read, or the menu would name rooms whose own
-    /// address then answered 404.
-    /// </summary>
+    // The same rank on the point read, or the menu would name rooms whose own address then answered
+    // 404.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -316,11 +309,8 @@ public class RoomServiceShould : UnitTestBase
         await repository.Received(1).GetAvailable(roomId, CurrentUserId, mayJudge);
     }
 
-    /// <summary>
-    /// A room is moved after another room of its own game and nowhere else: an
-    /// id of another game, of no room, or of the room itself is refused by name
-    /// before anything is written.
-    /// </summary>
+    // A room is moved after another room of its own game and nowhere else: an id of another game,
+    // of no room, or of the room itself is refused by name before anything is written.
     [Theory]
     [InlineData("another game")]
     [InlineData("no room")]
@@ -353,10 +343,7 @@ public class RoomServiceShould : UnitTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdateRoomEntity>());
     }
 
-    /// <summary>
-    /// The head of the list is asked for with an explicit null, and needs no
-    /// room to stand after.
-    /// </summary>
+    // The head of the list is asked for with an explicit null, and needs no room to stand after.
     [Fact]
     public async Task PutARoomFirstWithoutAskingForAnotherRoom()
     {
@@ -371,12 +358,9 @@ public class RoomServiceShould : UnitTestBase
             u => u.ShouldReorder && u.NewPreviousRoomId == null));
     }
 
-    /// <summary>
-    /// A closed room the reader may not open is named in the menu with the
-    /// characters who write in it, as the old site writes it: "[Лес] - Густав,
-    /// Эодор". Characters let in to read, people let in by name and a removed
-    /// character are not among them, and nothing else of the room is told.
-    /// </summary>
+    // A closed room the reader may not open is named in the menu with the characters who write in
+    // it, as the old site writes it: "[Лес] - Густав, Эодор". Characters let in to read, people let
+    // in by name and a removed character are not among them, and nothing else of the room is told.
     [Fact]
     public async Task NameOnlyTheWritingCharactersOfARoomTheReaderMayNotOpen()
     {

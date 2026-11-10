@@ -356,7 +356,7 @@ describe("a toast", () => {
 
   /** The forms a line is written in, one past the cap behind each. */
   it("follows a line to wherever its words are written", () => {
-    const long = (where: string) => `Не удалось ${where} ` + "о".repeat(MAX);
+    const long = (where: string) => `Не удалось ${where} ${"о".repeat(MAX)}`;
     const tree = treeOf({
       "shared/copy/index.ts": [
         `export * from "./refusals";`,
@@ -414,7 +414,7 @@ describe("a toast", () => {
         long("вычисленное"),
         long("атрибут"),
         long("привязка"),
-        "Не удалось изменить статус " + "о".repeat(MAX),
+        `Не удалось изменить статус ${"о".repeat(MAX)}`,
       ].sort(),
     );
   });
@@ -422,7 +422,7 @@ describe("a toast", () => {
   // A sentence beside a name at the call: the long line behind the name is
   // read as well, and so is a prop beside a sentence.
   it("reads every branch of an argument that spells one of its own", () => {
-    const long = "Не удалось " + "о".repeat(MAX);
+    const long = `Не удалось ${"о".repeat(MAX)}`;
     const scanned = platesOf(
       treeOf({
         "pages/Mixed.vue": [
@@ -464,7 +464,7 @@ describe("a toast", () => {
   // A sentence that fits by itself can still be the head of a longer line,
   // and the fields a call labels are a line of their own too.
   it("measures a call's sentence at the head of a general refusal", () => {
-    const head = "Не удалось " + "о".repeat(40);
+    const head = `Не удалось ${"о".repeat(40)}`;
     const label = "п".repeat(40);
     const scanned = platesOf(
       treeOf({

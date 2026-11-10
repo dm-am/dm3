@@ -16,12 +16,10 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class DocumentLineReferencesShould
 {
-    /// <summary>A file with its extension, then a line or a range of lines.</summary>
     private static readonly Regex FileAndLine = new(
         @"[\w.-]+\.(?:cs|ts|tsx|vue|js|mjs|cjs|sass|scss|css|md|ps1|sh|yml|yaml|json|props|html)(?::\d+(?:-\d+)?|#L\d+)(?!\w)",
         RegexOptions.Compiled);
 
-    /// <summary>A colon and a line standing alone, the file named before it.</summary>
     private static readonly Regex BareLine = new(@"(?<=[(\s,]):\d+(?:-\d+)?(?=[),\s.])", RegexOptions.Compiled);
 
     [Fact]
@@ -40,7 +38,6 @@ public class DocumentLineReferencesShould
             "section instead");
     }
 
-    /// <summary>What counts as a reference to a line.</summary>
     [Theory]
     [InlineData("(`shared/ui/BBCodeEditor/BBCodeEditor.vue:1340-1348`)", 1)]
     [InlineData("see Dialog.vue#L37 and Dialog.vue:12", 2)]

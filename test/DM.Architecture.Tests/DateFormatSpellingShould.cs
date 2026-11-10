@@ -9,13 +9,10 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The pattern a date is rendered with is written in one file.
-/// </summary>
-/// <remarks>Asserted against the sources: the defect is the string in more than one place.</remarks>
+// Asserted against the sources: the defect is the string in more than one place.
 public class DateFormatSpellingShould
 {
-    /// <summary>Where the patterns are declared, and the only file allowed to spell them.</summary>
+    // Where the patterns are declared, and the only file allowed to spell them.
     private const string Home = "src/DM.Web.Client/src/shared/lib/utils/datetime.ts";
 
     /// <summary>

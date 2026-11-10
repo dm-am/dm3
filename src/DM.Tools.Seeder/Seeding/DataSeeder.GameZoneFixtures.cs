@@ -17,10 +17,8 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// UI test fixtures for the designated game: post pendency, unread counter, closed room posts,
-    /// chat room messages and master notepad entries, so a reseed gives QA the same game every time.
-    /// </summary>
+    // UI test fixtures for the designated game: post pendency, unread counter, closed room posts,
+    // chat room messages and master notepad entries, so a reseed gives QA the same game every time.
     private async Task SeedGameZoneFixtures(
         SeedingGame seeding, GameRooms rooms, GameCast cast, List<DbUser> users,
         List<(Chat Chat, Guid LastMessageId)> chatsAwaitingLastMessage,
@@ -71,10 +69,6 @@ internal sealed partial class DataSeeder
         SeedCharacterNotepads(game, master, waitingCharacter, waitingPlayer);
     }
 
-    /// <summary>
-    /// Open post pendency awaiting a seeded player - shows the red
-    /// waiting-star with tooltip until they post or it's fulfilled.
-    /// </summary>
     private void SeedTurnPendency(
         Room mainRoom, Character waitingCharacter, DbUser waitingPlayer, DbUser master)
     {
@@ -91,11 +85,8 @@ internal sealed partial class DataSeeder
         });
     }
 
-    /// <summary>
-    /// Baseline unread counter for the main room so any user who
-    /// never visited it (i.e. everyone but its own post authors)
-    /// sees the (N) unread badge instead of a silent zero.
-    /// </summary>
+    // Baseline unread counter for the main room so any user who never visited it (i.e. everyone but
+    // its own post authors) sees the (N) unread badge instead of a silent zero.
     private void SeedRoomUnreadCounter(DbGame game, Room mainRoom, int postsToCreate)
     {
         if (postsToCreate > 0)
@@ -112,9 +103,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// The scene of the closed post room, written only by the NPC and the characters with access.
-    /// </summary>
     private void SeedClosedRoomScene(
         Room privateRoom, Character npc, List<Character> restrictedRoomMembers, DbUser master, List<DbUser> users,
         ComprehensiveSeedResult result)
@@ -144,9 +132,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// A chat room filled with messages; both chat room examples are filled through this one.
-    /// </summary>
     private async Task SeedRoomChat(
         Room room, IReadOnlyList<Guid> speakerIds, IReadOnlyList<string> texts,
         List<(Chat Chat, Guid LastMessageId)> chatsAwaitingLastMessage,
@@ -188,7 +173,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>Master notepad entries (game "Заметки").</summary>
     private void SeedMasterNotepad(DbGame game, DbUser master)
     {
         var masterNotepadEntries = new[]
@@ -200,11 +184,6 @@ internal sealed partial class DataSeeder
         AddNotepadEntries(NotepadType.Master, game.GameId, null, master.UserId, 0, masterNotepadEntries);
     }
 
-    /// <summary>
-    /// The notes about the first active character: the player's own, so the
-    /// player scope of the game "Заметки" page has data too, and the ones the
-    /// leads keep about the same character.
-    /// </summary>
     private void SeedCharacterNotepads(
         DbGame game, DbUser master, Character waitingCharacter, DbUser waitingPlayer)
     {
@@ -226,9 +205,6 @@ internal sealed partial class DataSeeder
             master.UserId, 3, characterMasterNotepadEntries);
     }
 
-    /// <summary>
-    /// Notepad entries in their order, a day apart and ending yesterday, shifted by the given hours.
-    /// </summary>
     private void AddNotepadEntries(
         NotepadType type, Guid gameId, Guid? ownerId, Guid authorId, int hoursLater, (string Title, string Content)[] entries)
     {

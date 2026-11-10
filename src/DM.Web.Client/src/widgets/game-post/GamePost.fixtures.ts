@@ -5,6 +5,12 @@ import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { PostReviewItem } from "@/entities/game";
 import type { Post, PostReview } from "@/entities/game";
+import {
+  createMockGameRef,
+  createMockPost,
+} from "@/entities/game/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { useAuthStore } from "@/shared/stores";
 import GamePost from "./GamePost.vue";
 
@@ -38,25 +44,38 @@ export const REVIEWS = [
   },
 ] as unknown as PostReview[];
 
-export const post = {
-  id: "p-1",
+export const post: Post = {
+  ...createMockPost("p-1", "<p>Текст поста</p>"),
   createdUtc: "2026-07-26T15:00:00",
-  gameText: "<p>Текст поста</p>",
   reviewCount: 2,
   rating: 1,
-  author: { username: "Author", role: "Player" },
-  room: { id: "room-guid", roomNumber: 2, game: { publicId: "abcde" } },
-} as unknown as Post;
+  author: createMockUser("u-author", "Author"),
+  room: {
+    id: asServed("room-guid"),
+    roomNumber: asServed(2),
+    title: "Комната",
+    unreadPostsCount: 0,
+    // No id, as the post lists serve it: the name of a character is no link.
+    game: {
+      ...createMockGameRef("", "Игра"),
+      publicId: asServed("abcde"),
+    },
+  },
+};
 
 /** The same post as the room page answers with: no `room`, that IS the page. */
-export const roomPost = { ...post, room: undefined } as unknown as Post;
+export const roomPost: Post = { ...post, room: undefined };
 
 /** The post as the server answers it to a viewer. */
 export const answered = (
   subject: Post,
   canReview = true,
   gameId = "game-guid",
-) => ({ ...subject, gameId, viewer: { canReview } }) as unknown as Post;
+): Post => ({
+  ...subject,
+  gameId: asServed(gameId),
+  viewer: asServed({ canReview, canEdit: false }),
+});
 
 const ROUTES = [
   { path: "/", name: "home", component: { template: "<div />" } },
@@ -130,18 +149,17 @@ export function renderAs(
   editable = true,
   role = "Player",
 ) {
-  const subject = {
+  const subject: Post = {
     ...roomPost,
     createdUtc: new Date().toISOString(),
     ...over,
-  } as unknown as Post;
+  };
   return render(ROOM, subject, {
     viewer: viewer && { username: viewer, role },
     props: { editable },
   });
 }
 
-/** The edit line of a post, "Отредактировано ... | Редактировать | Удалить". */
 export const lineOf = (wrapper: PostWrapper) => wrapper.find(".post-edit-line");
 
 /** The text of an element as it is copied: its runs of space made one. */

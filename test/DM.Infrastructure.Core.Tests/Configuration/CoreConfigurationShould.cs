@@ -10,10 +10,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Configuration;
 
-/// <summary>
-/// A host is refused what it cannot work with, and asked for nothing else.
-/// </summary>
-/// <remarks>Validation runs through the startup validator, as the host runs it: binding alone never fails.</remarks>
+// Validation runs through the startup validator, as the host runs it: binding alone never fails.
 public class CoreConfigurationShould
 {
     [Fact]
@@ -61,7 +58,6 @@ public class CoreConfigurationShould
             .Should().Be("token");
     }
 
-    /// <summary>The message of the first failure, or null when the host would start.</summary>
     private static string? Validate(
         IDictionary<string, string?> settings, Action<IServiceCollection>? declare = null)
     {

@@ -1,25 +1,17 @@
-using System.Net;
 using System.Text.Json;
-using DM.Web.API.Swagger;
+using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Every success body is an envelope, and the ones that are not are counted.
-/// </summary>
-/// <remarks>
-/// A consumer cannot have one unwrapping function while some answers are bare. The list below is the debt by
-/// operation, asserted both ways, and only shrinks; ResponseBodySchema tells an inline body from no body.
-/// </remarks>
+// A consumer cannot have one unwrapping function while some answers are bare.
 public class EnvelopeCoverageShould : IntegrationTestBase
 {
     public EnvelopeCoverageShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>Operations answering with a bare DTO, as inherited.</summary>
     private static readonly HashSet<string> Legacy = new(StringComparer.Ordinal)
     {
         "GET /v1/account/activation",
@@ -89,43 +81,32 @@ public class EnvelopeCoverageShould : IntegrationTestBase
         "PUT /v1/users/me/notes/{username}",
     };
 
-    /// <summary>Operations whose 2xx body is not an envelope, read off the document.</summary>
     private async Task<HashSet<string>> BareResponses()
     {
         var bare = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var group in SwaggerExtensions.ApiGroups)
+        foreach (var operation in await SwaggerDocuments.OperationsAsync(Client))
         {
-            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            if (operation.Value.ValueKind != JsonValueKind.Object ||
+                !operation.Value.TryGetProperty("responses", out var responses))
             {
-                foreach (var operation in path.Value.EnumerateObject())
+                continue;
+            }
+
+            foreach (var status in responses.EnumerateObject())
+            {
+                if (!int.TryParse(status.Name, out var code) || code >= 400)
                 {
-                    if (operation.Value.ValueKind != JsonValueKind.Object ||
-                        !operation.Value.TryGetProperty("responses", out var responses))
-                    {
-                        continue;
-                    }
-
-                    foreach (var status in responses.EnumerateObject())
-                    {
-                        if (!int.TryParse(status.Name, out var code) || code >= 400)
-                        {
-                            continue;
-                        }
-
-                        var schema = ResponseBodySchema.NameOf(status.Value);
-                        if (schema == null || schema.Contains("Envelope", StringComparison.Ordinal))
-                        {
-                            continue;
-                        }
-
-                        bare.Add(operation.Name.ToUpperInvariant() + " " + path.Name);
-                    }
+                    continue;
                 }
+
+                var schema = ResponseBodySchema.NameOf(status.Value);
+                if (schema == null || schema.Contains("Envelope", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                bare.Add(operation.Address);
             }
         }
 

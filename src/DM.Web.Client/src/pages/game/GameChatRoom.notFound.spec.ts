@@ -8,22 +8,20 @@
  * failed, or one of another game, says nothing of the room.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import RefusalNote from "@/shared/ui/Layout/RefusalNote.vue";
 import GameChatRoom from "./GameChatRoom.vue";
+import { mockGetChatMessages, mockGetRooms } from "./GameChatRoom.doubles";
 import {
-  mockGetChatMessages,
-  mockGetRooms,
-  mockReplace,
-  route,
-} from "./GameChatRoom.doubles";
-import {
+  FRAME_STUBS,
+  mountRoom,
+  notFoundAsked,
   notFoundAt,
   openRoomAs,
-  keep,
+  roomAt,
   sentToNotFound,
   standInRoomOne,
   unmountRoom,
@@ -31,9 +29,6 @@ import {
 
 vi.mock("@/entities/game/api/roomApi", async () =>
   (await import("./GameChatRoom.doubles")).roomApi(),
-);
-vi.mock("vue-router", async () =>
-  (await import("./GameChatRoom.doubles")).vueRouter(),
 );
 
 describe("GameChatRoom not found", () => {
@@ -48,7 +43,7 @@ describe("GameChatRoom not found", () => {
       mockGetChatMessages.mockResolvedValue({ data: null, error: { status } });
       const wrapper = await openRoomAs({ access: "Private" });
 
-      expect(mockReplace).toHaveBeenCalledWith(notFoundAt("1"));
+      expect(notFoundAsked()).toEqual(notFoundAt("1"));
       expect(wrapper.findAllComponents(RefusalNote)).toHaveLength(0);
       expect(wrapper.find(".chat-messages").exists()).toBe(false);
       expect(wrapper.find(".chat-input-wrapper").exists()).toBe(false);
@@ -71,7 +66,7 @@ describe("GameChatRoom not found", () => {
         signedIn,
       });
 
-      expect(mockReplace).toHaveBeenCalledWith(notFoundAt("1"));
+      expect(notFoundAsked()).toEqual(notFoundAt("1"));
       expect(mockGetChatMessages).not.toHaveBeenCalled();
       expect(wrapper.find(".login-prompt").exists()).toBe(false);
       expect(wrapper.findAllComponents(RefusalNote)).toHaveLength(0);
@@ -81,30 +76,19 @@ describe("GameChatRoom not found", () => {
   );
 
   it('opens "not found" for a number the list does not hold, with the query and the hash', async () => {
-    route.params.num = "7";
-    route.query = { scrollTo: "m-1" };
-    route.hash = "#msg-m-1";
-    try {
-      const wrapper = await openRoomAs();
+    const wrapper = await openRoomAs({
+      at: roomAt("7", "?scrollTo=m-1#msg-m-1"),
+    });
 
-      expect(mockReplace).toHaveBeenCalledWith({
-        ...notFoundAt("7"),
-        query: { scrollTo: "m-1" },
-        hash: "#msg-m-1",
-      });
-      expect(mockGetChatMessages).not.toHaveBeenCalled();
-      expect(wrapper.text()).not.toContain("не найдена");
-      expect(wrapper.find(".chat-messages").exists()).toBe(false);
-    } finally {
-      route.query = {};
-      route.hash = "";
-    }
+    expect(notFoundAsked()).toEqual(notFoundAt("7", "?scrollTo=m-1#msg-m-1"));
+    expect(mockGetChatMessages).not.toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain("не найдена");
+    expect(wrapper.find(".chat-messages").exists()).toBe(false);
   });
 
   // Until the game is in, the list may be another game's.
   it("decides nothing about a room it cannot find until the game is in", async () => {
-    route.params.num = "7";
-    const wrapper = await openRoomAs({ gameIn: false });
+    const wrapper = await openRoomAs({ gameIn: false, at: roomAt("7") });
 
     expect(sentToNotFound()).toBe(false);
     expect(
@@ -114,7 +98,7 @@ describe("GameChatRoom not found", () => {
     useGameDetailsStore().game = { id: "g-guid", publicId: "g-1" } as never;
     await flushPromises();
 
-    expect(mockReplace).toHaveBeenCalledWith(notFoundAt("7"));
+    expect(notFoundAsked()).toEqual(notFoundAt("7"));
   });
 
   // On the way to another game the store holds the one before for a moment.
@@ -124,8 +108,7 @@ describe("GameChatRoom not found", () => {
   ] as const)(
     "decides nothing about the room off a list of another game that %s it",
     async (_what, num, canView) => {
-      route.params.num = num;
-      await openRoomAs({ gameIn: false, canView });
+      await openRoomAs({ gameIn: false, canView, at: roomAt(num) });
 
       useGameDetailsStore().game = { id: "g2-guid", publicId: "g-2" } as never;
       await flushPromises();
@@ -135,25 +118,19 @@ describe("GameChatRoom not found", () => {
       useGameDetailsStore().game = { id: "g-guid", publicId: "g-1" } as never;
       await flushPromises();
 
-      expect(mockReplace).toHaveBeenCalledWith(notFoundAt(num));
+      expect(notFoundAsked()).toEqual(notFoundAt(num));
     },
   );
 
   it("does not send the reader away when the list itself failed", async () => {
     mockGetRooms.mockResolvedValue({ data: null, error: { status: 500 } });
     const pinia = createPinia();
-    setActivePinia(pinia);
-    useGameDetailsStore().game = { id: "g-guid", publicId: "g-1" } as never;
-    useAuthStore().user = { username: "player" } as never;
-    const room = keep(
-      mount(GameChatRoom, {
-        global: {
-          plugins: [pinia],
-          stubs: { RouterLink: true, BBCodeEditor: true, ChatMessage: true },
-        },
-      }),
-    );
-    await flushPromises();
+    useGameDetailsStore(pinia).game = {
+      id: "g-guid",
+      publicId: "g-1",
+    } as never;
+    useAuthStore(pinia).user = { username: "player" } as never;
+    const room = await mountRoom(GameChatRoom, { pinia, stubs: FRAME_STUBS });
 
     expect(sentToNotFound()).toBe(false);
     expect(room.get(".chat-error").text()).toContain(

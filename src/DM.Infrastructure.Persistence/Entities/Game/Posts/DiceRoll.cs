@@ -9,9 +9,6 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
 [Table("DiceRolls")]
 public class DiceRoll
 {
-    /// <summary>
-    /// Roll identifier
-    /// </summary>
     public Guid DiceRollId { get; set; }
 
     /// <summary>
@@ -72,9 +69,6 @@ public class RollResult
     /// </summary>
     public int Value { get; set; }
 
-    /// <summary>
-    /// Critical flag
-    /// </summary>
     public bool IsCritical { get; set; }
 
     /// <summary>

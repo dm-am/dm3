@@ -13,9 +13,6 @@ public class UsernameChangeRequest
     /// </summary>
     public Guid RequestId { get; set; }
 
-    /// <summary>
-    /// User who requested the change
-    /// </summary>
     public Guid UserId { get; set; }
 
     public string? RequestedUsername { get; set; }
@@ -45,9 +42,6 @@ public class UsernameChangeRequest
     /// </summary>
     public DateTimeOffset? ApprovalTokenExpiresUtc { get; set; }
 
-    /// <summary>
-    /// When the request was resolved (UTC)
-    /// </summary>
     public DateTimeOffset? ResolvedUtc { get; set; }
 
     /// <summary>
@@ -67,9 +61,6 @@ public class UsernameChangeRequest
     /// </summary>
     public string? UserEmail { get; set; }
 
-    /// <summary>
-    /// User's current username
-    /// </summary>
     public string? UserUsername { get; set; }
 
     /// <summary>
@@ -105,9 +96,6 @@ public class UsernameChangeRequestEntry
     /// </summary>
     public string Reason { get; set; } = null!;
 
-    /// <summary>
-    /// Request status
-    /// </summary>
     public UsernameChangeRequestStatus Status { get; set; }
 
     /// <summary>
@@ -126,9 +114,6 @@ public class UsernameChangeRequestEntry
     /// </summary>
     public DateTimeOffset? ApprovalTokenExpiresUtc { get; set; }
 
-    /// <summary>
-    /// When the request was resolved
-    /// </summary>
     public DateTimeOffset? ResolvedUtc { get; set; }
 
     /// <summary>

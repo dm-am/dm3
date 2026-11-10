@@ -33,7 +33,8 @@ public class BotConfiguration
     /// (X-Signature-Ed25519 over timestamp + raw body); the URL is
     /// /v1/webhooks/discord, registered as the Interactions Endpoint URL.
     /// If not set, the webhook is closed: it answers 404 rather than accepting
-    /// anything, because an unset key is the shipped default.
+    /// anything, because an unset key is the shipped default. A value that is
+    /// not such a key stops the host that verifies with it at start.
     /// </summary>
     public string? DiscordPublicKey { get; set; }
 }

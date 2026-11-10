@@ -12,9 +12,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The cache policy the server declares is a policy the only consumer can obey.
-/// </summary>
 /// <remarks>
 /// A request-side `no-cache` forbids the middleware its store and makes the browser revalidate, and this
 /// API has no ETag. Textual: the header is a literal in a TypeScript object. The wire half is
@@ -22,7 +19,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class ResponseCachePolicyShould
 {
-    /// <summary>A request header assignment, whatever quoting style is used.</summary>
     private static readonly Regex CacheControlHeader = new(
         @"[""']?Cache-Control[""']?\s*:", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
@@ -42,11 +38,7 @@ public class ResponseCachePolicyShould
             "[ResponseCache]");
     }
 
-    /// <summary>
-    /// Every endpoint that may be stored by a cache the client does not own is
-    /// covered by the client's freshness gate.
-    /// </summary>
-    /// <remarks>Derived from the assembly: a catalogue missing from the client gate fails.</remarks>
+    // Derived from the assembly: a catalogue missing from the client gate fails.
     [Fact]
     public void CoverEveryPubliclyCacheableReadByTheClientsFreshnessGate()
     {
@@ -69,9 +61,6 @@ public class ResponseCachePolicyShould
             "is pinned — listing the path there is what says the reload exists", 300);
     }
 
-    /// <summary>
-    /// What a scanner rule is silenced with is what the code does.
-    /// </summary>
     /// <remarks>
     /// .zap/rules.tsv silences rule 10049 by pointing at no-store on the account reads. Derived: every
     /// authenticated read of the account area is asked.
@@ -94,11 +83,7 @@ public class ResponseCachePolicyShould
         }
     }
 
-    /// <summary>
-    /// Every GET of the account area that requires a session, with whatever cache
-    /// policy it declares.
-    /// </summary>
-    /// <remarks>The authentication attribute is internal to the host, so it is matched by name.</remarks>
+    // The authentication attribute is internal to the host, so it is matched by name.
     private static IReadOnlyCollection<(string Origin, ResponseCacheAttribute? Policy)> AuthenticatedAccountReads()
     {
         var found = new List<(string, ResponseCacheAttribute?)>();
@@ -143,12 +128,8 @@ public class ResponseCachePolicyShould
         return found;
     }
 
-    /// <summary>An action the API lets any cache store, and the path it answers on.</summary>
     private sealed record CacheableRead(string Action, string Path);
 
-    /// <summary>
-    /// Reads the declared policy off the assembly: the wire path is the route the framework composes.
-    /// </summary>
     private static CacheableRead[] SharedCacheableReads()
     {
         var found = new List<CacheableRead>();

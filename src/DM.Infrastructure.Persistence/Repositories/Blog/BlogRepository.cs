@@ -251,13 +251,11 @@ internal partial class BlogRepository : IBlogRepository
     /// capped name preview, and the active-subscriber count — on blogs the
     /// projection cannot produce it for.
     /// </summary>
-    /// <param name="blogs">Blogs to hydrate</param>
     /// <param name="userId">
     /// The user the read is on behalf of; only
     /// <see cref="BlogDto.IsViewerSubscriber" /> depends on it.
     /// <see cref="Guid.Empty" /> for an anonymous read.
     /// </param>
-    /// <param name="ct">Cancellation token</param>
     private async Task FillSubscriberSummary(IList<BlogDto> blogs, Guid userId, CancellationToken ct)
     {
         if (blogs.Count == 0) return;

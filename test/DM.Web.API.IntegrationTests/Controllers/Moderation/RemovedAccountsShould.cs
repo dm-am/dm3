@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// The two surfaces a removed account is reachable through, and nothing else is.
-/// </summary>
 /// <remarks>
 /// On a live database: both endpoints read past the global filter. The list runs over accounts this test removed,
 /// found by a term nobody else uses.
@@ -21,14 +18,10 @@ public class RemovedAccountsShould : IntegrationTestBase
     {
     }
 
-    /// <summary>The rank both surfaces are behind.</summary>
     private static HttpRequestMessage SeniorModerator(HttpMethod method, string url) =>
         CreateAuthenticatedRequest(method, url, CustomWebApplicationFactory.CreateSeniorModeratorUser());
 
-    /// <summary>
-    /// Takes an account out of the product the way a removal does.
-    /// </summary>
-    /// <remarks>Written to the row: a third endpoint's rules must not decide these tests.</remarks>
+    // Written to the row: a third endpoint's rules must not decide these tests.
     private async Task Remove(string login)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -72,10 +65,7 @@ public class RemovedAccountsShould : IntegrationTestBase
                 "thing that tells him his account is back");
     }
 
-    /// <summary>
-    /// A name nobody removed is a 404, and a live account is such a name.
-    /// </summary>
-    /// <remarks>Read without lifting the filter, a restoration would report success over the live row.</remarks>
+    // Read without lifting the filter, a restoration would report success over the live row.
     [Fact]
     public async Task RefuseToRestoreAnAccountNobodyRemoved()
     {
@@ -136,17 +126,13 @@ public class RemovedAccountsShould : IntegrationTestBase
                 "administrator is who answers it");
     }
 
-    /// <summary>Both surfaces, as a caller below the rank reaches them.</summary>
     public static TheoryData<string, string> Surfaces => new()
     {
         { "POST", $"/v1/moderation/users/{TestConstants.TestUserLogin}/account" },
         { "GET", "/v1/moderation/users/removed" },
     };
 
-    /// <summary>
-    /// A moderator is refused as flatly as a reader is.
-    /// </summary>
-    /// <remarks>A moderator refused distinguishes the rank of these from the rank of the screen.</remarks>
+    // A moderator refused distinguishes the rank of these from the rank of the screen.
     [Theory]
     [MemberData(nameof(Surfaces))]
     public async Task RefuseBothSurfacesBelowASeniorModerator(string method, string url)

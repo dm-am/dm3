@@ -42,8 +42,10 @@ describe("GamePost attachments", () => {
     ...over,
   });
 
-  const carrying = (...files: PostAttachment[]) =>
-    ({ ...post, attachments: files }) as unknown as Post;
+  const carrying = (...files: PostAttachment[]): Post => ({
+    ...post,
+    attachments: files,
+  });
 
   const three = () =>
     carrying(

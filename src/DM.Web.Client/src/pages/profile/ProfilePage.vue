@@ -16,6 +16,7 @@ import {
 } from "@/entities/user";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import {
+  type Contact,
   Gender,
   type PersonalProfile,
   type UserPicture,
@@ -236,16 +237,13 @@ function onFieldUpdate(field: string, value: string) {
       });
     case "gender":
       return setField("gender", (value || undefined) as Gender);
-    case "contacts": {
-      try {
-        return setField("contacts", JSON.parse(value));
-      } catch {
-        return;
-      }
-    }
     default:
       return setField(field as Parameters<typeof setField>[0], value as never);
   }
+}
+
+function onContactsUpdate(contacts: Contact[]) {
+  setField("contacts", contacts);
 }
 
 const userRoles = computed<string[]>(() => {
@@ -415,6 +413,7 @@ onMounted(() => {
       :is-edit-mode="editing"
       :own="ownProfile"
       @update-field="onFieldUpdate"
+      @update-contacts="onContactsUpdate"
     />
 
     <ProfileTabs

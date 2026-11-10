@@ -9,9 +9,6 @@ using DM.Domain.Game.Authorization;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// The status of a game and its premoderation, each moved by the transition the caller names
-/// </summary>
 internal partial class GameService
 {
     public async Task<GameDetails> ChangeStatusAsync(Guid gameId, ModuleStatusTransition transition)

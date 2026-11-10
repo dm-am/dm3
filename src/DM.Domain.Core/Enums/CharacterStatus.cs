@@ -1,8 +1,5 @@
 namespace DM.Domain.Core.Enums;
 
-/// <summary>
-/// Character status
-/// </summary>
 public enum CharacterStatus
 {
     /// <summary>

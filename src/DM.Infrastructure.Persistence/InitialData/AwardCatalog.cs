@@ -5,16 +5,8 @@ using DM.Infrastructure.Persistence.Entities.Community;
 
 namespace DM.Infrastructure.Persistence.InitialData;
 
-/// <summary>
-/// The award types and the contest series the site ships with, seeded with the
-/// schema.
-/// </summary>
-/// <remarks>
-/// A row helper per kind, as in AchievementCatalog. Every row ships active.
-/// </remarks>
 internal static class AwardCatalog
 {
-    /// <summary>The award types, in the order the profile shows them.</summary>
     internal static AwardType[] AwardTypes() =>
     [
         Award(1, "contest_first", "Литконкурс", "Первое место в конкурсе", "trophy-cup", TierScale.Gold),
@@ -27,7 +19,6 @@ internal static class AwardCatalog
         Award(7, "honorary_goblin", "Почетный гоблин", "Годы службы сообществу в команде гоблинов", "goblin", TierScale.Platinum)
     ];
 
-    /// <summary>The contest series awards are given in.</summary>
     internal static ContestSeries[] ContestSeries() =>
     [
         Series(1, ContestType.Literary, 23, 2026, "/forum/contests/13232"),
@@ -38,7 +29,7 @@ internal static class AwardCatalog
         Series(6, ContestType.Art, 1, 2013, "/forum/contests/3764")
     ];
 
-    /// <summary>One award type; its place in the profile is its number.</summary>
+    // One award type; its place in the profile is its number.
     private static AwardType Award(
         int number, string code, string title, string description, string iconName, int tier) => new()
         {

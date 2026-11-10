@@ -8,7 +8,6 @@ import type { Served } from "../common";
  * @see src/DM.Domain.Core/Enums/EventType.cs
  */
 export enum NotificationType {
-  // Messaging
   NewMessage = "NewMessage",
   NewGlobalChatMessage = "NewGlobalChatMessage",
   GlobalChatEventStarted = "GlobalChatEventStarted",
@@ -40,7 +39,6 @@ export enum NotificationType {
   NewTopicComment = "NewTopicComment",
   LikedTopicComment = "LikedTopicComment",
 
-  // Games
   NewGame = "NewGame",
   NewCharacter = "NewCharacter",
 

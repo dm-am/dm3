@@ -20,11 +20,14 @@ import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { TestimonialSkeleton } from "@/entities/testimonial";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import type { SortDirection } from "@/shared/lib/filters/types";
+import type { TestimonialSortBy } from "@/features/testimonial-filter";
+import type { TestimonialSide } from "./profileSubpages";
 
 const props = defineProps<{
   username: string;
   /** Which side of the pair the list shows; part of the refetch key. */
-  mode: "received" | "written";
+  mode: TestimonialSide;
   /** The route of the page, for the paging links. */
   routeName: string;
   /** The text `ErrorState` shows when a page fails to load. */
@@ -36,8 +39,8 @@ const props = defineProps<{
   /** Loads one page for the current query; the frame decides when. */
   fetchPage: (q: {
     search?: string;
-    sortBy?: "created" | "author";
-    sortOrder?: "asc" | "desc";
+    sortBy?: TestimonialSortBy;
+    sortOrder?: SortDirection;
     number?: number;
     take?: number;
   }) => Promise<ApiResult<ListEnvelope<T>>>;

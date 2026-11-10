@@ -8,15 +8,11 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests;
 
-/// <summary>
-/// Every entity that owns a unit of storage carries [Table]; a nested value that owns none, a jsonb payload
-/// or an owned column shape, carries nothing. See docs/conventions/DATA_STORAGE.md.
-/// </summary>
+// Every entity that owns a unit of storage carries [Table]; a nested value that owns none, a jsonb
+// payload or an owned column shape, carries nothing.
 public class EntityStorageMarkerShould
 {
-    /// <summary>
-    /// Values embedded in a jsonb column, by full type name: adding here is a decision.
-    /// </summary>
+    // Values embedded in a jsonb column, by full type name: adding here is a decision.
     private static readonly HashSet<string> EmbeddedValues =
     [
         // Inside the UserSettings channel-preference columns
@@ -49,10 +45,8 @@ public class EntityStorageMarkerShould
             "an entity with its own unit of storage says which table that is");
     }
 
-    /// <summary>
-    /// The exemption has to keep naming a type that exists, or a rename turns it
-    /// into a hole nobody sees.
-    /// </summary>
+    // The exemption has to keep naming a type that exists, or a rename turns it into a hole nobody
+    // sees.
     [Fact]
     public void KeepTheListOfEmbeddedValuesHonest()
     {

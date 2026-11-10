@@ -8,6 +8,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { useAuthStore } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/common";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import TestimonialEditable from "./TestimonialEditable.vue";
 
@@ -34,8 +35,10 @@ const testimonial = {
   createdUtc: "2026-01-01T00:00:00Z",
 } as unknown as WebsiteTestimonial;
 
-const viewer = (id: string, role: UserRole) =>
-  ({ id, username: id, role }) as unknown as User;
+const viewer = (id: string, role: UserRole): User => ({
+  ...createMockUser(id, id),
+  role,
+});
 
 // The card is stubbed down to its #actions slot, where the pencil stands.
 const render = () =>

@@ -14,13 +14,17 @@ import type {
 } from "@/shared/api/models/community";
 import { TestimonialCard } from "@/entities/testimonial";
 import ProfileTestimonialsFrame from "./ProfileTestimonialsFrame.vue";
+import type {
+  EndorsementsSubpageName,
+  TestimonialSide,
+} from "./profileSubpages";
 
 const props = defineProps<{
   username: string;
   /** Received: recommendations about this user; written: the ones he wrote. */
-  mode: "received" | "written";
+  mode: TestimonialSide;
   /** The route of the page, for the paging links. */
-  routeName: "received-endorsements" | "given-endorsements";
+  routeName: EndorsementsSubpageName;
 }>();
 
 function fetchPage(q: EndorsementsQuery) {

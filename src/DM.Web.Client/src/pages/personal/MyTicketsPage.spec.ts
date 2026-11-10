@@ -6,30 +6,13 @@
 // caption without the author and with the star where the turn is his; the
 // four states of the list and its pages.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  enableAutoUnmount,
-  flushPromises,
-  mount,
-  RouterLinkStub,
-} from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { ticketApi, type Ticket } from "@/entities/ticket";
 import { TicketThread } from "@/widgets/ticket-thread";
 import MyTicketsPage from "./MyTicketsPage.vue";
 
 enableAutoUnmount(afterEach);
-
-const { route } = vi.hoisted(() => ({
-  route: { query: {} as Record<string, string>, params: {} },
-}));
-vi.mock("vue-router", async () => {
-  const { reactive: wrap } = await import("vue");
-  const live = wrap(route);
-  return {
-    useRoute: () => live,
-    useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  };
-});
 
 const ticket = (
   id: string,
@@ -59,24 +42,24 @@ const PagingStub = {
   template: "<nav class='paging-stub' />",
 };
 
-const render = () =>
-  mount(MyTicketsPage, {
-    global: {
-      plugins: [createPinia()],
-      stubs: {
-        RouterLink: RouterLinkStub,
-        PageTitle: true,
-        Paging: PagingStub,
-      },
-    },
+const render = async (address = "/my-tickets") => {
+  const { wrapper } = await mountPage(MyTicketsPage, address, {
+    routes: [
+      ["my-tickets", "/my-tickets"],
+      ["my-ticket", "/my-tickets/:ticketId"],
+      ["support", "/support"],
+      ["complaint", "/complaint"],
+    ],
+    stubs: { Paging: PagingStub },
   });
+  return wrapper;
+};
 
 const answer = (resources: Ticket[], paging?: object) =>
   ({ data: { resources, paging }, error: null }) as never;
 
 describe("the page of my tickets", () => {
   beforeEach(() => {
-    route.query = {};
     localStorage.clear();
   });
 
@@ -88,7 +71,7 @@ describe("the page of my tickets", () => {
     vi.spyOn(ticketApi, "getMyTickets").mockReturnValue(
       new Promise(() => {}) as never,
     );
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(wrapper.findAll(".ticket-skeleton")).toHaveLength(3);
@@ -99,7 +82,7 @@ describe("the page of my tickets", () => {
       .spyOn(ticketApi, "getMyTickets")
       .mockResolvedValueOnce({ data: null, error: { status: 500 } } as never)
       .mockResolvedValueOnce(answer([]));
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(wrapper.get(".error-state").text()).toContain(
@@ -113,7 +96,7 @@ describe("the page of my tickets", () => {
 
   it("says there are none under the lead", async () => {
     vi.spyOn(ticketApi, "getMyTickets").mockResolvedValue(answer([]));
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(wrapper.text()).toContain("Обращений пока нет");
@@ -128,7 +111,7 @@ describe("the page of my tickets", () => {
         ticket("new", "2026-10-01T10:00:00Z"),
       ]),
     );
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     const blocks = wrapper.findAllComponents(TicketThread);
@@ -149,7 +132,7 @@ describe("the page of my tickets", () => {
         }),
       ]),
     );
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     const caption = wrapper
@@ -178,7 +161,7 @@ describe("the page of my tickets", () => {
         ticket("theirs", "2026-10-01T10:00:00Z"),
       ]),
     );
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(
@@ -196,13 +179,12 @@ describe("the page of my tickets", () => {
   });
 
   it("asks the server for the page in the address and pages the list", async () => {
-    route.query = { number: "2" };
     const get = vi
       .spyOn(ticketApi, "getMyTickets")
       .mockResolvedValue(
         answer([ticket("a", "2026-10-01T10:00:00Z")], { current: 2, pages: 3 }),
       );
-    const wrapper = render();
+    const wrapper = await render("/my-tickets?number=2");
     await flushPromises();
 
     expect(get).toHaveBeenCalledWith(expect.objectContaining({ number: 2 }));

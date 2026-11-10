@@ -4,13 +4,8 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Logging;
 
-/// <summary>
-/// The commit a process was built from, or an honest admission that nobody stamped one.
-/// </summary>
-/// <remarks>
-/// The value is read once from the entry assembly, so the parsing is tested; a version with no stamp reads
-/// "1.0.0" on every build.
-/// </remarks>
+// The value is read once from the entry assembly, so the parsing is tested; a version with no stamp
+// reads "1.0.0" on every build.
 public class ReleaseInfoShould
 {
     [Theory]

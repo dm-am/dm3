@@ -13,11 +13,12 @@ import {
   siteTime,
 } from "@/shared/lib/utils/datetime";
 import { LANDING_SCROLL_MS } from "@/shared/lib/composables/useAnchoredInfiniteScroll";
+import type { MessageAlign } from "./useFeedPosition";
 
 /** What the window asks of the feed: the handle ChatFeed exposes. */
 interface ChatHistoryFeed {
   scrollToBottom(): void;
-  scrollToMessage(id: string, align?: "center" | "start"): void;
+  scrollToMessage(id: string, align?: MessageAlign): void;
   atBottom(): boolean;
   setupInfiniteScroll(): void;
   suspendInfiniteScroll(): void;

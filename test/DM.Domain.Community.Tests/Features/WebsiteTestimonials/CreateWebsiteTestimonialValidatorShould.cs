@@ -22,11 +22,8 @@ public class CreateWebsiteTestimonialValidatorShould
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// A testimonial is posted on behalf of a named participant. Missing, the
-    /// name is a malformed request - not an instruction to sign the entry with
-    /// whoever submitted it.
-    /// </summary>
+    // Missing, the name is a malformed request - not an instruction to sign the entry with whoever
+    // submitted it.
     [Fact]
     public void FailWhenAuthorIsNotNamed()
     {

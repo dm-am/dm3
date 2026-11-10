@@ -11,12 +11,8 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Popularity;
 
-/// <summary>
-/// What the site means by a popular game.
-/// </summary>
-/// <remarks>
-/// The score is active players plus active readers, and "active" is the product's window, not this calculation's.
-/// </remarks>
+// The score is active players plus active readers, and "active" is the product's window, not this
+// calculation's.
 public class GamePopularityProcessorShould : UnitTestBase
 {
     private static readonly DateTimeOffset Now = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
@@ -74,10 +70,8 @@ public class GamePopularityProcessorShould : UnitTestBase
         written![Ignored].Should().Be(0);
     }
 
-    /// <summary>
-    /// The window is the product's, and it is the same window on both counts: a
-    /// player active thirty-one days ago is no more active than a reader is.
-    /// </summary>
+    // The window is the product's, and it is the same window on both counts: a player active
+    // thirty-one days ago is no more active than a reader is.
     [Fact]
     public async Task CountAsActiveExactlyWhatTheProductCallsActive()
     {
@@ -91,11 +85,8 @@ public class GamePopularityProcessorShould : UnitTestBase
             Arg.Any<IReadOnlyCollection<Guid>>(), expected, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The moment comes from the caller, because the two callers disagree about
-    /// it on purpose: the host means now, the seeder means the instant its
-    /// fixture is dated from.
-    /// </summary>
+    // The moment comes from the caller, because the two callers disagree about it on purpose: the
+    // host means now, the seeder means the instant its fixture is dated from.
     [Fact]
     public async Task MeasureFromTheMomentItWasGiven()
     {

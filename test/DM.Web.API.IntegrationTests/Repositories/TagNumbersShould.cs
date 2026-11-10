@@ -18,7 +18,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// </remarks>
 public class TagNumbersShould : IntegrationTestBase
 {
-    /// <summary>A group of the seeded catalogue, so a created tag has somewhere to live.</summary>
+    // A group of the seeded catalogue, so a created tag has somewhere to live.
     private static readonly Guid SeededGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001");
 
     public TagNumbersShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -82,7 +82,6 @@ public class TagNumbersShould : IntegrationTestBase
             .Which.SqlState.Should().Be("23505", "that is unique_violation");
     }
 
-    /// <summary>A tag the number checks can create, under a group the seed ships with.</summary>
     private static CreateTag NewTag() => new()
     {
         GroupId = SeededGroupId,

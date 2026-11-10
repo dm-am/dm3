@@ -10,12 +10,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import {
-  gameApi,
-  useGameDetailsStore,
-  type Game,
-  type Invitation,
-} from "@/entities/game";
+import { gameApi, useGameDetailsStore, type Invitation } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { componentCss, styleRules } from "@/shared/lib/testing/styles";
 import { dirname, join } from "node:path";
@@ -89,10 +86,9 @@ async function mountSection(
   setActivePinia(pinia);
   const store = useGameDetailsStore();
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    title: "Игра",
-  } as unknown as Game;
+    ...createMockGame("the-game-guid", "Игра"),
+    publicId: asServed("the-game"),
+  };
 
   list = vi.fn().mockResolvedValue(served(initial));
   if (first) list.mockReturnValueOnce(first);
@@ -221,7 +217,10 @@ describe("Game InvitationsSection", () => {
 
 describe("Game InvitationsSection line that invites", () => {
   const css = componentCss(
-    join(dirname(fileURLToPath(import.meta.url)), "InvitationsSection.vue"),
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../features/module-staff/ui/InvitationsEditor.vue",
+    ),
   );
 
   it("is one line of the field, the list and the button at every width", () => {
@@ -231,7 +230,7 @@ describe("Game InvitationsSection line that invites", () => {
         selector.includes("invite-row") && "flex-wrap" in declarations,
     );
     expect(wraps).toEqual([]);
-    const row = rules.filter((rule) => rule.selector === ".invite-row");
+    const row = rules.filter((rule) => rule.selector === ".invite-row--kind");
     expect(
       row.map(({ declarations }) => declarations["grid-template-columns"]),
     ).toEqual(["minmax(0, 1fr) auto auto"]);

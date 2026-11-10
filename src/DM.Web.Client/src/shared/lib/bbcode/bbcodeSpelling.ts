@@ -173,6 +173,57 @@ function valueAfterNameEnd(src: string, from: number): number | null {
   return null;
 }
 
+/** A quoted value read from just past its opening quote, or why it is not one. */
+interface QuotedValue {
+  value: string;
+  /** Past the closing quote and "]", or at the space before the next name. */
+  end: number;
+  closesTag: boolean;
+}
+
+/**
+ * Why a value stops at a "[" or a line break: one that runs over it has its
+ * closing quote before the next "]", one that never closes does not.
+ */
+function valueBrokenAt(
+  src: string,
+  closes: Int32Array,
+  at: number,
+): BBCodeBrokenReason {
+  const close = closes[at];
+  const wouldEnd = close > 0 && src[close - 1] === '"';
+  if (!wouldEnd) return "unterminated-value";
+  return src[at] === "[" ? "bracket-in-value" : "newline-in-value";
+}
+
+/** Ends on a quote that "]" or " name=" follows, never on "[" or a line break. */
+function readQuotedValue(
+  src: string,
+  closes: Int32Array,
+  start: number,
+): QuotedValue | BBCodeBrokenReason {
+  for (let j = start; j < src.length; j++) {
+    const ch = src[j];
+    if (ch === "[" || ch === "\n" || ch === "\r") {
+      return valueBrokenAt(src, closes, j);
+    }
+    if (ch !== '"') continue;
+    if (src[j + 1] === "]") {
+      return { value: src.slice(start, j), end: j + 2, closesTag: true };
+    }
+    if (src[j + 1] !== " ") continue;
+    let q = j + 1;
+    while (src[q] === " ") q++;
+    if (src[q] === "]") return "stray-space";
+    let r = q;
+    while (isLetter(src.charCodeAt(r))) r++;
+    if (r > q && src[r] === "=") {
+      return { value: src.slice(start, j), end: j + 1, closesTag: false };
+    }
+  }
+  return "unterminated-value";
+}
+
 /**
  * Reads the opening of a tag other than [private]: name="value" pairs, Latin
  * names in any case, each once, values in straight quotes ending on a quote
@@ -234,52 +285,17 @@ export function readOpening(
     if (src[j] === " ") return fail("stray-space", typed);
     if (src[j] !== '"') return fail("unquoted-value", typed);
 
-    const valueStart = ++j;
-    let value: string | null = null;
-    let closesTag = false;
-    while (value === null) {
-      if (j >= src.length) return fail("unterminated-value", typed);
-      const ch = src[j];
-      if (ch === "[" || ch === "\n" || ch === "\r") {
-        // Tell a value that runs over one of them from one that never closes:
-        // the first has its closing quote before the next "]".
-        const close = closes[j];
-        const wouldEnd = close > 0 && src[close - 1] === '"';
-        if (!wouldEnd) return fail("unterminated-value", typed);
-        return fail(
-          ch === "[" ? "bracket-in-value" : "newline-in-value",
-          typed,
-        );
-      }
-      if (ch === '"') {
-        if (src[j + 1] === "]") {
-          value = src.slice(valueStart, j);
-          j += 2;
-          closesTag = true;
-          break;
-        }
-        if (src[j + 1] === " ") {
-          let q = j + 1;
-          while (src[q] === " ") q++;
-          if (src[q] === "]") return fail("stray-space", typed);
-          let r = q;
-          while (isLetter(src.charCodeAt(r))) r++;
-          if (r > q && src[r] === "=") {
-            value = src.slice(valueStart, j);
-            j += 1;
-            break;
-          }
-        }
-      }
-      j++;
-    }
+    const scan = readQuotedValue(src, closes, j + 1);
+    if (typeof scan === "string") return fail(scan, typed);
+    const { value } = scan;
+    j = scan.end;
 
     if (!semantic && NUMBER_PARAMS.has(name) && !isPixels(value)) {
       semantic = { reason: "bad-number", param: typed };
     }
     if (!params.has(name)) params.set(name, value);
 
-    if (closesTag) {
+    if (scan.closesTag) {
       return semantic
         ? {
             ok: false,

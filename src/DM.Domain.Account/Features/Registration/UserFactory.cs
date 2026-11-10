@@ -2,9 +2,6 @@ using DM.Domain.Core.Abstractions;
 
 namespace DM.Domain.Account.Features.Registration;
 
-/// <summary>
-/// Creates new user DTOs for email-first registration flow
-/// </summary>
 internal class UserFactory : IUserFactory
 {
     private readonly IGuidFactory _guidFactory;

@@ -8,17 +8,12 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Authorization;
 
-/// <summary>
-/// Gates who may post in a room and as whom. The expensive mistake here is not a
-/// locked door but an open one: posting under another player's character puts
-/// words in their mouth.
-/// </summary>
+// The expensive mistake here is not a locked door but an open one: posting under another player's
+// character puts words in their mouth.
 public class RoomPostIntentionShould : RoomIntentionTestBase
 {
-    /// <summary>
-    /// The game's blacklist closes the discussion and the application, not the
-    /// rooms: a seat the room gives is a seat, whoever the list holds.
-    /// </summary>
+    // The game's blacklist closes the discussion and the application, not the rooms: a seat the
+    // room gives is a seat, whoever the list holds.
     [Fact]
     public void LetABlacklistedUserWriteThroughTheSeatsTheRoomGivesHim()
     {
@@ -39,11 +34,8 @@ public class RoomPostIntentionShould : RoomIntentionTestBase
         resolver.IsAllowed(user, RoomIntention.ViewMessages, room).Should().BeTrue();
     }
 
-    /// <summary>
-    /// A character out of play writes nothing through the rows it still has in
-    /// the room: the rows stay when it leaves, is exiled or dies, and the roster
-    /// is what says it no longer plays.
-    /// </summary>
+    // A character out of play writes nothing through the rows it still has in the room: the rows
+    // stay when it leaves, is exiled or dies, and the roster is what says it no longer plays.
     [Theory]
     [InlineData(CharacterStatus.Retired)]
     [InlineData(CharacterStatus.UnderReview)]
@@ -61,9 +53,6 @@ public class RoomPostIntentionShould : RoomIntentionTestBase
         resolver.IsAllowed(user, RoomIntention.CreatePostPendency, room).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The same for a lead posting as an NPC that is out of play.
-    /// </summary>
     [Fact]
     public void KeepAnNpcOutOfPlayFromWritingInTheRoom()
     {
@@ -162,12 +151,8 @@ public class RoomPostIntentionShould : RoomIntentionTestBase
         resolver.IsAllowed(user, RoomIntention.CreatePost, (room, (Guid?)Guid.NewGuid())).Should().BeFalse();
     }
 
-    /// <summary>
-    /// An open room is open to read, not to write: a character still needs an
-    /// access of its own to post in it. The room's composer offers "От лица"
-    /// only the characters with such an access (PostComposer.vue mirrors this arm),
-    /// so the day this changes, the composer changes with it.
-    /// </summary>
+    // The room's composer offers "От лица" only the characters with such an access
+    // (PostComposer.vue mirrors this arm), so the day this changes, the composer changes with it.
     [Fact]
     public void NotLetACharacterWithoutAnAccessPostEvenInAnOpenRoom()
     {

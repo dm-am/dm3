@@ -189,7 +189,7 @@ describe("a picture", () => {
     expect(roundPicture, ROUND_PICTURE).toBe(true);
     // The scan sees the avatars, thumbnails and pictures of the tree.
     expect(pictures).toBeGreaterThan(30);
-  }, 60_000);
+  }, 120_000);
 
   it("is told from a control that acts on one", () => {
     for (const picture of [

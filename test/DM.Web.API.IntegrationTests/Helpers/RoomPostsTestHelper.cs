@@ -10,16 +10,9 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Helpers;
 
-/// <summary>
-/// A game with one room of its own, and the posts, reviews and read marks the
-/// room suites put into it.
-/// </summary>
-/// <remarks>A fresh game per test: a shared room holds a number of posts nobody here can state.</remarks>
+// A fresh game per test: a shared room holds a number of posts nobody here can state.
 public static class RoomPostsTestHelper
 {
-    /// <summary>
-    /// The game and room, with the master and one player, a character each.
-    /// </summary>
     public sealed record SeededRoom(
         Guid GameId,
         Guid RoomId,
@@ -28,10 +21,8 @@ public static class RoomPostsTestHelper
         Guid MasterCharacterId,
         Guid PlayerCharacterId);
 
-    /// <summary>The title of the game <see cref="AddGameWithRoomAsync" /> writes.</summary>
     public const string GameTitle = "Game for the room reads";
 
-    /// <summary>An approved, active game with one room and two characters in it.</summary>
     public static async Task<SeededRoom> AddGameWithRoomAsync(
         DatabaseFixture dbFixture, RoomAccessType access = RoomAccessType.Open)
     {
@@ -68,7 +59,6 @@ public static class RoomPostsTestHelper
         return new SeededRoom(gameId, roomId, master, player, masterCharacterId, playerCharacterId);
     }
 
-    /// <summary>One post, written straight to the table.</summary>
     public static async Task<Guid> AddPostAsync(
         DatabaseFixture dbFixture,
         Guid roomId,
@@ -96,10 +86,8 @@ public static class RoomPostsTestHelper
         return postId;
     }
 
-    /// <summary>
-    /// Reviews of one post, a new reviewer each: a review is one person's, and
-    /// the table refuses a second from the same author.
-    /// </summary>
+    // Reviews of one post, a new reviewer each: a review is one person's, and the table refuses a
+    // second from the same author.
     public static async Task AddReviewsAsync(
         DatabaseFixture dbFixture,
         SeededRoom room,
@@ -127,10 +115,6 @@ public static class RoomPostsTestHelper
         await db.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// The reader's mark on the room: everything written after
-    /// <paramref name="lastReadUtc"/> is unread for them.
-    /// </summary>
     public static async Task MarkReadAsync(
         DatabaseFixture dbFixture, SeededRoom room, Guid userId, DateTime lastReadUtc)
     {

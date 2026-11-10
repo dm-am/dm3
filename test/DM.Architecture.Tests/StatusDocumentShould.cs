@@ -5,10 +5,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// docs/STATUS.md says what the tree says: it is the output of its script, run on
-/// this checkout, to the byte.
-/// </summary>
 /// <remarks>
 /// The gate runs the --check of scripts/docs/build-status.mjs. Without the client's packages it exits 2,
 /// which is a red run, not a skipped one.
@@ -19,7 +15,6 @@ public class StatusDocumentShould
 
     private const string Script = "scripts/docs/build-status.mjs";
 
-    /// <summary>The exit code of the script when the client's packages are not installed.</summary>
     private const int NoCompiler = 2;
 
     private const int ShownDiffLines = 20;

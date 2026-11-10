@@ -71,9 +71,8 @@ public class BbTreeWalkShould
             "[pre]a -- b[/pre][empty][/empty][tab]a < b & c");
     }
 
-    /// <summary>
-    /// The tag set is built here, not taken from BbParserProvider: product changes must not move these strings.
-    /// </summary>
+    // The tag set is built here, not taken from BbParserProvider: product changes must not move
+    // these strings.
     private static BBCodeParser.Nodes.NodeTree Parse()
     {
         var tags = new Tag[]

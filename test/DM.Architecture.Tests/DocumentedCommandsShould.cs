@@ -36,7 +36,6 @@ public class DocumentedCommandsShould
         "cd", "export", "source", ".", "cp", "systemctl", "certbot", "jq",
     ];
 
-    /// <summary>The management scripts whose first argument is a command, and where they list them.</summary>
     private static readonly Dictionary<string, Func<string, IEnumerable<string>>> Dispatchers = new(StringComparer.Ordinal)
     {
         ["scripts/dm.ps1"] = text => Regex.Match(text, @"ValidateSet\(([^)]*)\)").Groups[1].Value
@@ -75,7 +74,6 @@ public class DocumentedCommandsShould
             "a command a guide gives is pasted into a terminal: point it at a script and a subcommand the tree has");
     }
 
-    /// <summary>What a command needs to exist.</summary>
     [Theory]
     [InlineData("powershell -File .\\scripts\\dm.ps1 start", true)]
     [InlineData("powershell -File .\\scripts\\dm.ps1 launch", false)]
@@ -94,7 +92,6 @@ public class DocumentedCommandsShould
     public void TellACommandThatExistsFromOneThatDoesNot(string block, bool exists) =>
         Problems(HandwrittenDocuments.Lines(block).ToList()).Should().HaveCount(exists ? 0 : 1);
 
-    /// <summary>The blocks of shell of a document, each as its lines.</summary>
     private static IEnumerable<List<HandwrittenDocuments.DocumentLine>> Blocks(
         IEnumerable<HandwrittenDocuments.DocumentLine> lines)
     {
@@ -122,7 +119,6 @@ public class DocumentedCommandsShould
         }
     }
 
-    /// <summary>One "line: reason" per command of the block that does not exist.</summary>
     private static List<string> Problems(IReadOnlyList<HandwrittenDocuments.DocumentLine> block)
     {
         var problems = new List<string>();
@@ -160,7 +156,6 @@ public class DocumentedCommandsShould
         return problems;
     }
 
-    /// <summary>Why the command does not exist, or null when it does; follows "cd".</summary>
     private static string? Check(List<string> words, ref string? folder)
     {
         var program = words[0];
@@ -199,7 +194,6 @@ public class DocumentedCommandsShould
         return null;
     }
 
-    /// <summary>Where the program takes the script it runs, or 0 when it runs none.</summary>
     private static int ScriptArgument(string program, List<string> words)
     {
         var at = program switch
@@ -291,7 +285,6 @@ public class DocumentedCommandsShould
             : new HashSet<string>();
     }
 
-    /// <summary>The line up to an unquoted "#" that starts a word.</summary>
     private static string WithoutComment(string line)
     {
         var quote = '\0';
@@ -315,7 +308,6 @@ public class DocumentedCommandsShould
         return line;
     }
 
-    /// <summary>The text cut at every unquoted separator, empty parts left out.</summary>
     private static IEnumerable<string> Split(string text, string[] separators)
     {
         var part = new StringBuilder();

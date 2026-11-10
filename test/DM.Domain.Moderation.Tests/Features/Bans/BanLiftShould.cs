@@ -12,9 +12,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Bans;
 
-/// <summary>
-/// The lift of a ban: who may lift which ban, and what the lift records.
-/// </summary>
 public class BanLiftShould : BanServiceTestBase
 {
     [Fact]
@@ -100,10 +97,8 @@ public class BanLiftShould : BanServiceTestBase
         }
     }
 
-    /// <summary>
-    /// A ban that has run out is refused as a conflict, not as a missing ban: it
-    /// is there, there is only nothing left of it to end.
-    /// </summary>
+    // A ban that has run out is refused as a conflict, not as a missing ban: it is there, there is
+    // only nothing left of it to end.
     [Fact]
     public async Task RefuseToLiftABanThatHasRunOut()
     {
@@ -129,9 +124,6 @@ public class BanLiftShould : BanServiceTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// A lift without words is refused before anything is read or written.
-    /// </summary>
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

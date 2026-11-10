@@ -62,10 +62,8 @@ describe("the time of a post", () => {
     expect(formatDateFull(POST_CREATED)).toBe(`26.09.2026 в${NBSP}20:09`);
   });
 
-  // In a narrow cell the line broke after the preposition: "01.01.2020 в" on
-  // one line and "03:00" alone on the next. The space after "в" does not
-  // break, so the line breaks before it and the time keeps its "в". The
-  // space before "в" is an ordinary one: that is where the break goes.
+  // The space after "в" does not break, so the line breaks before it and the
+  // time keeps its "в".
   it.each([
     ["with the year", DATE_TIME_FORMAT],
     ["without the year", DAY_MONTH_TIME_FORMAT],

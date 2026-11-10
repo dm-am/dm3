@@ -14,9 +14,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
-/// <summary>
-/// Repository for account deactivation operations
-/// </summary>
 internal class DeactivationRepository : IDeactivationRepository
 {
     private readonly DmDbContext _dbContext;
@@ -26,10 +23,8 @@ internal class DeactivationRepository : IDeactivationRepository
         _dbContext = dbContext;
     }
 
-    /// <summary>
-    /// The removed account as moderation reads it, spliced into every read below
-    /// so the SELECT stays the six columns the screen shows.
-    /// </summary>
+    // The removed account as moderation reads it, spliced into every read below so the SELECT stays
+    // the six columns the screen shows.
     private static readonly Expression<Func<DbUser, RemovedAccountRow>> Projection = user => new RemovedAccountRow(
         user.UserId,
         user.Username,
@@ -87,9 +82,6 @@ internal class DeactivationRepository : IDeactivationRepository
             .Select(Projection)
             .ToListAsync(cancellationToken);
 
-    /// <summary>
-    /// The removed rows the search matches.
-    /// </summary>
     /// <remarks>
     /// Two things happen here at once. The global filter is lifted, because it is
     /// what hides these rows from every other read in the product; and the flag is

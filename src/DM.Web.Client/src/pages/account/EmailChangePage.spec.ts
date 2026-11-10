@@ -7,17 +7,13 @@
  * what it says, the address it names when it knows it, and no code of the server.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import type { VueWrapper } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import type { Router } from "vue-router";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { accountApi } from "@/entities/user";
 import { useAuthStore } from "@/shared/stores";
 import EmailChangePage from "./EmailChangePage.vue";
-import { push } from "./guestPages.doubles";
-
-vi.mock("vue-router", async () =>
-  (await import("./guestPages.doubles")).vueRouter(),
-);
 
 /** The account refresh is stubbed; the stub puts the new address where the page reads it. */
 const fetchUser = vi.hoisted(() => vi.fn());
@@ -31,16 +27,22 @@ vi.mock("@/entities/user/lib/session", () => ({
 /** A request that never settles: the page stays in the state under test. */
 const pending = () => new Promise(() => {}) as never;
 
-const options = () => {
-  const pinia = createPinia();
-  setActivePinia(pinia);
+/** The page, and every address its card leads to. */
+const routes: Address[] = [
+  ["confirm-email", "/confirm-email"],
+  ["home", "/"],
+  ["support", "/support"],
+];
 
-  return {
-    global: {
-      plugins: [pinia],
-      stubs: { RouterLink: { template: "<a><slot /></a>" } },
-    },
-  };
+let router: Router;
+
+/** Open the page at its address, as the letter does. */
+const open = async () => {
+  const opened = await mountPage(EmailChangePage, "/confirm-email", {
+    routes,
+  });
+  router = opened.router;
+  return opened.wrapper;
 };
 
 /** A reader who followed the letter while signed in on this device. */
@@ -55,7 +57,7 @@ const confirmed = async () => {
     error: null,
   } as never);
 
-  const wrapper = mount(EmailChangePage, options());
+  const wrapper = await open();
   await flushPromises();
   return wrapper as VueWrapper;
 };
@@ -67,7 +69,7 @@ const refused = async (errors?: Record<string, string[]>) => {
     error: { status: errors ? 400 : 404, title: "Gone", errors },
   } as never);
 
-  const wrapper = mount(EmailChangePage, options());
+  const wrapper = await open();
   await flushPromises();
   return wrapper as VueWrapper;
 };
@@ -77,9 +79,7 @@ const takenAddress = () => refused({ email: ["Taken"] });
 
 describe("the page reached from the address-change letter", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     vi.restoreAllMocks();
-    push.mockClear();
     fetchUser.mockReset();
     // The viewer is persisted: a signed-in fixture would be read back by the next test.
     localStorage.clear();
@@ -88,10 +88,10 @@ describe("the page reached from the address-change letter", () => {
   });
 
   /** The first frame says it is checking. */
-  it("says it is checking before the server has answered", () => {
+  it("says it is checking before the server has answered", async () => {
     vi.spyOn(accountApi, "confirmEmailChange").mockImplementation(pending);
 
-    const wrapper = mount(EmailChangePage, options());
+    const wrapper = await open();
 
     expect(wrapper.text()).toContain("Проверяем ссылку...");
     // Nothing has gone wrong yet, so no help is offered.
@@ -165,7 +165,7 @@ describe("the page reached from the address-change letter", () => {
     window.location.hash = "";
     const confirm = vi.spyOn(accountApi, "confirmEmailChange");
 
-    const wrapper = mount(EmailChangePage, options());
+    const wrapper = await open();
     await flushPromises();
 
     expect(confirm).not.toHaveBeenCalled();
@@ -186,26 +186,30 @@ describe("the page reached from the address-change letter", () => {
       },
     ],
     ["the changed address, as a guest", confirmed],
-  ] as const)("leads home from %s with one button", async (_, open) => {
-    const wrapper = await open();
+  ] as const)("leads home from %s with one button", async (_, arrive) => {
+    const wrapper = await arrive();
 
     const ways = wrapper.findAll("button");
     expect(ways.map((button) => button.text())).toEqual(["На главную"]);
 
     await ways[0].trigger("click");
-    expect(push).toHaveBeenCalledWith("/");
+    await flushPromises();
+    expect(router.currentRoute.value.fullPath).toBe("/");
   });
 
   /** The support line on the two answers that need it. */
   it.each([
     ["the dead link", () => refused()],
     ["the taken address", takenAddress],
-  ] as const)("calls for support from %s", async (_, open) => {
-    const wrapper = await open();
+  ] as const)("calls for support from %s", async (_, arrive) => {
+    const wrapper = await arrive();
     const footnote = wrapper.get(".auth-footnote");
 
     expect(footnote.text()).toContain("Нужна помощь?");
     expect(footnote.get("a").text()).toBe("поддержку");
+    expect(footnote.get("a").attributes("href")).toBe(
+      "/support?subtype=AccessRecovery",
+    );
     // The only link on the card.
     expect(wrapper.findAll("a")).toHaveLength(1);
   });

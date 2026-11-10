@@ -27,11 +27,6 @@ namespace DM.Infrastructure.Core;
 /// </summary>
 public static class CoreRegistrationExtensions
 {
-    /// <summary>
-    /// Registers the core infrastructure services and the assembly's default types.
-    /// </summary>
-    /// <param name="services">Service collection.</param>
-    /// <returns>Service collection for chaining.</returns>
     public static IServiceCollection AddDmCore(this IServiceCollection services)
     {
         // The module ships an ICache over IMemoryCache, so the cache is its own.

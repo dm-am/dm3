@@ -77,10 +77,8 @@ public class UpdateUserEndorsementValidatorShould
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// Present and blank is not "keep what is stored": the service trims the text
-    /// before storing it, so a text of spaces would store an empty recommendation.
-    /// </summary>
+    // Present and blank is not "keep what is stored": the service trims the text before storing it,
+    // so a text of spaces would store an empty recommendation.
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

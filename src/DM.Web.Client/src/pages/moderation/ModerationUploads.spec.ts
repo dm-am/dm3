@@ -5,13 +5,16 @@
 // The name filter goes both ways through the address, and a new name opens on
 // the first page. A name nobody carries is the server's 404 and an empty list.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
-import type { Mock } from "vitest";
-import type { Ref } from "vue";
-import * as vueRouter from "vue-router";
-import { createPinia, setActivePinia } from "pinia";
+import {
+  flushPromises,
+  enableAutoUnmount,
+  type VueWrapper,
+} from "@vue/test-utils";
+import type { Router } from "vue-router";
+import { createPinia, getActivePinia, setActivePinia } from "pinia";
 import { useAuthStore } from "@/shared/stores";
 import { DEFAULT_PAGE_SIZE } from "@/shared/lib/composables/usePaging";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import ModerationUploads from "./ModerationUploads.vue";
 
 const getAllUploads = vi.hoisted(() => vi.fn());
@@ -20,14 +23,14 @@ vi.mock("@/entities/moderation", () => ({
   moderationApi: { getAllUploads },
 }));
 
-vi.mock("vue-router", async () =>
-  (await import("./moderationLists.doubles")).vueRouter(),
-);
+const UPLOADS = "/moderation/uploads";
 
-const { routeQuery, routerPush } = vueRouter as unknown as {
-  routeQuery: Ref<Record<string, string>>;
-  routerPush: Mock;
-};
+let router: Router;
+/** Where the list stands: its route and the filter in the address. */
+const where = () => ({
+  name: router.currentRoute.value.name,
+  query: router.currentRoute.value.query,
+});
 
 /** The page of a reader who chose no size. */
 const PAGE_SIZE = DEFAULT_PAGE_SIZE;
@@ -60,43 +63,44 @@ const notFound = {
 
 enableAutoUnmount(afterEach);
 
-function render() {
-  return mount(ModerationUploads, {
-    global: {
-      stubs: {
-        RouterLink: {
-          props: ["to"],
-          template: "<a class='router-link'><slot /></a>",
-        },
-        "page-title": { template: "<h1><slot /></h1>" },
-        // Registered on the app, so a mount of the page alone knows neither.
-        FormField: {
-          props: ["label"],
-          template:
-            "<div class='field-stub'><label>{{ label }}</label><slot /></div>",
-        },
-        Button: { template: "<button><slot /></button>" },
-        Paging: { template: "<nav class='paging-stub' />" },
-        ErrorState: {
-          props: ["message"],
-          template: "<div class='error-stub'>{{ message }}</div>",
-        },
-        ConfirmDialog: true,
+async function render(address: string) {
+  const mounted = await mountPage(ModerationUploads, address, {
+    routes: [
+      ["moderation-uploads", UPLOADS],
+      ["profile", "/users/:username"],
+    ],
+    pinia: getActivePinia(),
+    stubs: {
+      "page-title": { template: "<h1><slot /></h1>" },
+      // Plain, so the assertions read the page's own words.
+      FormField: {
+        props: ["label"],
+        template:
+          "<div class='field-stub'><label>{{ label }}</label><slot /></div>",
       },
+      Button: { template: "<button><slot /></button>" },
+      Paging: { template: "<nav class='paging-stub' />" },
+      ErrorState: {
+        props: ["message"],
+        template: "<div class='error-stub'>{{ message }}</div>",
+      },
+      ConfirmDialog: true,
     },
   });
+  router = mounted.router;
+  return mounted.wrapper;
 }
 
-async function rendered() {
-  const wrapper = render();
+async function rendered(address = UPLOADS) {
+  const wrapper = await render(address);
   await flushPromises();
   return wrapper;
 }
 
-const nameField = (wrapper: ReturnType<typeof render>) =>
+const nameField = (wrapper: VueWrapper) =>
   wrapper.find<HTMLInputElement>("form input");
 
-async function lookUp(wrapper: ReturnType<typeof render>, name: string) {
+async function lookUp(wrapper: VueWrapper, name: string) {
   await nameField(wrapper).setValue(name);
   await wrapper.find("form").trigger("submit");
   await flushPromises();
@@ -107,8 +111,6 @@ describe("the moderation list of uploads", () => {
     setActivePinia(createPinia());
     getAllUploads.mockReset();
     getAllUploads.mockResolvedValue(page([upload()]));
-    routerPush.mockClear();
-    routeQuery.value = {};
   });
 
   it("draws the search line of the moderation lists, no caption over it", async () => {
@@ -123,9 +125,7 @@ describe("the moderation list of uploads", () => {
   });
 
   it("asks for the name and the page the address names", async () => {
-    routeQuery.value = { username: "Загрузивший", number: "2" };
-
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${UPLOADS}?username=Загрузивший&number=2`);
 
     expect(getAllUploads).toHaveBeenCalledWith({
       username: "Загрузивший",
@@ -137,12 +137,11 @@ describe("the moderation list of uploads", () => {
   });
 
   it("asks for pages as long as the reader's lists", async () => {
-    routeQuery.value = { number: "3" };
     useAuthStore().user = {
       settings: { pageSize: 7 },
     } as never;
 
-    await rendered();
+    await rendered(`${UPLOADS}?number=3`);
 
     expect(getAllUploads).toHaveBeenCalledWith({
       username: undefined,
@@ -152,12 +151,11 @@ describe("the moderation list of uploads", () => {
   });
 
   it("puts the name in the address without the page number of the list being left", async () => {
-    routeQuery.value = { number: "3" };
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${UPLOADS}?number=3`);
 
     await lookUp(wrapper, "  Загрузивший  ");
 
-    expect(routerPush).toHaveBeenCalledWith({
+    expect(where()).toEqual({
       name: "moderation-uploads",
       query: { username: "Загрузивший" },
     });
@@ -176,21 +174,17 @@ describe("the moderation list of uploads", () => {
     await nameField(wrapper).setValue("Загр");
     await flushPromises();
 
-    expect(routerPush).not.toHaveBeenCalled();
+    expect(where()).toEqual({ name: "moderation-uploads", query: {} });
     expect(getAllUploads).toHaveBeenCalledTimes(1);
   });
 
   it("drops the name at once when the cross empties the field", async () => {
-    routeQuery.value = { username: "Загрузивший", number: "2" };
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${UPLOADS}?username=Загрузивший&number=2`);
 
     await wrapper.find("form .clear-input-btn").trigger("click");
     await flushPromises();
 
-    expect(routerPush).toHaveBeenCalledWith({
-      name: "moderation-uploads",
-      query: {},
-    });
+    expect(where()).toEqual({ name: "moderation-uploads", query: {} });
     expect(getAllUploads).toHaveBeenLastCalledWith({
       username: undefined,
       number: 1,
@@ -199,10 +193,9 @@ describe("the moderation list of uploads", () => {
   });
 
   it("says a name nobody carries found nothing, and not that the list failed", async () => {
-    routeQuery.value = { username: "НетТакого" };
     getAllUploads.mockResolvedValue(notFound);
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${UPLOADS}?username=НетТакого`);
 
     expect(wrapper.find(".error-stub").exists()).toBe(false);
     expect(wrapper.text()).toContain(
@@ -212,10 +205,9 @@ describe("the moderation list of uploads", () => {
   });
 
   it("says the same of a name that uploaded nothing", async () => {
-    routeQuery.value = { username: "Молчун" };
     getAllUploads.mockResolvedValue(page([]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(`${UPLOADS}?username=Молчун`);
 
     expect(wrapper.text()).toContain(
       "Загруженных файлов по заданным фильтрам не найдено",

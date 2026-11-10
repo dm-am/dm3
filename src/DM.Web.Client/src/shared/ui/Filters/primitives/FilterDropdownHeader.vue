@@ -51,8 +51,8 @@ const emit = defineEmits<{
     color: $text
 
   :deep(svg)
-    width: 14px
-    height: 14px
+    width: $control-glyph-size
+    height: $control-glyph-size
 
 .nav-title
   font-size: $secondary-font-size

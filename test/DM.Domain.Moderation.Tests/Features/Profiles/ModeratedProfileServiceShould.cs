@@ -114,12 +114,7 @@ public class ModeratedProfileServiceShould : UnitTestBase
             .Where(e => e.ValidationErrors.ContainsKey("role"));
     }
 
-    /// <summary>
-    /// A role change moves the person between two listings, and both are cached.
-    /// </summary>
-    /// <remarks>
-    /// The user document is cached by name and by identifier, so both keys go.
-    /// </remarks>
+    // The user document is cached by name and by identifier, so both keys go.
     [Fact]
     public async Task InvalidateEveryListingASetRoleMovesTheUserBetween()
     {
@@ -138,12 +133,7 @@ public class ModeratedProfileServiceShould : UnitTestBase
         await cache.Received(1).InvalidateAsync(CacheKeys.UsersByRole(UserRole.Moderator));
     }
 
-    /// <summary>
-    /// The manual watch flag: set it, clear it, and read the profile back.
-    /// </summary>
-    /// <remarks>
-    /// Unlike the violators list it does not lapse, so it is stored and only a moderator moves it.
-    /// </remarks>
+    // Unlike the violators list it does not lapse, so it is stored and only a moderator moves it.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -166,12 +156,7 @@ public class ModeratedProfileServiceShould : UnitTestBase
         intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.SetModerationWatch);
     }
 
-    /// <summary>
-    /// Both keys of the user document, as on every other write here.
-    /// </summary>
-    /// <remarks>
-    /// The creation path reads this field to decide whether the next game or blog is premoderated.
-    /// </remarks>
+    // The creation path reads this field to decide whether the next game or blog is premoderated.
     [Fact]
     public async Task InvalidateBothKeysOfTheUserAfterMovingTheWatch()
     {

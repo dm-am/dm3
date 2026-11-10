@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using DM.Infrastructure.Persistence;
-using DM.Web.API.Swagger;
+using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc.ActionConstraints;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -14,9 +14,6 @@ using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A 201 declares its Location, and the Location leads to what was created.
-/// </summary>
 /// <remarks>
 /// API_DESIGN states the rule. The declaration is checked against the code: an action calling CreatedAtRoute
 /// or its siblings sends a Location and is not marked, one answering 201 any other way sends none and is. The
@@ -37,37 +34,27 @@ public class CreatedLocationShould : IntegrationTestBase
         var wrong = new List<string>();
         var examined = 0;
 
-        foreach (var group in SwaggerExtensions.ApiGroups)
+        foreach (var operation in await SwaggerDocuments.OperationsAsync(Client))
         {
-            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            if (operation.Value.ValueKind != JsonValueKind.Object ||
+                !operation.Value.TryGetProperty("responses", out var responses) ||
+                !responses.TryGetProperty("201", out var created))
             {
-                foreach (var operation in path.Value.EnumerateObject())
-                {
-                    if (operation.Value.ValueKind != JsonValueKind.Object ||
-                        !operation.Value.TryGetProperty("responses", out var responses) ||
-                        !responses.TryGetProperty("201", out var created))
-                    {
-                        continue;
-                    }
+                continue;
+            }
 
-                    examined++;
-                    var address = $"{operation.Name.ToUpperInvariant()} {path.Name}";
-                    var declares = created.TryGetProperty("headers", out var headers) &&
-                                   headers.TryGetProperty("Location", out _);
+            examined++;
+            var address = $"{operation.Address}";
+            var declares = created.TryGetProperty("headers", out var headers) &&
+                           headers.TryGetProperty("Location", out _);
 
-                    if (marked.Contains(address) && declares)
-                    {
-                        wrong.Add($"{address} declares a Location it never sends");
-                    }
-                    else if (!marked.Contains(address) && !declares)
-                    {
-                        wrong.Add($"{address} sends a Location the document does not name");
-                    }
-                }
+            if (marked.Contains(address) && declares)
+            {
+                wrong.Add($"{address} declares a Location it never sends");
+            }
+            else if (!marked.Contains(address) && !declares)
+            {
+                wrong.Add($"{address} sends a Location the document does not name");
             }
         }
 
@@ -78,10 +65,7 @@ public class CreatedLocationShould : IntegrationTestBase
             "worse than the silence it replaced: silence is visible");
     }
 
-    /// <summary>
-    /// The addresses of the operations marked as sending no Location.
-    /// </summary>
-    /// <remarks>Read off the registered routes, the set the filter skips.</remarks>
+    // Read off the registered routes, the set the filter skips.
     private HashSet<string> MarkedRoutes() => DatabaseFixture.Factory.Services
         .GetRequiredService<IActionDescriptorCollectionProvider>()
         .ActionDescriptors.Items
@@ -95,10 +79,8 @@ public class CreatedLocationShould : IntegrationTestBase
             $"/{action.AttributeRouteInfo!.Template}")
         .ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>
-    /// The marker sits on exactly the actions that send no Location.
-    /// </summary>
-    /// <remarks>Read from the source: the attributes of an action answering through StatusCode and through CreatedAtRoute are the same.</remarks>
+    // Read from the source: the attributes of an action answering through StatusCode and through
+    // CreatedAtRoute are the same.
     [Fact]
     public void MarkEveryCreatedResponseThatCarriesNoLocation()
     {
@@ -137,10 +119,7 @@ public class CreatedLocationShould : IntegrationTestBase
             "out of step with the code is a header a consumer follows and never receives");
     }
 
-    /// <summary>
-    /// A like is not a resource, so liking answers 200 and sets no Location.
-    /// </summary>
-    /// <remarks>The like has to be taken for the missing header to mean anything, so the comment is written and removed here.</remarks>
+    // A like is not a resource, so liking answers 200 and sets no Location.
     [Theory]
     [InlineData("topic")]
     [InlineData("comment")]
@@ -167,7 +146,7 @@ public class CreatedLocationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>A comment of the second user on the seeded topic, written past the counters.</summary>
+    // A comment of the second user on the seeded topic, written past the counters.
     private async Task<Guid> SeedCommentAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -187,7 +166,6 @@ public class CreatedLocationShould : IntegrationTestBase
         return commentId;
     }
 
-    /// <summary>The like this test put, and the comment when the test wrote it.</summary>
     private async Task DropAsync(Guid target, bool ownComment)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -203,11 +181,8 @@ public class CreatedLocationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Actions of one controller: the name, and its own attributes, signature
-    /// and body — nothing of its neighbour's.
-    /// </summary>
-    /// <remarks>The attribute run is walked backwards from the signature: the marker is above it, the call below.</remarks>
+    // The attribute run is walked backwards from the signature: the marker is above it, the call
+    // below.
     private static IEnumerable<(string Name, string Body)> Actions(string source)
     {
         var signature = new Regex(@"^\s+public\s+(?:async\s+)?[\w<>,\[\]\? ]+\s+(\w+)\s*\(");
@@ -251,7 +226,7 @@ public class CreatedLocationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>The API project, found from the test binary rather than copied.</summary>
+    // The API project, found from the test binary rather than copied.
     private static string ApiSourceRoot =>
         Path.Combine(DM.Testing.RepositoryLayout.Root, "src", "DM.Web.API");
 }

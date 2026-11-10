@@ -19,9 +19,7 @@ namespace DM.Domain.Game.Features.PostReviews;
 /// <inheritdoc />
 internal class PostReviewService : IPostReviewService
 {
-    /// <summary>
-    /// For a typo, not a change of mind; deleting has no window.
-    /// </summary>
+    // For a typo, not a change of mind; deleting has no window.
     private static readonly TimeSpan EditWindow = TimeSpan.FromMinutes(15);
 
     private static readonly TimeSpan CooldownPerGame = TimeSpan.FromDays(3);
@@ -140,9 +138,7 @@ internal class PostReviewService : IPostReviewService
         return review;
     }
 
-    /// <summary>
-    /// No scope of its own: editing and removal carry their own gates.
-    /// </summary>
+    // No scope of its own: editing and removal carry their own gates.
     private async Task<PostReview> GetByIdAsync(Guid id) =>
         await _repository.GetAsync(id) ?? throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
 
@@ -279,7 +275,6 @@ internal class PostReviewService : IPostReviewService
         return verdicts;
     }
 
-    /// <summary>What <see cref="JudgeAsync" /> found for one post.</summary>
     private enum Verdict
     {
         Allowed,

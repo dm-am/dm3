@@ -12,10 +12,8 @@ using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subs
 
 namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 
-/// <summary>
-/// A subscription row carries the status and the opening day of its game or blog, for the status colour
-/// (UI_STANDARDS, "Цвет ссылок игр и блогов по статусу").
-/// </summary>
+// A subscription row carries the status and the opening day of its game or blog, for the status
+// colour (UI_STANDARDS, "Цвет ссылок игр и блогов по статусу").
 public class SubscriptionTargetStatusShould : IntegrationTestBase
 {
     public SubscriptionTargetStatusShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -110,7 +108,6 @@ public class SubscriptionTargetStatusShould : IntegrationTestBase
         CreatedUtc = DateTimeOffset.UtcNow,
     };
 
-    /// <summary>The reader's subscription rows, by target.</summary>
     private async Task<Dictionary<Guid, JsonElement>> RowsAsync()
     {
         var response = await Client.SendAsync(
@@ -123,7 +120,7 @@ public class SubscriptionTargetStatusShould : IntegrationTestBase
             .ToDictionary(s => s.GetProperty("targetId").GetGuid(), s => s.Clone());
     }
 
-    /// <summary>A null is written by omitting the property, or as a literal null.</summary>
+    // A null is written by omitting the property, or as a literal null.
     private static bool Absent(JsonElement row, string property) =>
         !row.TryGetProperty(property, out var value) || value.ValueKind == JsonValueKind.Null;
 }

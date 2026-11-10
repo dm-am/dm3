@@ -9,25 +9,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   enableAutoUnmount,
   flushPromises,
-  mount,
-  RouterLinkStub,
   type VueWrapper,
 } from "@vue/test-utils";
-import { createPinia } from "pinia";
 import {
   ticketApi,
   type TicketComment,
   type TicketDetails,
 } from "@/entities/ticket";
 import { TicketConversation, TicketThread } from "@/widgets/ticket-thread";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import ModerationTicketPage from "./ModerationTicketPage.vue";
 
 enableAutoUnmount(afterEach);
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: { ticketId: "t-1" }, query: {}, hash: "" }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}));
 
 // A heavy tiptap component, as a plain field: the page holds one editor, the form's.
 vi.mock("@/shared/ui/BBCodeEditor", async () =>
@@ -101,12 +94,20 @@ const signIn = (id = "u-reader", username = "Moderator_Me") =>
   );
 
 const render = async () => {
-  const wrapper = mount(ModerationTicketPage, {
-    global: {
-      plugins: [createPinia()],
-      stubs: { RouterLink: RouterLinkStub, PageTitle: true },
+  const { wrapper } = await mountPage(
+    ModerationTicketPage,
+    "/moderation/tickets/t-1",
+    {
+      routes: [
+        ["moderation-ticket", "/moderation/tickets/:ticketId"],
+        ["moderation-tickets", "/moderation/tickets"],
+        ["my-ticket", "/tickets/:ticketId"],
+        ["profile", "/users/:username"],
+        ["received-reviews", "/reviews"],
+      ],
+      stubs: { PageTitle: true },
     },
-  });
+  );
   await flushPromises();
   return wrapper;
 };
@@ -149,9 +150,9 @@ describe("a moderator's page of one ticket", () => {
     });
     expect(caption(wrapper)).toContain("Автор: Experienced");
     const back = wrapper
-      .findAllComponents(RouterLinkStub)
+      .findAll("a")
       .find((link) => link.text() === "Обращения");
-    expect(back?.props("to")).toEqual({ name: "moderation-tickets" });
+    expect(back?.attributes("href")).toBe("/moderation/tickets");
   });
 
   it("leads every ticket back to the one queue, the support desk's too", async () => {
@@ -159,9 +160,9 @@ describe("a moderator's page of one ticket", () => {
     const wrapper = await render();
 
     const back = wrapper
-      .findAllComponents(RouterLinkStub)
+      .findAll("a")
       .find((link) => link.text() === "Обращения");
-    expect(back?.props("to")).toEqual({ name: "moderation-tickets" });
+    expect(back?.attributes("href")).toBe("/moderation/tickets");
   });
 
   it("offers nobody to take the ticket in hand", async () => {

@@ -16,7 +16,6 @@ import UserSubscriptionPanel from "./UserSubscriptionPanel.vue";
 
 const props = defineProps<{
   userId: string;
-  username: string;
   result: ActionResult;
 }>();
 

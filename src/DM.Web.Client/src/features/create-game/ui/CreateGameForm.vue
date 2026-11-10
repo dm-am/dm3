@@ -24,7 +24,7 @@ import {
 import AssistantSelector from "./AssistantSelector.vue";
 import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
 import { readFieldError } from "@/shared/lib/errors/validationErrors";
-import type { BadRequestError } from "@/shared/api/models/common";
+import type { BadRequestError, GeneralError } from "@/shared/api/models/common";
 import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
@@ -106,9 +106,7 @@ const settingError = ref("");
 const infoError = ref("");
 const assistantError = ref("");
 
-const canCreate = computed(() => {
-  return user.value && title.value.trim().length > 0;
-});
+const canCreate = computed(() => user.value && title.value.trim().length > 0);
 
 const createResult = useActionResult();
 
@@ -121,6 +119,47 @@ function clearErrors() {
   createResult.clear();
 }
 
+// One request: a refused sheet is a refused game.
+function createRequest(): CreateGameInput {
+  return {
+    title: title.value,
+    system: systemName.value.trim() ? systemName.value : undefined,
+    setting: settingName.value.trim() ? settingName.value : undefined,
+    info: information.value,
+    draft: state.value === "draft",
+    tags: selectedTags.value.length > 0 ? [...selectedTags.value] : undefined,
+    attributeSpecifications: schemaDraft.value?.specifications ?? [],
+    assistantUsername: assistantUsername.value || undefined,
+    privacySettings: {
+      viewPrivates: showPrivateMessages.value,
+      viewDice: viewDice.value,
+      viewPostStats: true,
+      commentariesAccess: commentariesAccessMode.value,
+    },
+  };
+}
+
+/** The refusal under its fields, or as one line when it names none of them. */
+function showRefusal(apiError: GeneralError | BadRequestError) {
+  const errors = parseApiErrors(apiError as BadRequestError);
+  // By the request's property names, which key the server's dictionary.
+  titleError.value = readFieldError(errors, "title") || "";
+  systemError.value = readFieldError(errors, "systemName") || "";
+  settingError.value = readFieldError(errors, "narrativeSetting") || "";
+  infoError.value = readFieldError(errors, "info") || "";
+  assistantError.value = readFieldError(errors, "assistantUsername") || "";
+
+  if (
+    !titleError.value &&
+    !systemError.value &&
+    !settingError.value &&
+    !infoError.value &&
+    !assistantError.value
+  ) {
+    createResult.refuse(apiError, "Не удалось создать игру");
+  }
+}
+
 async function handleSubmit() {
   if (!canCreate.value || isSubmitting.value) return;
 
@@ -128,44 +167,10 @@ async function handleSubmit() {
   clearErrors();
 
   try {
-    // One request: a refused sheet is a refused game.
-    const gameData: CreateGameInput = {
-      title: title.value,
-      system: systemName.value.trim() ? systemName.value : undefined,
-      setting: settingName.value.trim() ? settingName.value : undefined,
-      info: information.value,
-      draft: state.value === "draft",
-      tags: selectedTags.value.length > 0 ? [...selectedTags.value] : undefined,
-      attributeSpecifications: schemaDraft.value?.specifications ?? [],
-      assistantUsername: assistantUsername.value || undefined,
-      privacySettings: {
-        viewPrivates: showPrivateMessages.value,
-        viewDice: viewDice.value,
-        viewPostStats: true,
-        commentariesAccess: commentariesAccessMode.value,
-      },
-    };
-
-    const { data, error: apiError } = await gameApi.createGame(gameData);
+    const { data, error: apiError } = await gameApi.createGame(createRequest());
 
     if (apiError) {
-      const errors = parseApiErrors(apiError as BadRequestError);
-      // By the request's property names, which key the server's dictionary.
-      titleError.value = readFieldError(errors, "title") || "";
-      systemError.value = readFieldError(errors, "systemName") || "";
-      settingError.value = readFieldError(errors, "narrativeSetting") || "";
-      infoError.value = readFieldError(errors, "info") || "";
-      assistantError.value = readFieldError(errors, "assistantUsername") || "";
-
-      if (
-        !titleError.value &&
-        !systemError.value &&
-        !settingError.value &&
-        !infoError.value &&
-        !assistantError.value
-      ) {
-        createResult.refuse(apiError, "Не удалось создать игру");
-      }
+      showRefusal(apiError);
       return;
     }
 

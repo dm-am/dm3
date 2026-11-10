@@ -41,12 +41,12 @@ describe("GamePost seeds the editor from the author's own text", () => {
   const AUTHOR_SOURCE =
     '[b]Жирно[/b] [private="Чак"]Секрет[/private] хвост, Том &amp; Джерри';
 
-  const ownPost = {
+  const ownPost: Post = {
     ...post,
     gameText: DISPLAY_HTML,
     // Inside the fifteen minutes, so the button is drawn for its author.
     createdUtc: new Date().toISOString(),
-  } as unknown as Post;
+  };
 
   beforeEach(() => {
     localStorage.clear();

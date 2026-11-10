@@ -15,10 +15,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
-/// <summary>
-/// The list of violators: the points and the running bans of every reader who
-/// has either.
-/// </summary>
 public class ViolatorListShould : WarningServiceTestBase
 {
     [Fact]

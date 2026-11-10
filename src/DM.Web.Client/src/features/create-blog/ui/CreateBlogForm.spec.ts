@@ -5,12 +5,12 @@
 // The statuses the interceptor speaks for are left to it; the rest is said by the form.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { blogApi } from "@/entities/blog";
 import { blacklistApi } from "@/entities/user";
 import type { GeneralError } from "@/shared/api/models/common";
 import { problem } from "@/shared/lib/testing/problem";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import type { BlacklistSettings } from "@/shared/api/models/personal";
 import CreateBlogForm from "./CreateBlogForm.vue";
 
@@ -23,12 +23,6 @@ const toast = vi.hoisted(() => ({
 
 vi.mock("@/shared/lib/composables/useToast", () => ({
   useToast: () => toast,
-}));
-
-// A mock that leaves the guard hook out fails the mount instead of the assertion.
-vi.mock("vue-router", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-  onBeforeRouteLeave: vi.fn(),
 }));
 
 vi.mock("@/shared/ui/BBCodeEditor", async () =>
@@ -61,15 +55,23 @@ const listOf = (names: string[], total = names.length) =>
     error: null,
   }) as never;
 
+// Routed: the unsaved-changes guard of the form runs on leaving it.
+const mountForm = () =>
+  mountPage(CreateBlogForm, "/blogs/create", {
+    routes: [
+      ["create-blog", "/blogs/create"],
+      ["blog", "/blogs/:id"],
+    ],
+    routed: true,
+  });
+
 async function submitInto(error: GeneralError) {
   vi.spyOn(blogApi, "createBlog").mockResolvedValue({
     data: null,
     error,
   } as never);
 
-  const wrapper = mount(CreateBlogForm, {
-    global: { plugins: [createPinia()] },
-  });
+  const { wrapper } = await mountForm();
   await wrapper.find("#title").setValue("Записки Лекса");
   await wrapper.find("form").trigger("submit");
   await flushPromises();
@@ -119,12 +121,30 @@ describe("CreateBlogForm", () => {
   });
 });
 
+describe("CreateBlogForm: creating", () => {
+  beforeEach(withEmptyBlacklist);
+
+  it("opens the new blog by its public name", async () => {
+    vi.spyOn(blogApi, "createBlog").mockResolvedValue({
+      data: { resource: { id: "b-1", publicId: "records-of-lex" } },
+      error: null,
+    } as never);
+    const { wrapper, router } = await mountForm();
+    await wrapper.find("#title").setValue("Записки Лекса");
+
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe("/blogs/records-of-lex");
+  });
+});
+
 // Without a box the field is left out, and the server applies the account setting itself.
 describe("CreateBlogForm: carrying the blacklist over", () => {
-  const copyBox = (wrapper: ReturnType<typeof mount>) =>
+  const copyBox = (wrapper: VueWrapper) =>
     wrapper.find<HTMLInputElement>(".copy-blacklist input[type='checkbox']");
 
-  async function sent(wrapper: ReturnType<typeof mount>) {
+  async function sent(wrapper: VueWrapper) {
     const create = vi.spyOn(blogApi, "createBlog").mockResolvedValue({
       data: null,
       error: problem(409, "Блог с таким названием уже есть"),
@@ -135,13 +155,10 @@ describe("CreateBlogForm: carrying the blacklist over", () => {
     return create.mock.calls[0][0];
   }
 
-  const mountForm = () =>
-    mount(CreateBlogForm, { global: { plugins: [createPinia()] } });
-
   it("draws no box and sends no field when the own list is empty", async () => {
     vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(settingsWith(true));
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(listOf([]));
-    const wrapper = mountForm();
+    const { wrapper } = await mountForm();
     await flushPromises();
 
     expect(copyBox(wrapper).exists()).toBe(false);
@@ -159,7 +176,7 @@ describe("CreateBlogForm: carrying the blacklist over", () => {
       vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(
         listOf(["Player-Two"]),
       );
-      const wrapper = mountForm();
+      const { wrapper } = await mountForm();
       await flushPromises();
 
       expect(copyBox(wrapper).element.checked).toBe(setting);
@@ -172,7 +189,7 @@ describe("CreateBlogForm: carrying the blacklist over", () => {
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(
       listOf(["Player-Two"]),
     );
-    const wrapper = mountForm();
+    const { wrapper } = await mountForm();
     await flushPromises();
 
     await copyBox(wrapper).setValue(false);
@@ -191,7 +208,7 @@ describe("CreateBlogForm: carrying the blacklist over", () => {
       .mockResolvedValueOnce(
         listOf(["Mordred_Moon", "Повелитель_Драконов1"], 5),
       );
-    const wrapper = mountForm();
+    const { wrapper } = await mountForm();
     await flushPromises();
 
     expect(wrapper.get(".copy-blacklist-hint").text()).toBe(
@@ -204,9 +221,7 @@ describe("CreateBlogForm: laid out as the game form", () => {
   beforeEach(withEmptyBlacklist);
 
   it("names the fields in the words of the site", async () => {
-    const wrapper = mount(CreateBlogForm, {
-      global: { plugins: [createPinia()] },
-    });
+    const { wrapper } = await mountForm();
     await flushPromises();
 
     expect(

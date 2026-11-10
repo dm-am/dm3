@@ -61,9 +61,6 @@ internal static class ModerationMapper
             Author = GeneralUserProjections.Projection.Splice(w.Author)
         }));
 
-    /// <summary>
-    /// EF projection to the domain ban
-    /// </summary>
     public static IQueryable<Ban> ProjectToBan(this IQueryable<DbBan> query) =>
         query.Select(ExpressionSplicer.Expand<Func<DbBan, Ban>>(b => new Ban
         {
@@ -129,9 +126,6 @@ internal static class ModerationMapper
             Text = c.Text
         }));
 
-    /// <summary>
-    /// EF projection to the moderator's profile note
-    /// </summary>
     public static IQueryable<ModeratedProfileNote> ProjectToModeratedProfileNote(
         this IQueryable<DbModeratedProfileNote> query) =>
         query.Select(ExpressionSplicer.Expand<Func<DbModeratedProfileNote, ModeratedProfileNote>>(

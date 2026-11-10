@@ -1,11 +1,5 @@
 namespace DM.Domain.Core.Dto;
 
-/// <summary>
-/// Paging data for repositories
-/// </summary>
-/// <remarks>
-/// Converts skip/take pagination to internal paging result.
-/// </remarks>
 public class PagingData
 {
     /// <summary>
@@ -25,9 +19,6 @@ public class PagingData
         Take = pageSize;
     }
 
-    /// <summary>
-    /// Number of entities to skip
-    /// </summary>
     public int Skip { get; }
 
     /// <summary>

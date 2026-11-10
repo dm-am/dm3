@@ -18,9 +18,7 @@ using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 
 namespace DM.Domain.Blog.Tests.Dsl;
 
-/// <summary>
-/// A real blog service over substitutes, read by a guest until a test signs somebody in.
-/// </summary>
+// A real blog service over substitutes, read by a guest until a test signs somebody in.
 public abstract class BlogServiceTestBase : UnitTestBase
 {
     protected readonly IBlogRepository repository = Mock<IBlogRepository>();
@@ -69,10 +67,8 @@ public abstract class BlogServiceTestBase : UnitTestBase
             eventProducer);
     }
 
-    /// <summary>
-    /// The caller holds no role in any blog: neither of the two view gates opens
-    /// for them, which is what a stranger's read answers.
-    /// </summary>
+    // The caller holds no role in any blog: neither of the two view gates opens for them, which is
+    // what a stranger's read answers.
     protected void HideEveryBlogFromTheCaller() =>
         intentionManager.IsAllowed(Arg.Any<BlogIntention>(), Arg.Any<BlogDto>()).Returns(false);
 }

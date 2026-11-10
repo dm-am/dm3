@@ -16,9 +16,6 @@ public class Poll : IRemovable
     /// </summary>
     public Guid PollId { get; set; }
 
-    /// <summary>
-    /// Start moment (UTC)
-    /// </summary>
     public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
@@ -89,9 +86,6 @@ public class PollOption
 [Table("PollVotes")]
 public class PollVote
 {
-    /// <summary>
-    /// Poll identifier, part of the primary key
-    /// </summary>
     public Guid PollId { get; set; }
 
     /// <summary>

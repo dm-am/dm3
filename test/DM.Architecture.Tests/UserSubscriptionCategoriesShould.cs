@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The words of a category of a subscription to a user say what the dispatcher sends under its bit.
-/// </summary>
 /// <remarks>
 /// Asserted against the sources, as NotificationAudienceShould is: the bit is an argument of the
 /// audience query inside a method body. Each event of the words stands for one generator.
@@ -21,7 +18,6 @@ public class UserSubscriptionCategoriesShould
     private const string NotifiersDirectory =
         "src/DM.Workers.NotificationDispatcher/Notifiers";
 
-    /// <summary>The generators whose code, its doc comments aside, asks for the subscribers of the bit.</summary>
     private static string[] SendersUnder(SubscriptionSettings category)
     {
         var asked = new Regex($@"\bSubscriptionSettings\.{category}\b");

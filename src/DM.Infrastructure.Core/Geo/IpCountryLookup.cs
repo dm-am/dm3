@@ -64,7 +64,6 @@ internal sealed class IpCountryLookup : IIpCountryLookup
         return code is null ? null : table.Names.GetValueOrDefault(code);
     }
 
-    /// <summary>The range that holds this address, if the table has one.</summary>
     private static string? Search<T>(Range<T>[] ranges, T address) where T : IComparable<T>
     {
         var low = 0;
@@ -81,9 +80,6 @@ internal sealed class IpCountryLookup : IIpCountryLookup
         return null;
     }
 
-    /// <summary>
-    /// Makes this table the one every later question is answered from.
-    /// </summary>
     internal void Use(Table table)
     {
         lock (_gate)
@@ -92,7 +88,6 @@ internal sealed class IpCountryLookup : IIpCountryLookup
         }
     }
 
-    /// <summary>The table in use, read from the configured file the first time.</summary>
     private Table Current => Volatile.Read(ref _table) ?? LoadConfigured();
 
     private Table LoadConfigured()
@@ -108,9 +103,6 @@ internal sealed class IpCountryLookup : IIpCountryLookup
         }
     }
 
-    /// <summary>
-    /// Reads the configured table, or hands back an empty one and says why.
-    /// </summary>
     /// <remarks>
     /// A missing file is not worth a failed start, one line of one letter, but a warning.
     /// </remarks>
@@ -149,7 +141,6 @@ internal sealed class IpCountryLookup : IIpCountryLookup
     /// <summary>
     /// The table a file holds, or null when not one line of it is a usable range.
     /// </summary>
-    /// <param name="path">File to read.</param>
     /// <param name="skipped">Lines that were not a range and were left out.</param>
     internal static Table? Read(string path, out int skipped)
     {
@@ -268,7 +259,6 @@ internal sealed class IpCountryLookup : IIpCountryLookup
 
     internal readonly record struct Range<T>(T First, T Last, string Code) where T : IComparable<T>;
 
-    /// <summary>A whole table: what one question is answered from.</summary>
     internal sealed record Table(
         Range<uint>[] V4,
         Range<UInt128>[] V6,

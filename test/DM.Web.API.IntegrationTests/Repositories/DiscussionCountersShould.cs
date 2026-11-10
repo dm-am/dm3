@@ -11,10 +11,6 @@ using DbPublication = DM.Infrastructure.Persistence.Entities.Blog.Publication;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// A denormalised count is what the database made of it, not what a caller read a
-/// query earlier and wrote back.
-/// </summary>
 /// <remarks>
 /// CommentCount and PublicationCount are stored columns written by set-based statements: an increment that locks
 /// the owner row and a conditional mark whose match count decides the rest. Neither runs in memory.
@@ -43,9 +39,6 @@ public class DiscussionCountersShould : IntegrationTestBase
         game.LastCommentId.Should().Be(commentIds[1], "the pointer names the newest comment");
     }
 
-    /// <summary>
-    /// The pointer does not walk backwards when an older comment lands last.
-    /// </summary>
     /// <remarks>
     /// CreatedUtc is stamped before the write, so the last commit is not always the newest. In order, not in parallel:
     /// which concurrent comment commits last cannot be pinned.

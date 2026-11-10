@@ -5,10 +5,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Game;
 
-/// <summary>
-/// An unsaved specification carries no identifier: the domain reads null as "a new one", and a zero Guid
-/// from the wire must not arrive as an identifier.
-/// </summary>
+// An unsaved specification carries no identifier: the domain reads null as "a new one", and a zero
+// Guid from the wire must not arrive as an identifier.
 public class AttributeSchemaMapperShould
 {
     private static readonly AttributeSchemaMapper Mapper = new();

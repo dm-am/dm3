@@ -11,20 +11,14 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
-/// <summary>
-/// A notification that names two places leads from the same one, whatever order
-/// its bag comes back in.
-/// </summary>
-/// <remarks>The details follow the bag, and jsonb orders keys by length, then by bytes.</remarks>
+// The details follow the bag, and jsonb orders keys by length, then by bytes.
 public class NotificationMapperShould
 {
-    /// <summary>A comment under a publication, as its generator writes the bag.</summary>
     private const string PublicationComment = """
         {"commentId":"c1","publicationId":"pervaja~mNoP","publicationTitle":"Первая партия",
          "blogId":"zapiski~iJkL","blogTitle":"Записки мастера","authorUsername":"TestHonorary"}
         """;
 
-    /// <summary>A changed topic, as its generator writes the bag.</summary>
     private const string ChangedTopic = """
         {"topicId":"faq~eFgH","topicTitle":"FAQ","boardId":"obshchee~aBcD",
          "boardTitle":"Общее","authorUsername":"TestModerator"}
@@ -65,11 +59,8 @@ public class NotificationMapperShould
         IsRead = false
     };
 
-    /// <summary>
-    /// The bag in the order jsonb keeps its keys: the shorter first, and keys of one
-    /// length by their bytes (lengthCompareJsonbString in jsonb_util.c of PostgreSQL).
-    /// The keys here are ASCII, so their bytes compare as their chars do.
-    /// </summary>
+    // The bag in the order jsonb keeps its keys: the shorter first, and keys of one length by their
+    // bytes (lengthCompareJsonbString in jsonb_util.c of PostgreSQL).
     private static string Stored(string bag) => Reordered(bag, fields => fields
         .OrderBy(field => field.Key.Length)
         .ThenBy(field => field.Key, StringComparer.Ordinal));

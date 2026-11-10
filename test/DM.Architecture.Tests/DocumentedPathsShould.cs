@@ -9,11 +9,7 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A document that names a file this repository does not contain sends the
-/// reader looking for something nobody wrote.
-/// </summary>
-/// <remarks>Whether prose is true cannot be checked; whether a path exists can, and it is acted on first.</remarks>
+// Whether prose is true cannot be checked; whether a path exists can, and it is acted on first.
 public class DocumentedPathsShould
 {
     /// <summary>
@@ -76,9 +72,6 @@ public class DocumentedPathsShould
             "no other way to find out that it does not");
     }
 
-    /// <summary>
-    /// A stylesheet path is a reference like any other, under a directory that exists too.
-    /// </summary>
     [Theory]
     [InlineData(
         "`src/DM.Web.Client/src/assets/styles/_ZIndex.sass`",
