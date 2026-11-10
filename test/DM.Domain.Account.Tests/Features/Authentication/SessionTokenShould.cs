@@ -17,6 +17,8 @@ public class SessionTokenShould
     private static readonly Guid UserId = Guid.Parse("5e55a0de-0000-4000-8000-000000000001");
     private static readonly Guid SessionId = Guid.Parse("5e55a0de-0000-4000-8000-000000000002");
 
+    private static readonly string Payload = $$"""{"userId":"{{UserId}}","sessionId":"{{SessionId}}"}""";
+
     private readonly AesGcmSymmetricCryptoService cipher = new(Options.Create(new CryptoConfiguration
     {
         KeyBase64 = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
@@ -36,7 +38,7 @@ public class SessionTokenShould
     [Fact]
     public async Task OpenATokenOfThePayloadAlreadyIssued()
     {
-        var token = await cipher.Encrypt($$"""{"userId":"{{UserId}}","sessionId":"{{SessionId}}"}""");
+        var token = await cipher.Encrypt(Payload, SealPurpose.SessionToken);
 
         (await SessionToken.Read(cipher, token)).Should().Be(new SessionToken(UserId, SessionId));
     }
@@ -49,9 +51,37 @@ public class SessionTokenShould
     [InlineData("""null""")]
     public async Task OpenToNothingWhenThePayloadDoesNotNameBothHalves(string payload)
     {
-        var token = await cipher.Encrypt(payload);
+        var token = await cipher.Encrypt(payload, SealPurpose.SessionToken);
 
         (await SessionToken.Read(cipher, token)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task OpenToNothingWhenThePairWasSealedForTheSecondFactorChallenge()
+    {
+        var sealedForTheChallenge = await cipher.Encrypt(Payload, SealPurpose.TwoFactorChallenge);
+
+        (await SessionToken.Read(cipher, sealedForTheChallenge)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task OpenToNothingWhenThePairWasSealedForNoPurpose()
+    {
+        var sealedForNoPurpose = await cipher.Encrypt(Payload);
+
+        (await SessionToken.Read(cipher, sealedForNoPurpose)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task NotOpenAsTheSecondFactorChallengeOrAsAStoredValue()
+    {
+        var token = await new SessionToken(UserId, SessionId).Write(cipher);
+
+        var asTheChallenge = () => cipher.Decrypt(token, SealPurpose.TwoFactorChallenge);
+        var asAStoredValue = () => cipher.Decrypt(token);
+
+        await asTheChallenge.Should().ThrowAsync<AuthenticationTagMismatchException>();
+        await asAStoredValue.Should().ThrowAsync<AuthenticationTagMismatchException>();
     }
 
     [Theory]

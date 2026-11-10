@@ -47,7 +47,10 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
         .ProjectToGeneralUser()
         .ToArrayAsync();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Copies the owner's personal blacklist into the game's, skipping anyone already on it, inside
+    /// the transaction of the game insert. Returns how many entries were added.
+    /// </summary>
     /// <remarks>
     /// One statement, and the skip is the database's. The copy used to read the
     /// game's list and insert what it did not see there, and a read cannot see a
@@ -61,10 +64,11 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
     /// selects. Made here, they would need the owner's list read out first, and
     /// that read is the extra statement this replaces.
     /// </remarks>
-    public Task<int> CopyFromPersonalBlacklist(Guid gameId, Guid ownerId, CancellationToken ct = default) =>
-        _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+    internal static Task<int> CopyFromPersonalBlacklist(
+        DmDbContext dbContext, Guid gameId, Guid ownerId, DateTimeOffset now, CancellationToken ct) =>
+        dbContext.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "GameBlacklists" ("EntryId", "GameId", "BlockedUserId", "BlockedByUserId", "CreatedUtc")
-            SELECT gen_random_uuid(), {gameId}, personal."BlockedUserId", {ownerId}, {_dateTimeProvider.Now}
+            SELECT gen_random_uuid(), {gameId}, personal."BlockedUserId", {ownerId}, {now}
             FROM "UserBlacklists" AS personal
             WHERE personal."OwnerId" = {ownerId}
             ON CONFLICT ("GameId", "BlockedUserId") DO NOTHING

@@ -190,6 +190,26 @@ describe("DiceComposer", () => {
     expect(rollsOf(composer)[0].explosion).toBe(3);
   });
 
+  // "2.5" is how jsdom takes the "2,5" a Russian keyboard types.
+  it.each([
+    ["2.5", 2],
+    ["-1", 0],
+    ["150", 100],
+  ])(
+    "shows %s as %i once the field is left, the number the roll sends",
+    async (typed, sent) => {
+      const composer = mountComposer();
+
+      const field = named(composer, "Сколько раз взрывается кубик");
+      await field.setValue(typed);
+      await field.trigger("blur");
+
+      expect((field.element as HTMLInputElement).value).toBe(String(sent));
+      await named(composer, "Бросить D6").trigger("click");
+      expect(rollsOf(composer)[0].explosion).toBe(sent);
+    },
+  );
+
   it("does not explode without the box, whatever the field says", async () => {
     const composer = mountComposer();
 

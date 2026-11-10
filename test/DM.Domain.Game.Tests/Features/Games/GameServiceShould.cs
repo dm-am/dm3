@@ -91,6 +91,30 @@ public class GameServiceShould : GameServiceTestBase
         await unreadCountersRepository.Received(1).DeleteAsync(gameId, UnreadEntryType.Character);
     }
 
+    // The copy rides in the game's own write, so a failed copy leaves no game: the request decides,
+    // and a silent request leaves it to the master's account setting.
+    [Theory]
+    [InlineData(true, UserBlacklistSettings.None, true)]
+    [InlineData(false, UserBlacklistSettings.AutoPopulateContentBlacklist, false)]
+    [InlineData(null, UserBlacklistSettings.AutoPopulateContentBlacklist, true)]
+    [InlineData(null, UserBlacklistSettings.None, false)]
+    public async Task HandTheBlacklistCopyToTheGameWrite(
+        bool? requested, UserBlacklistSettings settings, bool expected)
+    {
+        var gameId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        guidFactory.Create().Returns(gameId, roomId);
+        blacklistChecker.GetSettingsAsync(currentUserId, Arg.Any<CancellationToken>()).Returns(settings);
+        CreateGameEntity? captured = null;
+        repository.Create(
+                Arg.Do<CreateGameEntity>(e => captured = e), Arg.Any<CreateRoomEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = roomId } } });
+
+        await service.CreateAsync(new CreateGame { Title = "Test Game", CopyBlacklist = requested });
+
+        captured!.CopyMasterBlacklist.Should().Be(expected);
+    }
+
     [Fact]
     public async Task ParentTheFirstRoomsCounterByItsGame()
     {

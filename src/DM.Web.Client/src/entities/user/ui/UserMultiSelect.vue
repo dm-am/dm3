@@ -34,7 +34,7 @@ const SHOWN = 6;
 const searchInput = ref("");
 const highlightedIndex = ref(-1);
 
-const { results, loading, search, clear } = useUserSearch({
+const { results, loading, failed, search, clear } = useUserSearch({
   limit: 10,
   debounceMs: 150,
   activity: props.includeInactive ? UserActivityFilter.All : undefined,
@@ -116,7 +116,11 @@ function handleKeydown(event: KeyboardEvent) {
       />
     </div>
 
-    <div v-if="showEmpty" class="dropdown-empty">Пользователь не найден</div>
+    <div v-if="showEmpty" class="dropdown-empty">
+      {{
+        failed ? "Не удалось загрузить пользователей" : "Пользователь не найден"
+      }}
+    </div>
 
     <template v-else-if="hasSuggestions">
       <FilterDropdownItem

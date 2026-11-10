@@ -15,8 +15,9 @@ namespace DM.Web.API.Shared.Authentication;
 /// A cookie and not a field of the answer: a single-page client would lose it
 /// on a refresh halfway through a login, and scripts cannot read it. The
 /// attributes are the session cookie's, the value is the challenge identifier in
-/// the AEAD envelope of the session token, so a forged one is refused before the
-/// database is asked anything.
+/// the AEAD envelope of the session token, sealed for its own purpose, so a forged
+/// one, or a session token put in its place, is refused before the database is
+/// asked anything.
 /// </remarks>
 public class TwoFactorChallengeCookie
 {
@@ -45,7 +46,7 @@ public class TwoFactorChallengeCookie
         var options = ApiCredentialsStorage.SessionCookieOptions(httpContext, _cookie);
         options.MaxAge = lifetime;
         httpContext.Response.Cookies.Append(
-            CookieName, await _cryptoService.Encrypt(challengeId.ToString()), options);
+            CookieName, await _cryptoService.Encrypt(challengeId.ToString(), SealPurpose.TwoFactorChallenge), options);
     }
 
     /// <summary>
@@ -67,7 +68,8 @@ public class TwoFactorChallengeCookie
 
         try
         {
-            return Guid.TryParse(await _cryptoService.Decrypt(value), out var challengeId)
+            return Guid.TryParse(
+                await _cryptoService.Decrypt(value, SealPurpose.TwoFactorChallenge), out var challengeId)
                 ? challengeId
                 : null;
         }

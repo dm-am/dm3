@@ -43,7 +43,31 @@ internal class AesGcmSymmetricCryptoService : ISymmetricCryptoService
     }
 
     /// <inheritdoc />
-    public Task<string> Encrypt(string valueToEncrypt)
+    public Task<string> Encrypt(string valueToEncrypt) =>
+        Task.FromResult(Seal(valueToEncrypt, default));
+
+    /// <inheritdoc />
+    public Task<string> Encrypt(string valueToEncrypt, SealPurpose purpose) =>
+        Task.FromResult(Seal(valueToEncrypt, AssociatedData(purpose)));
+
+    /// <inheritdoc />
+    public Task<string> Decrypt(string valueToDecrypt) =>
+        Task.FromResult(Open(valueToDecrypt, default));
+
+    /// <inheritdoc />
+    public Task<string> Decrypt(string valueToDecrypt, SealPurpose purpose) =>
+        Task.FromResult(Open(valueToDecrypt, AssociatedData(purpose)));
+
+    // Authenticated, not stored: the envelope is one for every purpose, and the tag
+    // holds only under the purpose the value was sealed for.
+    private static ReadOnlySpan<byte> AssociatedData(SealPurpose purpose) => purpose switch
+    {
+        SealPurpose.SessionToken => "session-token"u8,
+        SealPurpose.TwoFactorChallenge => "two-factor-challenge"u8,
+        _ => throw new ArgumentOutOfRangeException(nameof(purpose), purpose, null)
+    };
+
+    private string Seal(string valueToEncrypt, ReadOnlySpan<byte> associatedData)
     {
         var plaintext = Encoding.UTF8.GetBytes(valueToEncrypt);
 
@@ -55,13 +79,12 @@ internal class AesGcmSymmetricCryptoService : ISymmetricCryptoService
 
         using var aesGcm = new AesGcm(_currentKey, TagSize);
         aesGcm.Encrypt(nonce, plaintext, result.AsSpan(VersionSize + NonceSize + TagSize),
-            result.AsSpan(VersionSize + NonceSize, TagSize));
+            result.AsSpan(VersionSize + NonceSize, TagSize), associatedData);
 
-        return Task.FromResult(Convert.ToBase64String(result));
+        return Convert.ToBase64String(result);
     }
 
-    /// <inheritdoc />
-    public Task<string> Decrypt(string valueToDecrypt)
+    private string Open(string valueToDecrypt, ReadOnlySpan<byte> associatedData)
     {
         var combined = Convert.FromBase64String(valueToDecrypt);
 
@@ -76,10 +99,10 @@ internal class AesGcmSymmetricCryptoService : ISymmetricCryptoService
             throw new CryptographicException($"Unknown encryption key version: {version}");
         }
 
-        return Task.FromResult(DecryptWithKey(combined, key));
+        return DecryptWithKey(combined, key, associatedData);
     }
 
-    private static string DecryptWithKey(byte[] combined, byte[] key)
+    private static string DecryptWithKey(byte[] combined, byte[] key, ReadOnlySpan<byte> associatedData)
     {
         var payload = combined.AsSpan(VersionSize);
         var nonce = payload[..NonceSize];
@@ -89,7 +112,7 @@ internal class AesGcmSymmetricCryptoService : ISymmetricCryptoService
         var plaintext = new byte[ciphertext.Length];
 
         using var aesGcm = new AesGcm(key, TagSize);
-        aesGcm.Decrypt(nonce, ciphertext, tag, plaintext);
+        aesGcm.Decrypt(nonce, ciphertext, tag, plaintext, associatedData);
 
         return Encoding.UTF8.GetString(plaintext);
     }

@@ -364,9 +364,7 @@ async function retryLoad() {
     :loading="loading"
     :error="error"
     :retry="retryLoad"
-    :empty-text="
-      user ? 'Сообщений пока нет. Начните общение!' : 'Сообщений пока нет'
-    "
+    empty-text="Сообщений пока нет"
     :notice="feedNotice"
     label="Сообщения чата"
     context="message"

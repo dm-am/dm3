@@ -72,7 +72,7 @@ public class RateLimitPartitioningShould : UnitTestBase
     [Fact]
     public async Task CountATokenThisServerDidNotMintAsAGuest()
     {
-        cryptoService.Decrypt("forged").ThrowsAsync(new CryptographicException());
+        cryptoService.Decrypt("forged", SealPurpose.SessionToken).ThrowsAsync(new CryptographicException());
 
         var forged = await PartitionKey(Address, "forged");
 
@@ -107,7 +107,7 @@ public class RateLimitPartitioningShould : UnitTestBase
     {
         var token = $"token-of-{userId}";
         cryptoService
-            .Decrypt(token).Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{Guid.NewGuid()}\"}}");
+            .Decrypt(token, SealPurpose.SessionToken).Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{Guid.NewGuid()}\"}}");
         return token;
     }
 

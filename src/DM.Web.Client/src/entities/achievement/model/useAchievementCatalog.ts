@@ -8,11 +8,14 @@ import type {
 const categories: Ref<AchievementCategory[] | null> = ref(null);
 const types: Ref<AchievementType[] | null> = ref(null);
 const loading = ref(false);
+/** The last read of the public slice was refused, so nothing of it is kept as the answer. */
+const failed = ref(false);
 let pending: Promise<void> | null = null;
 
 // With inactive records, so a deactivated category can be restored.
 const adminCategories: Ref<AchievementCategory[] | null> = ref(null);
 const adminTypes: Ref<AchievementType[] | null> = ref(null);
+const adminFailed = ref(false);
 let adminPending: Promise<void> | null = null;
 
 export function useAchievementCatalog() {
@@ -27,6 +30,8 @@ export function useAchievementCatalog() {
           achievementApi.getAchievementCategories(fresh),
           achievementApi.getAchievementTypes(fresh),
         ]);
+        failed.value = Boolean(c.error || t.error);
+        if (failed.value) return;
         categories.value = c.data?.resources ?? [];
         types.value = t.data?.resources ?? [];
       } finally {
@@ -48,6 +53,8 @@ export function useAchievementCatalog() {
           achievementApi.getModerationAchievementCategories(),
           achievementApi.getModerationAchievementTypes(),
         ]);
+        adminFailed.value = Boolean(c.error || t.error);
+        if (adminFailed.value) return;
         adminCategories.value = c.data?.resources ?? [];
         adminTypes.value = t.data?.resources ?? [];
       } finally {
@@ -78,6 +85,8 @@ export function useAchievementCatalog() {
     adminCategories,
     adminTypes,
     loading,
+    failed,
+    adminFailed,
     load,
     loadAdmin,
     reload,

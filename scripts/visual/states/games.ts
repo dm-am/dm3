@@ -144,6 +144,37 @@ export const GAMES_STATES: State[] = [
     url: "/games/create",
   },
   {
+    // The server refuses the assistant with a code of its own on the field.
+    name: "member-create-game-assistant-blocked",
+    role: "user",
+    url: "/games/create",
+    act: async (page) => {
+      await page.route(/\/v1\/games$/, (route) =>
+        route.request().method() === "POST"
+          ? route.fulfill({
+              status: 400,
+              contentType: "application/problem+json",
+              body: JSON.stringify({
+                type: "about:blank",
+                title: "Ошибка валидации",
+                status: 400,
+                errors: {
+                  assistantUsername: ["Нельзя пригласить этого пользователя"],
+                },
+              }),
+            })
+          : route.fallback(),
+      );
+      await page.locator("#title").fill("Тест");
+      await page
+        .getByRole("combobox", { name: "Поиск пользователя" })
+        .fill("Test");
+      await page.locator("#system").fill("Тест");
+      await page.locator("#setting").fill("Тест");
+      await button(page, "Создать").click();
+    },
+  },
+  {
     // A game of TestSeniorMod with one review: the member may write his own.
     name: "member-game-reviews",
     role: "user",
@@ -222,6 +253,35 @@ export const GAMES_STATES: State[] = [
     act: async (page) => {
       await page.getByLabel("Показывать всем результаты бросков").uncheck();
       await button(page, "Бросить D20").click();
+    },
+  },
+  {
+    // The field takes whole numbers: 2.5 left by the focus becomes 2.
+    name: "member-dice-explosion-blur",
+    role: "user",
+    url: (f) => `/game/${f.playedGame}/rooms/1`,
+    act: async (page) => {
+      await page.getByLabel("Броски взрываются максимум").first().check();
+      const limit = page.getByLabel("Сколько раз взрывается кубик");
+      await limit.fill("2.5");
+      await limit.blur();
+    },
+  },
+  {
+    // The people search of a filter, refused after a few letters.
+    name: "member-filter-people-refused",
+    role: "user",
+    url: "/games",
+    whole: false,
+    act: async (page) => {
+      await refuse(page, /\/v1\/users\?/, "GET", 500, "Ошибка");
+      await openFilter(page);
+      await button(page, /^Ведущие/).click();
+      await page.getByRole("textbox", { name: "Поиск ведущего" }).fill("Tes");
+      // Before the change a refused search read as an empty one.
+      await page
+        .getByText(/Не удалось загрузить пользователей|Пользователь не найден/)
+        .waitFor();
     },
   },
   {

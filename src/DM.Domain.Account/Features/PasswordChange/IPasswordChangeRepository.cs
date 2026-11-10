@@ -48,5 +48,6 @@ public interface IPasswordChangeRepository
     /// Names the caller's route and no longer selects what is spent: the whole
     /// live set goes either way, and this secret is part of it.
     /// </param>
-    Task UpdatePassword(Guid userId, string passwordHash, string salt, Guid? secretToInvalidate);
+    /// <returns>False when the account is gone, and then nothing is written</returns>
+    Task<bool> UpdatePassword(Guid userId, string passwordHash, string salt, Guid? secretToInvalidate);
 }

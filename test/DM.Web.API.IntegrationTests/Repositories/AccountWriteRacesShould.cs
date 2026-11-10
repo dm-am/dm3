@@ -339,6 +339,33 @@ public class AccountWriteRacesShould : IntegrationTestBase
             .Should().Be(0, "every live link of the account goes with the password it could replace");
     }
 
+    // Removed between the lookup and the write: the caller must learn the password did not change.
+    [Fact]
+    public async Task WriteNothingForAnAccountRemovedBeforeThePasswordChange()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var reset = scope.ServiceProvider.GetRequiredService<IPasswordResetRepository>();
+        var change = scope.ServiceProvider.GetRequiredService<IPasswordChangeRepository>();
+        var factory = scope.ServiceProvider.GetRequiredService<ITokenFactory>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+        var userId = await SeedUser(scope);
+        var link = factory.Create(userId, TokenType.PasswordChange);
+        await reset.ReplacePasswordResetToken(userId, link);
+        await dbContext.Users
+            .Where(u => u.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsRemoved, true));
+
+        var updated = await change.UpdatePassword(userId, "newhash", "newsalt", link.Secret);
+
+        updated.Should().BeFalse();
+        await using var db = DatabaseFixture.CreateDbContext();
+        (await db.Users.IgnoreQueryFilters().SingleAsync(u => u.UserId == userId)).PasswordHash
+            .Should().Be("hash", "a removed account keeps the password it had");
+        (await db.Tokens.IgnoreQueryFilters().CountAsync(t =>
+                t.UserId == userId && t.Type == TokenType.PasswordChange && !t.IsRemoved))
+            .Should().Be(1, "nothing of a write that found no account is kept");
+    }
+
     // The unique index over lower("Email") decides; this is how its refusal reaches the caller.
     [Fact]
     public async Task RefuseAPendingAddressSomebodyElseTook()

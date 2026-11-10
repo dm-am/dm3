@@ -15,6 +15,8 @@ export function useUserSearch(options: UseUserSearchOptions = {}) {
 
   const results = ref<User[]>([]);
   const loading = ref(false);
+  /** The last search was refused, so an empty list is not "nobody found". */
+  const failed = ref(false);
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   function cancel() {
@@ -25,7 +27,8 @@ export function useUserSearch(options: UseUserSearchOptions = {}) {
   }
 
   async function run(query: string) {
-    const { data } = await userApi.searchUsers(query, limit, activity);
+    const { data, error } = await userApi.searchUsers(query, limit, activity);
+    failed.value = Boolean(error);
     results.value = data?.resources ?? [];
     loading.value = false;
   }
@@ -34,6 +37,7 @@ export function useUserSearch(options: UseUserSearchOptions = {}) {
     cancel();
     if (!query.trim()) {
       results.value = [];
+      failed.value = false;
       loading.value = false;
       return;
     }
@@ -45,10 +49,11 @@ export function useUserSearch(options: UseUserSearchOptions = {}) {
   function clear() {
     cancel();
     results.value = [];
+    failed.value = false;
     loading.value = false;
   }
 
   onUnmounted(cancel);
 
-  return { results, loading, search, clear, cancel };
+  return { results, loading, failed, search, clear, cancel };
 }

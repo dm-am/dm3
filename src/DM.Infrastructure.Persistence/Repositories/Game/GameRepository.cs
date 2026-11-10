@@ -242,21 +242,32 @@ internal partial class GameRepository : IGameRepository
 
     public async Task<GameDetails> Create(CreateGameEntity game, CreateRoomEntity room, CancellationToken ct = default)
     {
-        var dbGame = NewGameRow(game);
-        var dbRoom = NewFirstRoom(room);
-        var dbTags = NewTags(game);
-        var dbSchema = NewSheet(game);
+        // The copied blacklist commits with the game or the game does not commit.
+        await RetryableWrite.Run(_dbContext, async cancellation =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
 
-        // The readable address is taken before the insert instead of being stamped by
-        // a second SaveChanges — see SerialNumberAllocator for what that pair cost.
-        dbGame.SerialNumber = await SerialNumberAllocator.NextAsync<DbGame>(_dbContext, ct);
-        dbGame.PublicId = _publicIdService.Encode(dbGame.SerialNumber);
+            var dbGame = NewGameRow(game);
 
-        await _dbContext.Games.AddAsync(dbGame, ct);
-        await _dbContext.Rooms.AddAsync(dbRoom, ct);
-        await _dbContext.GameTags.AddRangeAsync(dbTags, ct);
-        await _dbContext.GameAttributeSchemas.AddAsync(dbSchema, ct);
-        await _dbContext.SaveChangesAsync(ct);
+            // The readable address is taken before the insert instead of being stamped by
+            // a second SaveChanges — see SerialNumberAllocator for what that pair cost.
+            dbGame.SerialNumber = await SerialNumberAllocator.NextAsync<DbGame>(_dbContext, cancellation);
+            dbGame.PublicId = _publicIdService.Encode(dbGame.SerialNumber);
+
+            await _dbContext.Games.AddAsync(dbGame, cancellation);
+            await _dbContext.Rooms.AddAsync(NewFirstRoom(room), cancellation);
+            await _dbContext.GameTags.AddRangeAsync(NewTags(game), cancellation);
+            await _dbContext.GameAttributeSchemas.AddAsync(NewSheet(game), cancellation);
+            await _dbContext.SaveChangesAsync(cancellation);
+
+            if (game.CopyMasterBlacklist)
+            {
+                await GameBlacklistRepository.CopyFromPersonalBlacklist(
+                    _dbContext, game.GameId, game.MasterId, game.CreatedUtc, cancellation);
+            }
+
+            await transaction.CommitAsync(cancellation);
+        }, ct);
 
         return await _dbContext.Games
             .Where(g => g.GameId == game.GameId)

@@ -27,6 +27,7 @@ public class TwoFactorChallengeCookieShould
     private const int KeyVersion = 1;
     private const int NonceSize = 12;
     private const int TagSize = 16;
+    private const SealPurpose Purpose = SealPurpose.TwoFactorChallenge;
 
     private static readonly string Key = NewKey();
 
@@ -65,18 +66,26 @@ public class TwoFactorChallengeCookieShould
         },
         {
             "another key of the same version", typeof(AuthenticationTagMismatchException),
-            () => CipherOf(NewKey(), KeyVersion).Encrypt(Guid.NewGuid().ToString())
+            () => CipherOf(NewKey(), KeyVersion).Encrypt(Guid.NewGuid().ToString(), Purpose)
         },
         {
             "a key version this server does not hold", typeof(CryptographicException),
-            () => CipherOf(Key, KeyVersion + 1).Encrypt(Guid.NewGuid().ToString())
+            () => CipherOf(Key, KeyVersion + 1).Encrypt(Guid.NewGuid().ToString(), Purpose)
         },
         {
-            "a session token in place of the challenge", null,
+            "a session token in place of the challenge", typeof(AuthenticationTagMismatchException),
             () => new SessionToken(Guid.NewGuid(), Guid.NewGuid()).Write(Cipher)
         },
-        { "text that is not an identifier", null, () => Cipher.Encrypt("not a challenge") },
-        { "nothing encrypted", null, () => Cipher.Encrypt(string.Empty) },
+        {
+            "a challenge sealed as a session token", typeof(AuthenticationTagMismatchException),
+            () => Cipher.Encrypt(Guid.NewGuid().ToString(), SealPurpose.SessionToken)
+        },
+        {
+            "a challenge sealed for no purpose", typeof(AuthenticationTagMismatchException),
+            () => Cipher.Encrypt(Guid.NewGuid().ToString())
+        },
+        { "text that is not an identifier", null, () => Cipher.Encrypt("not a challenge", Purpose) },
+        { "nothing encrypted", null, () => Cipher.Encrypt(string.Empty, Purpose) },
     };
 
     [Theory]
@@ -89,7 +98,8 @@ public class TwoFactorChallengeCookieShould
         var read = await Cookie.Read(RequestCarrying(value));
 
         read.Should().BeNull($"{forgery} is answered as a wrong code is, never by a 500");
-        (await Record.ExceptionAsync(() => Cipher.Decrypt(value)))?.GetType()
+        var raised = await Record.ExceptionAsync(() => Cipher.Decrypt(value, Purpose));
+        (raised?.GetType())
             .Should().Be(raisedByTheCipher, $"{forgery} has to reach the refusal the row stands for");
     }
 
@@ -108,12 +118,37 @@ public class TwoFactorChallengeCookieShould
     {
         var challengeId = Guid.NewGuid();
 
-        var read = await Cookie.Read(RequestCarrying(await Cipher.Encrypt(challengeId.ToString())));
+        var read = await Cookie.Read(RequestCarrying(await Cipher.Encrypt(challengeId.ToString(), Purpose)));
 
         read.Should().Be(challengeId);
     }
 
-    private static Task<string> Issued() => Cipher.Encrypt(Guid.NewGuid().ToString());
+    [Fact]
+    public async Task WriteAChallengeThatOpensOnlyAsAChallenge()
+    {
+        var challengeId = Guid.NewGuid();
+        var answer = new DefaultHttpContext();
+
+        await Cookie.Write(answer, challengeId, TimeSpan.FromMinutes(5));
+        var written = WrittenCookie(answer);
+
+        (await Cookie.Read(RequestCarrying(written))).Should().Be(challengeId);
+        (await SessionToken.Read(Cipher, written)).Should().BeNull();
+        (await Record.ExceptionAsync(() => Cipher.Decrypt(written, SealPurpose.SessionToken)))
+            .Should().BeOfType<AuthenticationTagMismatchException>(
+                "the purpose has to refuse it, not the shape of what is inside");
+        (await Record.ExceptionAsync(() => Cipher.Decrypt(written)))
+            .Should().BeOfType<AuthenticationTagMismatchException>();
+    }
+
+    private static string WrittenCookie(DefaultHttpContext answer)
+    {
+        var header = answer.Response.Headers.SetCookie.ToString();
+        return Uri.UnescapeDataString(
+            header[(TwoFactorChallengeCookie.CookieName.Length + 1)..header.IndexOf(';', StringComparison.Ordinal)]);
+    }
+
+    private static Task<string> Issued() => Cipher.Encrypt(Guid.NewGuid().ToString(), Purpose);
 
     private static async Task<string> Tampered(Action<byte[]> tamper)
     {

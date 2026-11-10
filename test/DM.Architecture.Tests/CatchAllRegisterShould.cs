@@ -59,11 +59,6 @@ public class CatchAllRegisterShould
             "invitation must not turn a created game into an error; it is logged. Telling the master " +
             "is a visible change waiting in the catalogue."),
 
-        new("src/DM.Domain.Game/Features/Games/GameService.cs", "CopyBlacklistOnCreation",
-            "The game is committed and a lost copy is refilled from the blacklist screen, so the copy " +
-            "must not fail creation; it is logged. Telling the master is a visible change waiting in " +
-            "the catalogue."),
-
         new("src/DM.Domain.Game/Features/Inactivity/GameInactivityProcessor.cs", "ProcessAsync",
             "One game's database or producer failure must not stop the pass for every other game: " +
             "it is logged and the pass goes on to the next one."),

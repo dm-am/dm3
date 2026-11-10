@@ -1,5 +1,7 @@
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Content;
+using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.AttributeSchemas;
 using FluentValidation;
@@ -9,7 +11,9 @@ namespace DM.Domain.Game.Features.Games;
 internal class CreateGameValidator : AbstractValidator<CreateGame>
 {
     public CreateGameValidator(
-        IUserLookupService userLookupService)
+        IUserLookupService userLookupService,
+        IUserBlacklistChecker userBlacklistChecker,
+        IIdentityProvider identityProvider)
     {
         RuleFor(g => g.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
@@ -38,8 +42,18 @@ internal class CreateGameValidator : AbstractValidator<CreateGame>
         // The sheet is created with the game, so a set it cannot hold refuses the whole request.
         this.RuleForSpecifications(g => g.AttributeSpecifications);
 
+        // The invitation sent after creation would be refused by the assistant's own blacklist,
+        // and by then the game exists, so the refusal comes before it.
         When(g => !string.IsNullOrEmpty(g.AssistantUsername), () =>
             RuleFor(g => g.AssistantUsername)
-                .MustAsync(userLookupService.UsernameExistsAsync).WithMessage(ValidationError.Invalid));
+                .Cascade(CascadeMode.Stop)
+                .MustAsync(userLookupService.UsernameExistsAsync).WithMessage(ValidationError.Invalid)
+                .MustAsync(async (username, ct) =>
+                {
+                    var (found, assistantId) = await userLookupService.FindUserIdAsync(username!, ct);
+                    return !found || !await userBlacklistChecker.IsBlockedAsync(
+                        assistantId, identityProvider.Current.User.UserId, ct);
+                })
+                .WithMessage(RefusalMessage.CannotInviteThisUser));
     }
 }

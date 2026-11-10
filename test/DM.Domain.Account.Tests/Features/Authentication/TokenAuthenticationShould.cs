@@ -97,7 +97,7 @@ public class TokenAuthenticationShould : AuthenticationServiceTestBase
         sessionFactory.Create(Arg.Any<bool>(), Arg.Any<SessionContext?>())
             .Returns(new CreateSession { Id = Guid.NewGuid() });
         repository.AddSession(userId, Arg.Any<CreateSession>()).Returns(new Session { Id = Guid.NewGuid() });
-        cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
+        cryptoService.Encrypt(Arg.Any<string>(), SealPurpose.SessionToken).Returns("encrypted-token");
 
         var result = await service.Authenticate(userId);
 
@@ -250,7 +250,7 @@ public class TokenAuthenticationShould : AuthenticationServiceTestBase
     private void Token(AuthenticatedUser user, Session? session)
     {
         var sessionId = session?.Id ?? Guid.NewGuid();
-        cryptoService.Decrypt("token").Returns($"{{\"userId\":\"{user.UserId}\",\"sessionId\":\"{sessionId}\"}}");
+        cryptoService.Decrypt("token", SealPurpose.SessionToken).Returns($"{{\"userId\":\"{user.UserId}\",\"sessionId\":\"{sessionId}\"}}");
         repository.FindUser(user.UserId).Returns(user);
         repository.FindUserSettings(user.UserId).Returns(UserSettings.Default);
         repository.FindUserSession(user.UserId, sessionId).Returns(session);
