@@ -371,7 +371,7 @@ commit_current() {
 # The one compose command line (3.2). The project directory goes through current, so a relative
 # mount lands on the same path whatever release is live, while the definitions and release.env
 # are the given release's. The edge's machine files come from where the release's own helper
-# puts them. No profile: watchtower, behind production, never starts on a layout.
+# puts them. No profile but the rollout one, which only the rollout passes.
 compose_cmd() {
     local dir=$1 edge
     shift
@@ -851,8 +851,8 @@ added_migrations() {
 }
 
 # The configuration as the server runs it: the rollout profile and no other. The seeder (tools)
-# and the updater (production) never start on a server, and the seeder takes the application's
-# settings, so counting it would refuse every change of the settings list.
+# never starts on a server, and it takes the application's settings, so counting it would
+# refuse every change of the settings list.
 resolved_config() {
     compose_cmd "$REL/$1" --profile rollout config --format json
 }

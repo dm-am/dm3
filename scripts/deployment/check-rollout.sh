@@ -317,9 +317,9 @@ layout() {
     touch -t "$1" /var/lib/dm-front/assets/proof-stray.txt' sh "$aged" "$ASSET"
   inode="$(docker exec dm-front stat -c %i "/var/lib/dm-front/assets/${ASSET##*/}")"
   make_commit B $(settings B)
-  local b=$COMMIT
-  make_images "$b"
-  release v1.1.0 "$b"
+  local commit_b=$COMMIT
+  make_images "$commit_b"
+  release v1.1.0 "$commit_b"
   probe_start
   poll
   zero_failure "run 1"
@@ -365,6 +365,7 @@ layout() {
 
   echo "run 5: a frontend twin that answers another name at /_instance"
   make_commit D $(settings D)
+  # shellcheck disable=SC2016 # a Dockerfile line: the shell in the image expands it
   make_images "$COMMIT" "" 'RUN sed -i "s/return 200 \"\$hostname\\\\n\";/return 200 \"elsewhere\\\\n\";/" /etc/nginx/conf.d/default.conf'
   release v1.3.0 "$COMMIT"
   api="$(container_id dm-api)"
@@ -448,11 +449,14 @@ layout() {
 
   echo "run 10: releases that need maintenance are refused, then applied by maintain"
   local alerts edge postgres script
+  # shellcheck disable=SC2016 # a sed program: $a appends after the last line
   alerts="$(edited docker/prometheus/alerts.yml '$a\
 # proof')"
+  # shellcheck disable=SC2016 # a sed program: $a appends after the last line
   edge="$(edited docker/nginx/edge-locations.conf '$a\
 # proof')"
   postgres="$(edited docker/docker-compose.yml 's/"max_connections=160"\]/"max_connections=160", "-c", "log_lock_waits=on"]/')"
+  # shellcheck disable=SC2016 # a sed program: $a appends after the last line
   script="$(edited docker/scripts/release-entry.sh '$a\
 # proof')"
   local version kind

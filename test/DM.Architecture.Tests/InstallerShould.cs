@@ -76,19 +76,19 @@ public class InstallerShould
     }
 
     /// <summary>
-    /// The updater never starts on a server layout.
+    /// No container holds the docker socket.
     /// </summary>
-    /// <remarks>watchtower sits behind the production profile, and nothing that deploys a layout enables it.</remarks>
+    /// <remarks>
+    /// Which release runs changes only through the release script, from a tag the pinned key signed. A
+    /// container with the socket is root on the host and could replace containers on its own schedule.
+    /// </remarks>
     [Fact]
-    public void LeaveTheUpdaterOutOfTheServerLayout()
+    public void HoldTheDockerSocketInNoContainer()
     {
-        ServiceBlock(Read(BaseCompose), "watchtower").Should().Contain("production",
-            "a service with no profile starts on every plain up");
-
-        foreach (var file in new[] { "dm3.service", "setup-server.sh", "scripts/install-release.sh", "scripts/release-entry.sh" })
+        foreach (var file in new[] { BaseCompose, PreviewCompose, PopCompose })
         {
-            File.ReadAllText(Path.Combine(DockerDirectory, file)).Should().NotContain("--profile production",
-                $"{file} would start an updater that takes whatever a moving tag names, beside the signed releases");
+            Read(file).Should().NotContain("docker.sock",
+                $"{file} would hand a container the host's docker, beside the signed releases");
         }
     }
 

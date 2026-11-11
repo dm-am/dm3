@@ -36,8 +36,8 @@ for occupied in opt etc state; do
     "$WORK/three/$occupied-case/etc" "$WORK/three/$occupied-case/state" 2> "$WORK/guard.err"; then
     fail "the guard accepts a layout whose $occupied directory is not empty"
   fi
-  if grep -q -e watchtower -e 'дерев' "$WORK/guard.err"; then
-    fail "the guard still sends the operator to watchtower or to a tree: updates come as signed releases"
+  if grep -q 'дерев' "$WORK/guard.err"; then
+    fail "the guard still sends the operator to a tree: updates come as signed releases"
   fi
 done
 if ! grep -q 'dm3-release status' "$WORK/guard.err" || ! grep -q 'dm3-release maintain' "$WORK/guard.err"; then

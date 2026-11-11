@@ -38,7 +38,7 @@ docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.prev
 echo "the unit boots through dm3-release, whose one compose line names both files and no profile but rollout"
 # The unit used to carry a compose line of its own, which had to agree with the installer's by
 # hand. Now there is one line, in the release script, and the unit only names its verbs. A
-# profile other than rollout there would start watchtower beside the signed releases.
+# profile other than rollout there would start services the releases do not account for.
 #
 # `|| true` because grep exits 1 on no match and this script runs under pipefail: without it
 # a line that is no longer there kills the script on the assignment, which is exactly the case
@@ -92,8 +92,6 @@ judge() {
 }
 
 echo "the twins of a rollout differ from their primaries only in name, port, profile and the key"
-# The labels of the updater are set aside: the primaries carry them and the twins do not, and
-# step 11 removes this exception together with the updater.
 judge '
   const canon = value => Array.isArray(value) ? value.map(canon)
     : value && typeof value === "object"
@@ -102,9 +100,6 @@ judge '
   const essence = service => {
     const copy = structuredClone(service);
     for (const key of ["container_name", "ports", "profiles"]) delete copy[key];
-    for (const key of Object.keys(copy.labels ?? {}))
-      if (key.startsWith("com.centurylinklabs.watchtower.")) delete copy.labels[key];
-    if (copy.labels && Object.keys(copy.labels).length === 0) delete copy.labels;
     if (copy.environment) delete copy.environment.DM_PeriodicServices__Enabled;
     return JSON.stringify(canon(copy));
   };

@@ -3,8 +3,8 @@ name: Security Scanning
 on:
   # Called from the build workflow rather than triggered beside it, so the publishing jobs can
   # name these in `needs`. Triggered separately, they ran on the same push and finished
-  # whenever: an image with a red CodeQL or ZAP reached the registry and watchtower installed
-  # it within five minutes.
+  # whenever: an image with a red CodeQL or ZAP reached the registry, and a release could name
+  # its digest.
   workflow_call:
     # Which scans the change needs, as the map of scripts/ci-paths.json decided
     # in the changes job of the caller. One input per job, named as the job.
