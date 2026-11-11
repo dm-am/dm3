@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# The one place that creates docker/.env. A bare copy of the template is not enough: the
+# The one place that creates the environment file: docker/.env from a checkout,
+# shared/env beside the releases from a release directory (_paths.sh). A bare copy of the template is not enough: the
 # key ships empty and compose stops at ${...:?} before any container starts.
 #
 # Usage: init-env.sh [local|server] [image-tag]
@@ -14,9 +15,10 @@ MODE="${1:-local}"
 IMAGE_TAG="${2:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DOCKER_DIR="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="$DOCKER_DIR/.env"
-EXAMPLE_FILE="$DOCKER_DIR/.env.example"
+# shellcheck source=docker/scripts/_paths.sh
+. "$SCRIPT_DIR/_paths.sh"
+ENV_FILE="$DM_ENV_FILE"
+EXAMPLE_FILE="$DM_DOCKER_DIR/.env.example"
 
 case "$MODE" in
     local|server) ;;
@@ -25,6 +27,13 @@ case "$MODE" in
         exit 1
         ;;
 esac
+
+# A release directory exists only on a server, and local there means Development: Swagger
+# mounted, the CSP relaxed, HSTS dropped, the template credentials kept.
+if [ "$DM_LAYOUT" = release ] && [ "$MODE" = local ]; then
+    echo "Error: local mode from a release directory; a server takes init-env.sh server" >&2
+    exit 1
+fi
 
 if [ ! -f "$EXAMPLE_FILE" ]; then
     echo "Error: .env.example not found at $EXAMPLE_FILE" >&2
@@ -37,6 +46,8 @@ if [ -f "$ENV_FILE" ]; then
     # empty values are filled, so a key already chosen is never replaced.
     EXISTING=1
 else
+    # shared/ does not exist before the first run on a server.
+    mkdir -p "$(dirname "$ENV_FILE")"
     cp "$EXAMPLE_FILE" "$ENV_FILE"
 fi
 
@@ -119,6 +130,9 @@ fi
 # relaxes the CSP and drops HSTS.
 if [ "$MODE" = "server" ]; then
     set_value ASPNETCORE_ENVIRONMENT Production
+    # Only when empty: migrate is the operator's choice, and a rerun must not undo it.
+    set_if_empty DM_SCHEMA_REGIME reset
+    set_if_empty DM_RELEASE_HEADROOM_MIB 512
 fi
 
 # The mail relay is a required answer on a server: activation, password reset and every
