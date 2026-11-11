@@ -475,8 +475,14 @@ layout() {
     poll
     test "$(tried_lines "$version")" = "$lines" || fail "run 10: $version was tried again"
   done
+  local prometheus
+  prometheus="$(container_id dm-prometheus)"
   "$ENTRY" maintain v1.7.0 || fail "run 10: maintain did not apply the release that changes a monitoring file"
   [[ $(live) == v1.7.0-* ]] || fail "run 10: maintain left current on $(live)"
+  # current moving is not the file applied: the container must be new and read the new file.
+  test "$(container_id dm-prometheus)" != "$prometheus" || fail "run 10: maintain did not recreate dm-prometheus"
+  test "$(docker exec dm-prometheus tail -n 1 /etc/prometheus/alerts.yml)" = "# proof" ||
+    fail "run 10: dm-prometheus does not read the alerts.yml of v1.7.0"
   local pg
   pg="$(container_id dm-pg)"
   for version in v1.8.0 v1.8.1; do
@@ -496,7 +502,6 @@ layout() {
   poll
   [[ $(live) == v1.10.0-* ]] || fail "run 10: the release after the maintain did not go live: $(cat "$PROOF/poll.log")"
   test "$(container_id dm-pg)" = "$pg" || fail "run 10: PostgreSQL was recreated"
-  PINS="$(stat -c '%n %i %a %U %Y' /opt/dm3/shared/env /etc/dm3 /etc/dm3/release-signers /etc/dm3/release.conf)"
   stand_is_current
 
   echo "run 11: dmapi recreated the plain way turns the verdict red"

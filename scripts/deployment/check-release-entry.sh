@@ -442,6 +442,122 @@ STUB
     verb_status | grep -q "^waiting: v1.4.0" || fail "status does not say what waits"
     rm -f "$DM3_STATE/tried" "$DM3_STATE/waiting" "$DM3_STATE/fetched"
   fi
+
+  # The verbs below are held with their docker and network steps stood in for, each in a
+  # subshell, so a stand-in ends with its case. The live release is $rid without rel/current,
+  # which Git Bash cannot link.
+  TEXTFILE_DIR="$WORK/textfile"
+  # Its own name: the verbs declare a local rid, which a stand-in would read instead.
+  local calls="$WORK/calls" old_rid=v0.9.0-0000000-000000000000 live_rid=$rid
+  mkdir -p "$DM3_ROOT/rel/$old_rid"
+
+  echo "a tick waits on a candidate it cannot fetch and rejects one that fails verification"
+  polled() (
+    local fetch_status=$1
+    live_id() { printf '%s\n' "$live_rid"; }
+    prune_app_images() { :; }
+    release_git_timed() { annotated 1 v2.0.0; }
+    fetch_and_verify() { refuse "stand-in"; return "$fetch_status"; }
+    verb_poll > /dev/null 2>&1
+  )
+  polled "$WAITS"
+  if is_rejected "$(idof 1)"; then
+    fail "a tag whose fetch failed was rejected for good"
+  fi
+  grep -q "	v2.0.0	" "$DM3_STATE/waiting" 2> /dev/null || fail "a tag whose fetch failed does not wait"
+  rm -f "$DM3_STATE/waiting"
+  polled 1
+  is_rejected "$(idof 1)" || fail "a tag that failed verification was not rejected"
+  rm -f "$DM3_STATE/rejected" "$DM3_STATE/waiting"
+  printf 'origin=%s\nimage_prefix=%s\n' "$WORK/missing" "$prefix" > "$DM3_ETC/release.conf"
+  rc=0
+  fetch_and_verify v1.0.0 > /dev/null 2>&1 || rc=$?
+  test "$rc" = "$WAITS" || fail "an origin that cannot be listed made fetch_and_verify exit $rc, not $WAITS"
+  printf 'origin=%s\nimage_prefix=%s\n' "$ORIGIN" "$prefix" > "$DM3_ETC/release.conf"
+
+  echo "boot and recover after a run that died list it as failed and recreate against what maintain replaced"
+  # shellcheck disable=SC2317 # stubs: the sourced script calls them in place of its own
+  recovered() (
+    local verb=$1 recover_status=$2
+    live_id() { printf '%s\n' "$live_rid"; }
+    recover_stack() { printf 'recover %s\n' "${1:-none}" >> "$calls"; return "$recover_status"; }
+    "$verb" > /dev/null 2>&1
+  )
+  rm -f "$calls"
+  write_marker v1.0.1 "$(printf 'd%.0s' {1..64})" "$old_rid"
+  recovered verb_boot 0 || fail "boot failed after a run that died and a recovery that passed"
+  test "$(cat "$calls")" = "recover $old_rid" || fail "boot recovered with $(cat "$calls"), not against $old_rid"
+  tail -n 1 "$DM3_STATE/tried" | grep -q "	v1.0.1	dddddddddddd	failed	" ||
+    fail "boot did not list the run that died as failed: $(cat "$DM3_STATE/tried" 2> /dev/null)"
+  grep -q 'field="failed",tag="v1.0.1"' "$WORK/textfile/dm_release.prom" || fail "boot did not write the failure into the metric"
+  rm -f "$calls" "$DM3_STATE/tried"
+  write_marker v1.0.1 "$(printf 'd%.0s' {1..64})" "$rid"
+  if recovered verb_recover 1; then
+    fail "recover succeeded with a recovery that failed"
+  fi
+  test "$(cat "$calls")" = "recover none" || fail "recover recreated against the live release itself: $(cat "$calls")"
+  grep -q "	v1.0.1	.*	failed	" "$DM3_STATE/tried" || fail "recover did not list the run that died as failed"
+  rm -f "$calls" "$DM3_STATE/tried" "$MARKER"
+
+  echo "maintain on a live release pulls before current moves and names what it replaced in the marker"
+  maintained() (
+    live_id() { printf '%s\n' "$live_rid"; }
+    fetch_and_verify() { printf 'commit=%s\nsigned=%s\nid=%s\n' "$commit" "$(printf 'e%.0s' {1..64})" "$(idof 9)"; }
+    mirror_fetch() { :; }
+    manifest_of() { :; }
+    refuse_schema_change() { :; }
+    pull_images() { :; }
+    build_release_dir() { :; }
+    install_machinery() { :; }
+    prune_release_dirs() { :; }
+    pull_missing_images() { printf 'pull %s\n' "${1:-current}" >> "$calls"; }
+    commit_current() { printf 'commit %s\n' "$1" >> "$calls"; }
+    recover_stack() { printf 'recover %s\n' "${1:-none}" >> "$calls"; }
+    verb_maintain v1.1.0 0 > /dev/null 2>&1
+  )
+  local new_rid
+  new_rid="$(release_id v1.1.0 "$commit" "$(printf 'e%.0s' {1..64})")"
+  maintained || fail "maintain failed with every step stood in for"
+  test "$(cat "$calls")" = "$(printf 'pull %s\ncommit %s\nrecover %s' "$DM3_ROOT/rel/$new_rid" "$new_rid" "$rid")" ||
+    fail "maintain ran $(tr '\n' ';' < "$calls"), not the pull, the move of current and the recreate against $rid"
+  grep -qx "previous=$rid" "$MARKER" || fail "the marker of maintain does not name the release it replaced"
+  rm -f "$calls" "$MARKER"
+
+  echo "recovery puts the edge on the primaries only once the edge is healthy"
+  # shellcheck disable=SC2317 # stubs: the sourced script calls them in place of its own
+  edge_waited() (
+    compose_cmd() { :; }
+    switch_check() { :; }
+    health_of() {
+      local n
+      n=$(($(cat "$calls.health" 2> /dev/null || echo 0) + 1))
+      echo "$n" > "$calls.health"
+      if [ "$n" -ge 3 ]; then echo healthy; else echo starting; fi
+    }
+    edge_switch() { printf 'switch after %s\n' "$(cat "$calls.health" 2> /dev/null)" >> "$calls"; }
+    recover_stack > /dev/null 2>&1
+  )
+  edge_waited || fail "recovery failed with an edge that became healthy"
+  test "$(cat "$calls")" = "switch after 3" || fail "recovery switched the edge before it was healthy: $(cat "$calls")"
+  rm -f "$calls" "$calls.health"
+
+  echo "a candidate that waits on memory pulls nothing"
+  short_of_memory() (
+    live_id() { printf '%s\n' "$live_rid"; }
+    mirror_fetch() { :; }
+    descends() { :; }
+    stand_healthy() { :; }
+    memory_fits() { return 1; }
+    pull_images() { echo pulled >> "$calls"; }
+    F_COMMIT=$commit F_ID=$(idof 9)
+    try_candidate v1.1.0 timer > /dev/null 2>&1
+  )
+  rc=0
+  short_of_memory || rc=$?
+  test "$rc" = "$WAITS" || fail "a candidate short of memory ended with $rc, not $WAITS"
+  test ! -e "$calls" || fail "a candidate that waits on memory pulled its images"
+  rm -f "$DM3_STATE/waiting"
+  rmdir "$DM3_ROOT/rel/$old_rid"
   PATH=$path_before
 
   echo "a second run that changes something exits while the lock is held, boot waits for it"
