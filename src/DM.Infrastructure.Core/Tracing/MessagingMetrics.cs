@@ -4,8 +4,7 @@ using System.Diagnostics.Metrics;
 namespace DM.Infrastructure.Core.Tracing;
 
 /// <summary>
-/// Metrics of message consumption: only the consumer says whether the work it took
-/// succeeded.
+/// Metrics of the queues: only the worker says whether the work it took succeeded.
 /// </summary>
 /// <remarks>
 /// The unit only in the unit argument and none on a counter: the Prometheus
@@ -19,11 +18,11 @@ public static class MessagingMetrics
     private static readonly Meter Meter = new(MeterName, DmActivitySource.Version);
 
     /// <summary>
-    /// Messages a consumer finished with. Attributes: <c>queue</c>,
+    /// Outbox rows a worker finished with, their mark written. Attributes: <c>queue</c>,
     /// <c>result</c> (the processing result the pipeline returned).
     /// </summary>
     public static readonly Counter<long> Consumed =
-        Meter.CreateCounter<long>("dm.messaging.consumed", null, "Messages a consumer finished with");
+        Meter.CreateCounter<long>("dm.messaging.consumed", null, "Outbox rows a worker finished with");
 
     /// <summary>
     /// Outbox rows that became dead: the last failure of the retry ladder, or a rejection.
@@ -31,7 +30,7 @@ public static class MessagingMetrics
     /// Attributes: <c>queue</c>, <c>reason</c> (exception type, or <c>Rejected</c>).
     /// </summary>
     public static readonly Counter<long> Failed =
-        Meter.CreateCounter<long>("dm.messaging.failed", null, "Messages that exhausted every retry");
+        Meter.CreateCounter<long>("dm.messaging.failed", null, "Outbox rows that became dead");
 
     /// <summary>
     /// Pauses of the retry ladder assigned to failed rows. Rises long before
@@ -39,14 +38,14 @@ public static class MessagingMetrics
     /// the first attempt is a queue about to fill with dead rows. Attributes: <c>queue</c>.
     /// </summary>
     public static readonly Counter<long> Retried =
-        Meter.CreateCounter<long>("dm.messaging.retried", null, "Retry attempts spent on messages");
+        Meter.CreateCounter<long>("dm.messaging.retried", null, "Retry pauses assigned to failed outbox rows");
 
     /// <summary>
     /// Time the handler spent on one claimed row, seconds.
     /// Attributes: <c>queue</c>.
     /// </summary>
     public static readonly Histogram<double> Duration =
-        Meter.CreateHistogram<double>("dm.messaging.duration", "s", "End-to-end message processing latency");
+        Meter.CreateHistogram<double>("dm.messaging.duration", "s", "Time the handler spent on one outbox row");
 
     /// <summary>
     /// Events lost for good: nothing stored them and nothing will retry them.
@@ -66,7 +65,7 @@ public static class MessagingMetrics
     /// <c>event</c> (notification type).
     /// </summary>
     /// <remarks>
-    /// A sender swallows what the channel answered, so the consumer counters see a
+    /// A sender swallows what the channel answered, so the worker counters see a
     /// success. Nothing about the recipient, which would open a series per user.
     /// </remarks>
     public static readonly Counter<long> DeliveryFailed = Meter.CreateCounter<long>(

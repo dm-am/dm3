@@ -112,6 +112,7 @@ public class PushListenerShould(DatabaseFixture fixture) : IAsyncDisposable
             .AddSingleton(hub)
             .AddSingleton(Substitute.For<IUserConnectionService>())
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
+            .AddScoped<RealtimeNotificationProcessor>()
             .BuildServiceProvider();
 
         _listener = new PushListener(

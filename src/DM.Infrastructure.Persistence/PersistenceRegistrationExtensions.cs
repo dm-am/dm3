@@ -79,8 +79,6 @@ using DM.Infrastructure.Persistence.Shared.Subscriptions;
 using DM.Infrastructure.Persistence.Shared.UnreadCounters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
-using Npgsql;
 
 namespace DM.Infrastructure.Persistence;
 
@@ -110,20 +108,6 @@ public static class PersistenceRegistrationExtensions
         // Default types (validators, factories, etc.) from this assembly
         services.AddDefaultTypes(typeof(PersistenceRegistrationExtensions).Assembly);
 
-        return services;
-    }
-
-    /// <summary>
-    /// The process's one source of database connections, built from ConnectionStrings:Rdb.
-    /// </summary>
-    /// <remarks>
-    /// Everything in the process that talks to the database takes its connections here, so
-    /// the process holds one pool and its size is the one the connection string names.
-    /// </remarks>
-    public static IServiceCollection AddDmConnectionSource(this IServiceCollection services)
-    {
-        services.TryAddSingleton(provider => NpgsqlDataSource.Create(
-            provider.GetRequiredService<IOptions<ConnectionStrings>>().Value.Rdb));
         return services;
     }
 

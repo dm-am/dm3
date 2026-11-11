@@ -22,7 +22,6 @@ public static class PushSender
     /// </summary>
     /// <param name="dataSource">The process's source of connections.</param>
     /// <param name="push">The push with all its recipients.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     public static async Task SendAsync(
         NpgsqlDataSource dataSource, RealtimeNotification push, CancellationToken cancellationToken)
     {

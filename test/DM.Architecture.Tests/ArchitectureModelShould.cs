@@ -5,10 +5,9 @@ using ArchitectureModel = ArchUnitNET.Domain.Architecture;
 namespace DM.Architecture.Tests;
 
 /// <remarks>
-/// The rules on owners of a broker producer left with the last one: no letter or event goes
-/// through the broker. What stays is the check that the model loads every executable.
+/// The rules over executables read the model, so a host it does not load passes them unread.
 /// </remarks>
-public class MessageProducerOwnershipShould
+public class ArchitectureModelShould
 {
     private static readonly ArchitectureModel Solution = ArchitectureSolution.Model;
 

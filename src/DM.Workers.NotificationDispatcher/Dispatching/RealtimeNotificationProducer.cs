@@ -7,15 +7,12 @@ using Npgsql;
 namespace DM.Workers.NotificationDispatcher.Dispatching;
 
 /// <summary>
-/// Publishes a notification for the API to push over SignalR.
+/// Sends the push of a notification for the API to deliver over SignalR.
 /// </summary>
 internal interface IRealtimeNotificationProducer
 {
-    /// <summary>
-    /// Publish one notification
-    /// </summary>
+    /// <summary>Sends the push of one notification.</summary>
     /// <param name="notification">Notification to push</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task SendAsync(RealtimeNotification notification, CancellationToken cancellationToken);
 }
 

@@ -9,8 +9,8 @@ using Xunit;
 namespace DM.Architecture.Tests;
 
 /// <remarks>
-/// A task nobody awaits outlives the request scope and publishes through a disposed sender, or leaks
-/// the channel <see cref="MessageProducerOwnershipShould"/> guards. Hosted services are exempt.
+/// A task nobody awaits outlives the request scope and stores its rows through a disposed
+/// context. Hosted services are exempt.
 /// </remarks>
 public class RequestPathBackgroundWorkShould
 {

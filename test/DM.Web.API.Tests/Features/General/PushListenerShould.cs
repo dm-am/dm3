@@ -1,9 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
+using DM.Domain.Core.Enums;
+using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Core.Configuration;
+using DM.Infrastructure.Core.Tracing;
 using DM.Testing;
 using DM.Web.API.Realtime;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,6 +61,56 @@ public class PushListenerShould : UnitTestBase
             "each failed attempt waits the next step of the ladder, and the stop ends the waiting");
         (await _state.CheckHealthAsync(new HealthCheckContext())).Status.Should().Be(HealthStatus.Degraded,
             "an instance that never reached its database hears no push");
+    }
+
+    /// <remarks>
+    /// The delivery is not started, so the buffer never drains and the push past its capacity is
+    /// the one dropped. Mutation it must fail on: a drop that is not counted.
+    /// </remarks>
+    [Fact]
+    public void CountThePushDroppedFromAFullBuffer()
+    {
+        using var listener = Listener(_ => TimeSpan.Zero);
+        var piece = PushPayload.Cut(new RealtimeNotification
+        {
+            NotificationId = Guid.NewGuid(),
+            EventType = EventType.GlobalChatEventEnded,
+            Metadata = new { },
+            RecipientIds = [Guid.NewGuid()],
+        }).Single();
+        var dropped = 0;
+        using var counter = new MeterListener
+        {
+            InstrumentPublished = (instrument, self) =>
+            {
+                if (instrument.Meter.Name == MessagingMetrics.MeterName &&
+                    instrument.Name == "dm.messaging.delivery_failed")
+                {
+                    self.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        counter.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+        {
+            var ofThisTest = false;
+            foreach (var tag in tags)
+            {
+                ofThisTest |= tag.Key == "event" && Equals(tag.Value, nameof(EventType.GlobalChatEventEnded));
+            }
+
+            if (ofThisTest)
+            {
+                Interlocked.Add(ref dropped, (int)value);
+            }
+        });
+        counter.Start();
+
+        for (var heard = 0; heard <= PushListener.BufferCapacity; heard++)
+        {
+            listener.Hear(piece);
+        }
+
+        dropped.Should().Be(1, "only the push past the buffer's capacity is dropped, and every drop is counted");
     }
 
     private PushListener Listener(Func<int, TimeSpan> ladder) => new(

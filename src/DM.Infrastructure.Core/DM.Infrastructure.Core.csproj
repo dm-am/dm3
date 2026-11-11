@@ -30,6 +30,9 @@
         <PackageReference Include="Serilog.Sinks.Console" />
         <PackageReference Include="Serilog.Sinks.Grafana.Loki" />
         <PackageReference Include="Magick.NET-Q8-AnyCPU" />
+        <!-- The process's one connection source and its database check, for every host. -->
+        <PackageReference Include="Npgsql" />
+        <PackageReference Include="AspNetCore.HealthChecks.Npgsql" />
     </ItemGroup>
 
 </Project>

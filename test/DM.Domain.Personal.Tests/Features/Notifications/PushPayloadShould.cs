@@ -17,6 +17,7 @@ public class PushPayloadShould
 {
     private const int NotificationLimit = 7000;
 
+    /// <remarks>Mutation it must fail on: a cut that drops the odd recipient of a halving.</remarks>
     [Fact]
     public void ReachEachOfAThousandRecipientsExactlyOnceUnderTheLimit()
     {
@@ -31,7 +32,10 @@ public class PushPayloadShould
             "each recipient is in exactly one piece, so nobody is missed and nobody hears it twice");
     }
 
-    // The broadcast types of the global chat travel this way: addressed to nobody, heard by all.
+    /// <remarks>
+    /// The broadcast types of the global chat travel this way: addressed to nobody, heard by all.
+    /// Mutation it must fail on: a cut that sends nothing for a push without recipients.
+    /// </remarks>
     [Fact]
     public void GoAsOneNotificationWhenItHasNoRecipients()
     {
@@ -41,6 +45,7 @@ public class PushPayloadShould
         Read(pieces[0]).RecipientIds.Should().BeEmpty();
     }
 
+    /// <remarks>Mutation it must fail on: a piece of one recipient sent with its metadata past the limit.</remarks>
     [Fact]
     public void GoWithoutItsMetadataWhenOneRecipientDoesNotFit()
     {
@@ -56,8 +61,11 @@ public class PushPayloadShould
         push.Metadata.Should().BeNull("the metadata was what did not fit");
     }
 
-    // Only the application role can send on the channel, and still nothing but the site's
-    // own shape may reach an open tab.
+    /// <remarks>
+    /// Only the application role can send on the channel, and still nothing but the site's
+    /// own shape may reach an open tab. Mutation it must fail on: a read that lets members the
+    /// push does not have through.
+    /// </remarks>
     [Theory]
     [InlineData("not json at all")]
     [InlineData("[]")]
@@ -69,6 +77,7 @@ public class PushPayloadShould
     public void RefuseANotificationOfAForeignShape(string payload) =>
         PushPayload.TryRead(payload, out _).Should().BeFalse("a tab only ever shows what the site produced");
 
+    /// <remarks>Mutation it must fail on: a read that refuses a push without metadata, the shape of a piece cut without it.</remarks>
     [Fact]
     public void AcceptAPushWithEmptyMetadata()
     {
