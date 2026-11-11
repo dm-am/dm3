@@ -16,16 +16,19 @@ public class ImageDeliveryShould
     [Fact]
     public void PullThePublishedImagesInsteadOfBuildingOnTheServer()
     {
-        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        // Every start on a server goes through the release script.
+        var entry = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "release-entry.sh"));
         var compose = Read(BaseCompose) + Read(PreviewCompose);
 
-        var starts = installer.Split('\n')
-            .Where(line => line.Contains("docker compose", StringComparison.Ordinal)
+        var starts = entry.Split('\n')
+            .Where(line => !line.TrimStart().StartsWith('#')
                            && line.Contains("up -d", StringComparison.Ordinal)).ToList();
 
-        starts.Should().NotBeEmpty().And.NotContain(line => line.Contains("--build", StringComparison.Ordinal),
-            "the deployment pulls the published image, and building it here replaces it " +
-            "with a local one under the same tag");
+        starts.Should().NotBeEmpty().And.OnlyContain(
+            line => line.Contains("--no-build", StringComparison.Ordinal)
+                    && line.Contains("--pull never", StringComparison.Ordinal),
+            "the deployment runs the images the release pulled by digest, and a build or a pull " +
+            "here would replace them with others under the same name");
 
         var localTags = compose.Split('\n')
             .Select(line => line.Trim())

@@ -1,31 +1,38 @@
 #!/bin/bash
 set -euo pipefail
 
-# The installer installs and does not update. Run again, it used to reach `git clone` into
-# a non-empty directory after apt and a docker restart on a live stand. Checked first.
-# Deliberately not a fetch-and-merge: the server tree carries the operator's own edits (the
-# environment file, the edge credentials), and a checkout would take them away.
+# The installer installs and does not update. Run again, it would lay a second layout over the
+# first after apt and a docker restart on a live server. Checked first, for every directory of
+# the layout: the releases and the shared files, the pins, the state of the release script.
+#
+# Usage: require-empty-install-dir.sh [dir...]   (default /opt/dm3)
 
-INSTALL_DIR="${1:-/opt/dm3}"
+[ "$#" -gt 0 ] || set -- /opt/dm3
 
-if [ ! -e "$INSTALL_DIR" ]; then
+occupied=()
+for dir in "$@"; do
+    if [ -e "$dir" ] && [ -n "$(ls -A "$dir" 2> /dev/null)" ]; then
+        occupied+=("$dir")
+    fi
+done
+
+if [ "${#occupied[@]}" -eq 0 ]; then
     exit 0
 fi
 
-if [ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
-    exit 0
-fi
+{
+    for dir in "${occupied[@]}"; do
+        echo "$dir уже существует и не пуст."
+    done
+    cat << 'EOF'
 
-cat >&2 <<EOF
-$INSTALL_DIR уже существует и не пуст.
+Установщик ставит сервер с нуля и обновлением не служит. Обновления приходят
+подписанными релизами: что стоит сейчас, показывает sudo dm3-release status,
+а релиз, который таймер не берет сам, ставит sudo dm3-release maintain <тег>.
 
-Установщик ставит стенд с нуля и обновлением не служит. Что делать вместо
-повторного запуска — в разделе "Обновление стенда" файла docs/guides/DEPLOYMENT.md:
-образы приложений носит watchtower, дерево обновляет оператор, а контейнеры,
-читающие конфигурацию с диска, после этого перезапускаются.
-
-Если стенд ставится действительно заново, каталог надо освободить руками — и
-сначала забрать из него то, что там ведется на месте: docker/.env, учетные
-данные края и локальные правки конфигурации.
+Если сервер ставится действительно заново, каталоги надо освободить руками и
+сначала забрать из них то, что ведется на месте: /opt/dm3/shared (файл
+окружения и файлы края) и /etc/dm3 (ключи подписи и release.conf).
 EOF
+} >&2
 exit 1

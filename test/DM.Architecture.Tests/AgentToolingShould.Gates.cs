@@ -25,7 +25,7 @@ public partial class AgentToolingShould
     /// and eslint, called by path, check the frame stand in scripts/visual, out of reach of the npm scripts.
     /// </remarks>
     private static readonly Regex GateSyntax = new(
-        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-monitoring\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js|block-in-subagents\.test\.js|lint-agent-files\.test\.js|lint-size-hint\.test\.js|compare-code\.test\.mjs|ci-paths\.mjs|node_modules/\.bin/(?:vue-tsc|eslint) [^\r\n)]+)",
+        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-release-entry\.sh|check-monitoring\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js|block-in-subagents\.test\.js|lint-agent-files\.test\.js|lint-size-hint\.test\.js|compare-code\.test\.mjs|ci-paths\.mjs|node_modules/\.bin/(?:vue-tsc|eslint) [^\r\n)]+)",
         RegexOptions.Compiled);
 
     /// <summary>The gate commands of a shell script, in the order it runs them.</summary>
@@ -177,8 +177,13 @@ public partial class AgentToolingShould
                 "reads the privileges of the database that pair started",
             ["The nightly dump holds no outbox rows and restores with an empty outbox table"] =
                 "dumps and restores the database that pair started",
+            ["Remove the pair and its volumes before the server layout"] =
+                "tears that pair down for the layout; nothing here starts one",
+            ["The server layout installs a signed release and boots back to it"] =
+                "installs the server layout as root with systemd and docker on a throwaway " +
+                "machine; the local gates run the same script without --layout, which needs none of them",
             ["Logs on failure"] =
-                "prints container logs of that pair",
+                "prints container logs of that pair and the journal of the layout's units",
 
             // codeql and zap-scan
             ["Build for analysis"] =

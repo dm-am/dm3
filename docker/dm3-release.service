@@ -1,0 +1,9 @@
+[Unit]
+Description=DM3 release: one tick of the signed-tag poll
+# A tick changes the stand, so it needs the stand up and the daemon it talks to.
+Requires=docker.service dm3.service
+After=docker.service dm3.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dm3-release poll

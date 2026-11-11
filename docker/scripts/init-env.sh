@@ -135,6 +135,18 @@ if [ "$MODE" = "server" ]; then
     set_if_empty DM_RELEASE_HEADROOM_MIB 512
 fi
 
+# The installer passes the relay it was given through the environment: written into the file
+# before this run, the file would count as existing and get no credentials. Only an empty key
+# takes it, so a relay the file already names stays.
+if [ "$MODE" = "server" ]; then
+    if [ -n "${MAIL_HOST:-}" ]; then
+        set_if_empty MAIL_HOST "$MAIL_HOST"
+    fi
+    if [ -n "${MAIL_PORT:-}" ]; then
+        set_if_empty MAIL_PORT "$MAIL_PORT"
+    fi
+fi
+
 # The mail relay is a required answer on a server: activation, password reset and every
 # alert travel through it, and the compose default (Mailpit) delivers into a dead end.
 # Refused rather than warned about.

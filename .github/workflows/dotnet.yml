@@ -590,6 +590,9 @@ jobs:
     - name: The server installer must hold what it is written around
       run: bash scripts/deployment/check-server-installer.sh
 
+    - name: The release script must refuse every tag but a signed release
+      run: bash scripts/deployment/check-release-entry.sh
+
     - name: The monitoring must parse, fire and reach a receiver
       run: bash scripts/deployment/check-monitoring.sh
 
@@ -602,10 +605,15 @@ jobs:
   deployment-smoke:
     needs: [changes]
     if: needs.changes.outputs.deployment-smoke == 'true'
-    timeout-minutes: 30
+    # The server layout at the end starts the whole stack a second time, monitoring included.
+    timeout-minutes: 60
     runs-on: ubuntu-24.04
     steps:
+    # The whole history: the server layout's origin is pushed from this clone, and a mirror
+    # refuses to fetch from a shallow one.
     - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
@@ -626,15 +634,19 @@ jobs:
       env:
         COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
         ASPNETCORE_ENVIRONMENT: Production
-      # Object storage comes first and with --wait: the site starts without it, so this line is
-      # where an image the registry no longer serves, or a bucket the server did not create,
-      # stops the job.
+        # The revision label the release script compares with the signed commit.
+        SOURCE_REVISION: ${{ github.sha }}
+      # All four application images are built first, since the server layout below runs them
+      # all. Object storage comes first and with --wait: the site starts without it, so this
+      # line is where an image the registry no longer serves, or a bucket the server did not
+      # create, stops the job.
       run: |
+        docker compose build dmapi dmfront dm-mail-worker dm-notification-worker
         docker compose up -d --wait storage seaweedfs
         docker compose up -d postgres mailpit jaeger
-        docker compose up -d --build --wait migration
-        docker compose up -d --build --wait dmapi
-        docker compose up -d --build --wait nginx
+        docker compose up -d --wait migration
+        docker compose up -d --wait dmapi
+        docker compose up -d --wait nginx
 
     # The same script an operator runs against the public address after the containers have
     # been replaced. The storage check and the nightly backup ride along: an operator runs
@@ -657,9 +669,25 @@ jobs:
     - name: The nightly dump holds no outbox rows and restores with an empty outbox table
       run: bash docker/scripts/check-dump-excludes-outbox.sh
 
+    # The layout gets its own shared file with fresh passwords, which the volumes of the pair
+    # above were initialised with other values for. The images stay: the layout runs them.
+    - name: Remove the pair and its volumes before the server layout
+      working-directory: docker
+      env:
+        COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
+      run: docker compose down -v
+
+    # Runs 0 and 8 of the release design: the images through a local registry, a signed tag of
+    # this commit from a local origin, the layout installed by its installer, a boot after a
+    # rollout died half way. What it holds is in the script.
+    - name: The server layout installs a signed release and boots back to it
+      run: sudo bash scripts/deployment/check-release-entry.sh --layout
+
     - name: Logs on failure
       if: failure()
       working-directory: docker
       env:
         COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
-      run: docker compose logs --tail=200 nginx dmapi dmfront storage seaweedfs
+      run: |
+        docker compose logs --tail=200 nginx dmapi dmfront dm-mail-worker dm-notification-worker storage seaweedfs
+        sudo journalctl --no-pager -u dm3 -u 'dm3-release*'
