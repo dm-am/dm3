@@ -640,6 +640,9 @@ jobs:
     - name: The release script must refuse every tag but a signed release
       run: bash scripts/deployment/check-release-entry.sh
 
+    - name: The rollout probe must turn red on every failure a visitor would see
+      run: bash scripts/deployment/check-rollout.sh
+
     - name: The monitoring must parse, fire and reach a receiver
       run: bash scripts/deployment/check-monitoring.sh
 
@@ -658,8 +661,10 @@ jobs:
   deployment-smoke:
     needs: [changes]
     if: needs.changes.outputs.deployment-smoke == 'true'
-    # The server layout at the end starts the whole stack a second time, monitoring included.
-    timeout-minutes: 60
+    # The server layout at the end starts the whole stack a second time, monitoring included,
+    # and then rolls some twenty releases out under the probe, each with a start gate of up to
+    # 90 s and a switch check of 30 s. To be lowered to what the first runs take.
+    timeout-minutes: 150
     runs-on: ubuntu-24.04
     steps:
     # The whole history: the server layout's origin is pushed from this clone, and a mirror
@@ -667,6 +672,11 @@ jobs:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0
+    # The rollout probe holds a hub connection through the global WebSocket, which the Node the
+    # runner ships lacks. The same Node as everywhere else.
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24.22.2'
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
@@ -736,6 +746,11 @@ jobs:
     - name: The server layout installs a signed release and boots back to it
       run: sudo bash scripts/deployment/check-release-entry.sh --layout
 
+    # Runs 1 to 7 and 9 to 12 of the release design, from the layout the step before left. sudo
+    # resets PATH, and the probe needs the Node set up above.
+    - name: Releases roll out under the probe without a failed request
+      run: sudo env "PATH=$PATH" bash scripts/deployment/check-rollout.sh --layout
+
     - name: Logs on failure
       if: failure()
       working-directory: docker
@@ -744,3 +759,4 @@ jobs:
       run: |
         docker compose logs --tail=200 nginx dmapi dmfront dm-mail-worker dm-notification-worker storage seaweedfs
         sudo journalctl --no-pager -u dm3 -u 'dm3-release*'
+        sudo cat /var/lib/dm3/tried || true

@@ -215,6 +215,9 @@ if full_requested && wants compose-topology; then
   say "Развертывание: скрипт релиза"
   bash "$ROOT/scripts/deployment/check-release-entry.sh"
 
+  say "Развертывание: вердикт пробы выкатки"
+  bash "$ROOT/scripts/deployment/check-rollout.sh"
+
   say "Развертывание: мониторинг"
   bash "$ROOT/scripts/deployment/check-monitoring.sh"
 

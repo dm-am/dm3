@@ -6,4 +6,6 @@ After=docker.service dm3.service
 
 [Service]
 Type=oneshot
+# Already a unit, so the tick runs here instead of starting a transient one of its own.
+Environment=DM3_IN_UNIT=1
 ExecStart=/usr/local/sbin/dm3-release poll

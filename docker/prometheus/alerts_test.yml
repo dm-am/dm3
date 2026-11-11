@@ -299,3 +299,156 @@ tests:
             exp_annotations:
               summary: "Отказы входа по причине WrongLogin"
               description: "Отказы одной причины идут быстрее двух в секунду десять минут подряд. WrongLogin похож на перебор адресов, WrongPassword на перебор паролей, AccountLocked на уже запертых людей. Смотреть docker logs dm-api."
+
+  # Письмо о выпуске уходит, пока current сменился меньше 15 минут назад, и
+  # смолкает после.
+  - interval: 1m
+    input_series:
+      - series: 'dm_release{field="changed",tag="v1.1.0"}'
+        values: '60+0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ReleaseChanged
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              field: changed
+              tag: v1.1.0
+            exp_annotations:
+              summary: "На сервере живет выпуск v1.1.0"
+              description: "Каталог выпуска сменился меньше 15 минут назад: выпуск, откат или обслуживание. Что живет и что пробовалось: sudo dm3-release status."
+      - eval_time: 20m
+        alertname: ReleaseChanged
+        exp_alerts: []
+
+  # Отказ новее последней смены current поднимает алерт своего тега. Следующий
+  # выпуск, сменивший current, его снимает.
+  - interval: 1m
+    input_series:
+      - series: 'dm_release{field="changed",tag="v1.1.0"}'
+        values: '100+0x10 _x10'
+      - series: 'dm_release{field="changed",tag="v1.3.0"}'
+        values: '_x10 900+0x10'
+      - series: 'dm_release{field="failed",tag="v1.2.0"}'
+        values: '300+0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ReleaseFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              field: failed
+              tag: v1.2.0
+            exp_annotations:
+              summary: "Выпуск v1.2.0 не встал"
+              description: "Выпуск отклонен или упал, сайт остался на прежнем выпуске или восстановлен. Таймер этот тег больше не берет. Причина в sudo dm3-release status и в journalctl -u dm3-release. Исправление выходит новой версией, а выпуск, которому нужно обслуживание, ставит sudo dm3-release maintain с его тегом."
+      - eval_time: 15m
+        alertname: ReleaseFailed
+        exp_alerts: []
+
+  # Ожидание считается от первого раза: до часа молчит, после пишет. Ноль
+  # значит, что ничего не ждет, и он молчит сколько угодно долго.
+  - interval: 1m
+    input_series:
+      - series: 'dm_release{field="waiting_since",tag="x"}'
+        values: '0+0x10 600+0x80'
+      - series: 'dm_release{field="fetched"}'
+        values: '0+60x90'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: ReleaseWaiting
+        exp_alerts: []
+      - eval_time: 72m
+        alertname: ReleaseWaiting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              field: waiting_since
+              tag: x
+            exp_annotations:
+              summary: "Выпуск не доходит до сервера больше часа"
+              description: "Либо подписанный тег ждет: стенд нездоров, образ не скачивается или не хватает памяти, либо сервер час не может прочесть список тегов репозитория. Причина в sudo dm3-release status и в journalctl -u dm3-release."
+
+  # Список тегов, который сервер час не мог прочесть, тоже ожидание.
+  - interval: 1m
+    input_series:
+      - series: 'dm_release{field="waiting_since"}'
+        values: '0+0x90'
+      - series: 'dm_release{field="fetched"}'
+        values: '60+0x90'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: ReleaseWaiting
+        exp_alerts: []
+      - eval_time: 62m
+        alertname: ReleaseWaiting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              field: fetched
+            exp_annotations:
+              summary: "Выпуск не доходит до сервера больше часа"
+              description: "Либо подписанный тег ждет: стенд нездоров, образ не скачивается или не хватает памяти, либо сервер час не может прочесть список тегов репозитория. Причина в sudo dm3-release status и в journalctl -u dm3-release."
+
+  # Отвергнутый тег пишет на том тике, где его отвергли, и молчит на следующем.
+  - interval: 5m
+    input_series:
+      - series: 'dm_release{field="rejected"}'
+        values: '0 2 0'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: ReleaseTagRejected
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: ReleaseTagRejected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              field: rejected
+            exp_annotations:
+              summary: "Сервер отверг теги выпуска"
+              description: "Тег с именем выпуска не прошел проверку подписи или полей, сайт не тронут. Если тег ставил подписывающий, проверить его ключ и сообщение тега, иначе тег поставил кто-то без ключа. Причина каждого в journalctl -u dm3-release."
+      - eval_time: 10m
+        alertname: ReleaseTagRejected
+        exp_alerts: []
+
+  # Образы старше 30 дней: на 29-й день молчит, на 31-й пишет.
+  - interval: 1d
+    input_series:
+      - series: 'dm_release{field="built"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 29d
+        alertname: ReleaseStale
+        exp_alerts: []
+      - eval_time: 31d
+        alertname: ReleaseStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              field: built
+            exp_annotations:
+              summary: "Живые образы собраны больше 30 дней назад"
+              description: "Исправления базовых образов приходят только с новой сборкой. Нужен новый коммит в dev, хватит пустого, затем выпуск из его сборки."
+
+  # Близнец, живой 15 минут, пережил выпуск. Основной экземпляр рядом не в счет.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="dm-api",instance="dm-api-next:5000"}'
+        values: '1+0x20'
+      - series: 'up{job="dm-api",instance="dm-api:5000"}'
+        values: '1+0x20'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: ApiRolloutUnfinished
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: ApiRolloutUnfinished
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: dm-api
+              instance: dm-api-next:5000
+            exp_annotations:
+              summary: "Близнец API пережил выпуск"
+              description: "dm-api-next работает 15 минут, а выпуск длится минуты. Команда sudo dm3-release recover возвращает край на основные контейнеры и убирает близнецов."
