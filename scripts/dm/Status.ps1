@@ -116,7 +116,7 @@ function Show-Status {
 
     # Group services. The last group is not a list but everything the three did not claim, so
     # a container the start command waits on cannot go missing from the screen.
-    $infra = @("pg", "rmq", "seaweedfs", "storage")
+    $infra = @("pg", "seaweedfs", "storage")
     $apps = @("api", "mail-worker", "notification-worker", "migration")
     $tools = @("mailpit", "grafana", "prometheus", "alertmanager", "jaeger", "loki")
 

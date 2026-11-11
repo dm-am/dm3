@@ -66,10 +66,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
     private Dictionary<string, string?> TestConfiguration() => new()
     {
-        // Point RabbitMQ to the test container, as its user: the development settings carry the stand's password.
-        ["RabbitMqConfiguration:Endpoint"] = _databaseFixture.RabbitMqConnectionString,
-        ["RabbitMqConfiguration:Username"] = DatabaseFixture.BrokerUsername,
-        ["RabbitMqConfiguration:Password"] = DatabaseFixture.BrokerPassword,
+        // The process's connection source, which the data layer of the tests is replaced around
+        // but the queue gauges and the database check read.
+        ["ConnectionStrings:Rdb"] = _databaseFixture.ConnectionString,
         // Disable rate limiting in tests
         ["RateLimiting:Enabled"] = "false",
         // The encryption key has no default in the repository, so the host
@@ -91,12 +90,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     {
         var backgroundServicesToRemove = new[]
         {
-            typeof(RealtimeNotificationConsumer), // RabbitMQ connection attempts
+            typeof(PushListener), // listens on ConnectionStrings:Rdb, not the test container; PushListenerShould starts its own
             typeof(WarmupService), // background warmup competes with tests for the pool
             typeof(TokenCleanupService), // Token cleanup uses DB — avoid race conditions
             typeof(SessionCleanupService), // periodic session purge — avoid race conditions
             typeof(RetentionSweepService), // periodic retention sweep — tests call the processor directly
-            typeof(OutboxRelayService), // outbox relay — tests drive the processor directly, a live loop would claim their rows
             typeof(PendingRegistrationCleanupService), // DB cleanup — avoid race conditions
             typeof(UsernameChangeCleanupService), // DB cleanup — avoid race conditions
             // Period digests: the tests drive the processor directly, and a live loop would claim their periods.

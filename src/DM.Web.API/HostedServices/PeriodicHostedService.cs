@@ -45,7 +45,7 @@ internal abstract class PeriodicHostedService(IServiceProvider serviceProvider, 
     {
         await Task.Yield();
 
-        // A TimeSpan, not TotalHours: the outbox relay runs every second.
+        // A TimeSpan, not TotalHours: an interval may be shorter than an hour.
         Logger.LogInformation(
             "{Tag} Service started. Every {Interval}, first pass after {StartupDelay}",
             Tag, Interval, StartupDelay);

@@ -26,51 +26,6 @@
       }
     },
     {
-      "title": "Queue Depth",
-      "description": "Waiting and in flight. A message handed to a consumer is no longer ready, so the ready series alone draws an empty queue for a worker that has taken a thousand messages and is working through them slowly.",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
-      "targets": [
-        {
-          "expr": "rabbitmq_queue_messages_ready{queue=~\"dm.*\"}",
-          "legendFormat": "{{queue}} ready",
-          "refId": "A"
-        },
-        {
-          "expr": "rabbitmq_queue_messages_unacked{queue=~\"dm.*\"}",
-          "legendFormat": "{{queue}} in flight",
-          "refId": "B"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
-      "title": "Dead-lettered Messages",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
-      "targets": [
-        {
-          "expr": "rabbitmq_queue_messages_ready{queue=~\".*-dlq\"}",
-          "legendFormat": "{{queue}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
-      "title": "Consumers per Queue",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
-      "targets": [
-        {
-          "expr": "rabbitmq_queue_consumers{queue=~\"dm.*\"}",
-          "legendFormat": "{{queue}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
-    },
-    {
       "title": "Messages Processed",
       "description": "What the consumers did with what they took. A short queue says nothing on its own: a worker throwing on every message keeps it exactly as short as one that finishes them.",
       "type": "timeseries",
@@ -123,6 +78,45 @@
         }
       ],
       "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "title": "Outbox Depth",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "expr": "max by (queue) (dm_messaging_outbox_pending)",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "title": "Oldest Pending Row Age",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
+      "targets": [
+        {
+          "expr": "max by (queue) (dm_messaging_outbox_lag_seconds)",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "title": "Dead Rows",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "targets": [
+        {
+          "expr": "max by (queue) (dm_messaging_outbox_dead)",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     }
   ],
   "schemaVersion": 39,

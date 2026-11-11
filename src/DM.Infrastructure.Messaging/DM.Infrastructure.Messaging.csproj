@@ -5,12 +5,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
-      <PackageReference Include="AspNetCore.HealthChecks.Rabbitmq" />
-      <PackageReference Include="RabbitMQ.Client" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
       <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-      <PackageReference Include="Polly" />
+      <!-- The claim of a queue holds a connection of its own outside the data layer. -->
+      <PackageReference Include="Npgsql" />
     </ItemGroup>
 
     <ItemGroup>

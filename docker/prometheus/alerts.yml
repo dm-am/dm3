@@ -180,112 +180,48 @@ groups:
           summary: "Не настроена цель опроса хранилища файлов"
           description: "В Prometheus нет цели для хранилища файлов, поэтому ObjectStorageDown о нем молчит. Скорее всего, задание переименовано. Сверить задание storage в docker/prometheus.yml и порт метрик dm-storage."
 
-  # The broker is the only place that knows a message exists between the service
-  # that sent it and the worker that will act on it. Every rule above is about a
+  # The queue is the outbox table: a row waits there between the service that
+  # stored it and the worker that will act on it. Every rule above is about a
   # process answering, and all of them are true of a worker that has stopped
-  # consuming.
-  - name: dm-broker
+  # draining its queue.
+  - name: dm-queue
     rules:
-      - alert: BrokerDown
-        expr: up{job="rabbitmq"} == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "RabbitMQ недоступен"
-          description: "Метрики брокера больше минуты не отвечают, события и письма не доходят до обработчиков. Уведомления и письма не уходят. Смотреть docker logs dm-rmq."
-
-      # A renamed or removed scrape target produces no `up` series at all, so
-      # BrokerDown stays silent on exactly the change that breaks it.
-      - alert: BrokerScrapeTargetMissing
-        expr: absent(up{job="rabbitmq"})
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Не настроена цель опроса брокера"
-          description: "В Prometheus нет цели для RabbitMQ, поэтому BrokerDown о нем молчит. Скорее всего, задание переименовано или плагин rabbitmq_prometheus выключен. Проверить задание rabbitmq в docker/prometheus.yml."
-
-      # Nothing here watches rabbitmq_global_messages_unroutable_returned_total,
-      # and a nonzero value of it is not an incident: the bindings are derived
-      # from the notification generators, so an event type no generator handles is
-      # published into the exchange and returned as unroutable on every stand from
-      # the first minute. A large share of the event types is unbound by
-      # construction, and no threshold on that counter would mean anything. What
-      # it cannot tell apart is a queue that was never declared at all, and that
-      # is the state the rule below names.
-      - alert: QueueWithoutConsumer
-        expr: rabbitmq_queue_consumers{queue=~"dm.notifications|dm.mail.sending"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "У очереди {{ $labels.queue }} нет обработчика"
-          description: "Работа копится, а брать ее некому, хотя процесс обработчика может быть жив. Письма или уведомления не уходят. Смотреть docker logs dm-mail-worker и dm-notification-worker, подписки в разделе Queues в RabbitMQ."
-
-      # The realtime push queue, a rule of its own rather than another name in the
-      # matcher above, for three reasons.
+      # The push listener of an API instance, read off the instance itself: each one
+      # holds a connection of its own that LISTENs on the push channel, and the gauge
+      # reads 1 while it does and 0 from the start until it does. Zero and not absent,
+      # so an instance that never reached its database is caught too; an instance that
+      # is down answers no scrape and is named by the rules about the process.
       #
-      # Name: the broker does not report this queue under the name the consumer is
-      # configured with. It reports that name with a suffix that is new on every
-      # subscription - one stack produced dm.notifications.api-9iugW5 and
-      # dm.notifications.api-wIBPmu across two restarts. PromQL anchors every regex
-      # whole, so a matcher spelled dm.notifications.api matches nothing at any
-      # time, healthy or broken, and only the prefix below finds the queue at all.
-      #
-      # Severity: warning against the critical above, because the message here is a
-      # copy of a notification the dispatcher has already stored and the client
-      # reads over REST. Nothing that exists only in this queue is lost by dropping
-      # it, which is also why its consumer declares no dead-letter exchange.
-      #
-      # Shape: the queue is exclusive to the connection of the API instance that
-      # consumes it, so a subscription that never came up leaves no queue, no
-      # series, and nothing for `== 0` to compare - the failure this rule exists
-      # for is the absent one. That branch is guarded on both processes answering,
-      # because absent() is equally true when the broker is down or its target is
-      # unscraped: firing then would blame the consumer for an outage BrokerDown
-      # and BrokerScrapeTargetMissing already name.
-      - alert: RealtimePushWithoutConsumer
-        expr: |
-          (rabbitmq_queue_consumers{queue=~"dm.notifications.api.*"} == 0)
-          or (
-            absent(rabbitmq_queue_consumers{queue=~"dm.notifications.api.*"})
-            and on() (up{job="dm-api"} == 1)
-            and on() (up{job="rabbitmq"} == 1)
-          )
+      # Severity: warning, because a push copies a notification the dispatcher has
+      # already stored and the client reads over REST. Nothing that exists only in a
+      # push is lost by dropping it.
+      - alert: RealtimePushNotListening
+        expr: dm_messaging_push_listening == 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "У очереди живых уведомлений нет обработчика"
-          description: "API и брокер работают, но API не подписано на очередь, поэтому живые уведомления в браузер не приходят. Сами уведомления сохранены и читаются запросом. Смотреть docker logs dm-api и строку realtime-push в /_health/detail."
+          summary: "API {{ $labels.instance }} не слушает живые уведомления"
+          description: "Пять минут экземпляр API не слушает канал уведомлений в базе, поэтому живые уведомления в его вкладки не приходят. Сами уведомления сохранены и читаются запросом. Смотреть docker logs dm-api и строку realtime-push в /_health/detail."
 
-      # Ready plus unacknowledged, not ready alone. A message handed to a consumer
-      # stops being ready the moment it is delivered, so a worker that has taken a
-      # thousand messages and is working through them slowly reads as an empty
-      # queue on the ready series - which is the shape of the backlog worth
-      # knowing about, and the one the rule used to be blind to.
-      - alert: QueueBacklog
-        expr: sum by (queue) ({__name__=~"rabbitmq_queue_messages_(ready|unacked)", queue=~"dm.*"}) > 1000
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Очередь {{ $labels.queue }} растет"
-          description: "Больше 1000 сообщений ждут или обрабатываются десять минут подряд. Считаются и ожидающие, и взятые обработчиком, но не завершенные. Смотреть очередь в RabbitMQ и docker logs ее обработчика."
-
-      - alert: DeadLetteredMessages
-        expr: rabbitmq_queue_messages_ready{queue=~".*-dlq"} > 0
+      # A dead row spent its ladder or was rejected, and no worker takes it again
+      # until a human returns it. The gauge is read from the table on every scrape,
+      # one series per queue, so a dead letter and a dead event each fire. NaN, the
+      # value of an unreachable database, compares false and leaves this to the
+      # database rules. The command is DeadRows.ReturnCommand, which a gate holds
+      # this text to.
+      - alert: DeadOutboxRows
+        expr: dm_messaging_outbox_dead > 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Очередь недоставленных {{ $labels.queue }} не пуста"
-          description: "Сообщение исчерпало все повторы и осело в этой очереди. Больше им никто не займется. Смотреть сообщение в RabbitMQ и причину в docker logs обработчика."
+          summary: "В очереди {{ $labels.queue }} есть мертвые записи"
+          description: 'Записи очереди исчерпали повторы или не читаются, и больше их никто не возьмет. Причина в поле LastError: SELECT "Id", "DeadUtc", "LastError" FROM "OutboxEvents" WHERE "DeadUtc" IS NOT NULL. Вернуть запись в очередь, когда причина устранена: UPDATE "OutboxEvents" SET "DeadUtc" = NULL, "Attempts" = 0, "NextAttemptUtc" = NULL WHERE "Id" = <Id> AND "DeadUtc" IS NOT NULL AND "ProcessedUtc" IS NULL; Письмо об учетной записи, мертвое больше 48 часов, не возвращать, а удалить: ссылка в нем уже истекла.'
 
-      # The rules above see the queue; this one sees the outcome. A consumer that
-      # takes every message and throws on every message keeps its queue short and
-      # its subscription alive, so it is invisible from the broker side alone.
+      # The rules above see the queue; this one sees the outcome. A worker that
+      # claims every row and fails on every row keeps its queue short and its loop
+      # alive, so it is invisible from the depth of the queue alone.
       - alert: ConsumerFailingMessages
         expr: sum by (queue) (rate(dm_messaging_failed_total[5m])) > 0
         for: 5m
@@ -320,34 +256,22 @@ groups:
           summary: "События типа {{ $labels.event }} не попали в исходящую очередь"
           description: "Это безвозвратные потери: запись в исходящую очередь отклонена сразу после сохранения данных, или не ушло письмо о входе. Их никто не хранит и не повторит. Смотреть docker logs dm-api."
 
-      # A broker refusal stopped being a loss when the outbox landed: the rows
-      # wait, the relay retries every second, and what matters is how long the
-      # oldest one has been waiting. Five minutes is longer than any deploy's
-      # broker restart, so this firing means the broker is properly down or the
-      # relay is jammed on a row it cannot assemble - either way a human call.
+      # The rows wait in the table, each worker claims its queue every second,
+      # and what matters is how long the oldest one has been waiting. Five
+      # minutes is longer than any deploy's restart, so this firing means a
+      # worker is down or stuck on a row - either way a human call.
+      # The gauge is read from the table on every scrape, one series per queue,
+      # so each queue fires on its own and a hung loop cannot freeze it.
       - alert: OutboxBacklogAging
         expr: dm_messaging_outbox_lag_seconds > 300
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "События застряли в исходящей очереди"
-          description: "Самое старое неотправленное событие ждет больше 5 минут, уведомления, письма и счетчики по нему не уходят. Ничего не потеряно, записи ждут отправки. Смотреть поля Attempts и LastError у старых записей в базе и docker logs dm-api."
+          summary: "Записи застряли в очереди {{ $labels.queue }}"
+          description: "Самая старая ожидающая запись очереди ждет больше 5 минут, уведомления, письма и счетчики по ней не уходят. Ничего не потеряно, записи ждут обработки. Смотреть поля Attempts и LastError у старых записей в базе и docker logs обработчика очереди."
 
-      # The gauge above is written by the relay itself, so a stalled relay loop
-      # in a live process freezes it at its last value - a zero that masks a
-      # growing backlog. The pass counter ticks on an empty backlog too, which
-      # is what makes its silence meaningful.
-      - alert: OutboxRelayStalled
-        expr: increase(dm_messaging_outbox_relay_passes_total[10m]) == 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Отправка событий из исходящей очереди остановилась"
-          description: "Процесс API жив, но цикл отправки не завершил ни одного прохода за 10 минут, поэтому события не публикуются вовсе. Показатель отставания в это время устарел. Смотреть docker logs dm-api."
-
-      # The far end of the same road. The message left the broker, reached a
+      # The far end of the same road. The row left the queue, reached a
       # sender, and the channel refused it - a bot token revoked, a relay
       # rejecting every letter, a push nobody is subscribed to. The sender
       # swallows that so one dead channel cannot cost the recipient duplicates

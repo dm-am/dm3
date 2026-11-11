@@ -61,10 +61,10 @@ export async function rebuildStand({ root: tree, commit }) {
   startApplications(tree, commit);
 }
 
-// "start" again when the reset fails: on empty volumes object storage and
-// RabbitMQ can pass their healthchecks after the script has stopped waiting
-// (on a busy machine RabbitMQ boots for minutes), and the stack then comes up
-// on the next attempt with nothing lost - the databases are already empty.
+// "start" again when the reset fails: on empty volumes object storage can
+// pass its healthcheck after the script has stopped waiting, and the stack
+// then comes up on the next attempt with nothing lost - the databases are
+// already empty.
 function resetStack(tree) {
   const manage = (command) =>
     process.platform === "win32"

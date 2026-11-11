@@ -8,13 +8,12 @@ function Start-Infrastructure {
         @{ Name = "dm-pg"; Label = "Postgres" },
         @{ Name = "dm-seaweedfs"; Label = "SeaweedFS" },
         @{ Name = "dm-storage"; Label = "Storage" },
-        @{ Name = "dm-loki"; Label = "Loki" },
-        @{ Name = "dm-rmq"; Label = "RabbitMQ" }
+        @{ Name = "dm-loki"; Label = "Loki" }
     )
 
     # alertmanager comes up with prometheus: started apart, prometheus evaluates its rules
     # into nothing.
-    if (-not (Invoke-Step -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres rabbitmq storage seaweedfs mailpit jaeger loki prometheus alertmanager grafana")) {
+    if (-not (Invoke-Step -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres storage seaweedfs mailpit jaeger loki prometheus alertmanager grafana")) {
         Write-FailedStep -Label "Infrastructure" -Current 0 -Total $infraServices.Count -Detail "start failed"
         exit 1
     }

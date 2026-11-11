@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,7 +17,7 @@ namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 public class OutboxEventProducerShould
 {
     [Fact]
-    public async Task StoreARowTheRelayCanRebuildTheMessageFrom()
+    public async Task StoreARowTheWorkerCanRebuildTheEventFrom()
     {
         await using var context = Context();
         var producer = Producer(context, out var clock, out _);
@@ -30,9 +31,75 @@ public class OutboxEventProducerShould
         row.EventId.Should().NotBe(Guid.Empty,
             "an empty id reads to the consumer as a pre-EventId message and is never deduplicated");
         row.OccurredUtc.Should().Be(clock.Now, "the order of publication is the order of insertion");
-        row.PublishedUtc.Should().BeNull("only the broker's confirm may ever set this");
+        row.ProcessedUtc.Should().BeNull("only the drain of the row may ever set this");
         row.Attempts.Should().Be(0);
         row.LastError.Should().BeNull();
+        row.Payload.Should().BeNull("the letter column is empty on an event, and the database " +
+            "does not enforce the shape: the inserting places do");
+        row.NextAttemptUtc.Should().BeNull("a fresh event may be claimed at once");
+        row.DeadUtc.Should().BeNull("a fresh event is alive");
+    }
+
+    [Fact]
+    public async Task StoreTheEventOnTheNotificationQueue()
+    {
+        await using var context = Context();
+        var producer = Producer(context, out _, out _);
+
+        await producer.SendAsync(EventType.NewGame, Guid.NewGuid());
+
+        context.OutboxEvents.Single().Queue.Should().Be("dm.notifications",
+            "the notification worker drains this queue, and the name is kept from before " +
+            "so the metric labels do not change");
+    }
+
+    [Fact]
+    public async Task CarryTheTraceContextOfTheRequestThatStoredIt()
+    {
+        await using var context = Context();
+        var producer = Producer(context, out _, out _);
+        using var request = new Activity("request");
+        request.SetIdFormat(ActivityIdFormat.W3C);
+        request.SetParentId(
+            ActivityTraceId.CreateFromString("0af7651916cd43dd8448eb211c80319c"),
+            ActivitySpanId.CreateFromString("b7ad6b7169203331"),
+            ActivityTraceFlags.Recorded);
+        request.Start();
+
+        await producer.SendAsync(EventType.NewGame, Guid.NewGuid());
+
+        var traceParent = context.OutboxEvents.Single().TraceParent;
+        traceParent.Should().MatchRegex("^00-0af7651916cd43dd8448eb211c80319c-[0-9a-f]{16}-01$",
+            "the notification worker's span continues the trace of this request");
+        traceParent.Should().Be(request.Id);
+    }
+
+    [Fact]
+    public async Task LeaveTheTraceContextEmptyOutsideTheW3CFormat()
+    {
+        await using var context = Context();
+        var producer = Producer(context, out _, out _);
+        using var request = new Activity("request");
+        request.SetIdFormat(ActivityIdFormat.Hierarchical);
+        request.Start();
+
+        await producer.SendAsync(EventType.NewGame, Guid.NewGuid());
+
+        context.OutboxEvents.Single().TraceParent.Should().BeNull(
+            "a value the worker cannot parse is worth nothing, and one that made the insert " +
+            "fail would silently lose the event");
+    }
+
+    [Fact]
+    public async Task LeaveTheTraceContextEmptyOutsideARequest()
+    {
+        await using var context = Context();
+        var producer = Producer(context, out _, out _);
+        Activity.Current = null;
+
+        await producer.SendAsync(EventType.NewGame, Guid.NewGuid());
+
+        context.OutboxEvents.Single().TraceParent.Should().BeNull();
     }
 
     [Fact]
@@ -49,7 +116,7 @@ public class OutboxEventProducerShould
         ids.Should().HaveCount(2);
         ids.Distinct().Should().HaveCount(2,
             "two publications about one entity are two events, not a replay of one - " +
-            "a replay is the relay re-publishing one row, which carries the stored id");
+            "a replay is the worker handling one row again, which carries the stored id");
     }
 
     [Fact]

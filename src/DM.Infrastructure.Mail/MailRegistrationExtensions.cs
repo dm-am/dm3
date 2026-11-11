@@ -17,7 +17,7 @@ public static class MailRegistrationExtensions
 {
     public static IServiceCollection AddDmMail(this IServiceCollection services)
     {
-        // Per scope: the scope disposes the channel, and a channel is not shared between threads.
+        // Per scope, as the validator it takes; the connection source is the process's one.
         services.TryAddScoped<IMailSender, MailSender>();
 
         // One renderer per process: the Dispatcher of HtmlRenderer serializes the renders.

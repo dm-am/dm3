@@ -32,7 +32,7 @@ public class PointOfPresenceShould
 
         foreach (var secret in new[]
                  {
-                     "POSTGRES_PASSWORD", "RABBITMQ_DEFAULT_PASS", "GF_SECURITY_ADMIN_PASSWORD",
+                     "POSTGRES_PASSWORD", "GF_SECURITY_ADMIN_PASSWORD",
                  })
         {
             content.Should().NotContain($"{secret}=",

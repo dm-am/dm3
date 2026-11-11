@@ -26,23 +26,23 @@ public static class MessagingMetrics
         Meter.CreateCounter<long>("dm.messaging.consumed", null, "Messages a consumer finished with");
 
     /// <summary>
-    /// Messages that exhausted every retry and left the pipeline as an exception.
-    /// The next thing that happens to one is the dead-letter exchange.
-    /// Attributes: <c>queue</c>, <c>reason</c> (exception type).
+    /// Outbox rows that became dead: the last failure of the retry ladder, or a rejection.
+    /// Nothing claims one again until a human returns it.
+    /// Attributes: <c>queue</c>, <c>reason</c> (exception type, or <c>Rejected</c>).
     /// </summary>
     public static readonly Counter<long> Failed =
         Meter.CreateCounter<long>("dm.messaging.failed", null, "Messages that exhausted every retry");
 
     /// <summary>
-    /// Individual retry attempts. Rises long before <see cref="Failed"/> does,
-    /// which is the point: a queue that is being processed on the second attempt
-    /// is a queue about to stop being processed. Attributes: <c>queue</c>.
+    /// Pauses of the retry ladder assigned to failed rows. Rises long before
+    /// <see cref="Failed"/> does, which is the point: a queue whose rows fail on
+    /// the first attempt is a queue about to fill with dead rows. Attributes: <c>queue</c>.
     /// </summary>
     public static readonly Counter<long> Retried =
         Meter.CreateCounter<long>("dm.messaging.retried", null, "Retry attempts spent on messages");
 
     /// <summary>
-    /// Time one message spent in the pipeline, retries included, seconds.
+    /// Time the handler spent on one claimed row, seconds.
     /// Attributes: <c>queue</c>.
     /// </summary>
     public static readonly Histogram<double> Duration =
@@ -55,46 +55,10 @@ public static class MessagingMetrics
     /// <remarks>
     /// The producer swallows a refusal rather than fail a committed write, so this is
     /// what shows it: the outbox insert refused after the commit, and the swallowed
-    /// letter about a sign-in from an unknown address. A broker refusal is a delay
-    /// (<see cref="OutboxPublishFailed"/>).
+    /// letter about a sign-in from an unknown address.
     /// </remarks>
     public static readonly Counter<long> PublishFailed =
-        Meter.CreateCounter<long>("dm.messaging.publish_failed", null, "Events the publisher could not hand to the broker");
-
-    /// <summary>
-    /// Age of the oldest unpublished outbox row, seconds; 0 on an empty
-    /// backlog. Updated by every relay pass.
-    /// </summary>
-    /// <remarks>
-    /// The number behind the backlog alert.
-    /// </remarks>
-    public static readonly Gauge<double> OutboxLag =
-        Meter.CreateGauge<double>("dm.messaging.outbox_lag", "s", "Age of the oldest unpublished outbox row");
-
-    /// <summary>Unpublished outbox rows. Updated by every relay pass.</summary>
-    public static readonly Gauge<long> OutboxPending =
-        Meter.CreateGauge<long>("dm.messaging.outbox_pending", null, "Unpublished outbox rows");
-
-    /// <summary>Outbox rows published with confirmation and marked.</summary>
-    public static readonly Counter<long> OutboxPublished =
-        Meter.CreateCounter<long>("dm.messaging.outbox_published", null, "Outbox rows published and marked");
-
-    /// <summary>
-    /// Publish refusals of the relay. Attributes: <c>reason</c> (exception
-    /// type). A delay, not a loss: the row stays in the outbox and the next
-    /// pass retries it — the opposite of <see cref="PublishFailed"/>.
-    /// </summary>
-    public static readonly Counter<long> OutboxPublishFailed =
-        Meter.CreateCounter<long>("dm.messaging.outbox_publish_failed", null, "Outbox publish refusals, retried by the next pass");
-
-    /// <summary>
-    /// Relay passes, ticking on an empty backlog too.
-    /// </summary>
-    /// <remarks>
-    /// A stalled relay would leave the lag gauge frozen; the stall alert reads this.
-    /// </remarks>
-    public static readonly Counter<long> OutboxRelayPasses =
-        Meter.CreateCounter<long>("dm.messaging.outbox_relay_passes", null, "Passes of the outbox relay");
+        Meter.CreateCounter<long>("dm.messaging.publish_failed", null, "Events and letters that could not be stored");
 
     /// <summary>
     /// Notifications that reached their channel and were refused by it.
@@ -107,6 +71,16 @@ public static class MessagingMetrics
     /// </remarks>
     public static readonly Counter<long> DeliveryFailed = Meter.CreateCounter<long>(
         "dm.messaging.delivery_failed", null, "Notifications a channel refused to deliver");
+
+    /// <summary>
+    /// Whether the push listener of this API instance is listening: 1 or 0.
+    /// </summary>
+    /// <remarks>
+    /// Recorded on every change of the listener's state and 0 from its start, so an instance
+    /// that never reached its database reads 0 and not nothing. The push alert reads it.
+    /// </remarks>
+    public static readonly Gauge<long> PushListening =
+        Meter.CreateGauge<long>("dm.messaging.push_listening", null, "Whether the push listener of this instance is listening");
 
     /// <summary>Attribute set naming the channel a delivery was attempted through.</summary>
     /// <param name="channel">Channel name.</param>

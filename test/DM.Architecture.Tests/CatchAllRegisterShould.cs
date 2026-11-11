@@ -93,25 +93,17 @@ public class CatchAllRegisterShould
             "Callers delete best-effort and delete again by design, so a storage failure of a delete " +
             "is false rather than an error; cancellation is rethrown above and a missing object is true."),
 
-        new("src/DM.Infrastructure.Messaging/DmConsumer.cs", "Subscribe",
-            "Cleanup and rethrow: a broker error during declare, bind or consume disposes " +
-            "the channel and goes on."),
+        new("src/DM.Infrastructure.Messaging/Queues/QueueWorker.cs", "ExecuteAsync",
+            "A loop error, the claim, the mark or the connection failing, is logged and the loop " +
+            "waits on its ladder: an exception leaving the loop would stop the whole host."),
 
-        new("src/DM.Infrastructure.Messaging/DmConsumer.cs", "Handle",
-            "The consumer boundary: whatever the pipeline still throws after its retries is " +
-            "logged and the message is nacked without requeue, so one message cannot block the queue."),
+        new("src/DM.Infrastructure.Messaging/Queues/QueueWorker.cs", "Handle",
+            "Filtered to a stop of the host: whatever the handler throws on its way out is turned " +
+            "into the cancellation, so the claim rolls back and the row spends no attempt."),
 
-        new("src/DM.Infrastructure.Messaging/DmConsumer.cs", "Handle",
-            "Inside the nack above: a nack on a closing channel fails, and the broker " +
-            "requeues the message on close anyway, so the failure is only logged."),
-
-        new("src/DM.Infrastructure.Messaging/MeasuredConsumerPipeline.cs", "InvokeAsync",
-            "Count and rethrow: every failure the retry policy gives up on is counted, and " +
-            "the same exception goes on."),
-
-        new("src/DM.Infrastructure.Messaging/PublishedExchangeDeclaration.cs", "ExecuteAsync",
-            "A broker that is down or refuses the declaration at start must not stop the " +
-            "host from serving pages; the failure is logged."),
+        new("src/DM.Infrastructure.Messaging/Queues/QueueWorker.cs", "Handle",
+            "A failure of the handler is logged and written on the row as an attempt with its last " +
+            "error, so the row climbs the retry ladder; a stop of the host is taken by the filter above."),
 
         new("src/DM.Infrastructure.Persistence/RelationalStorage/ExpressionIndexInitializer.cs", "Assert",
             "Fail-open on purpose: when the case-insensitive unique indexes cannot be asserted at start, " +
@@ -121,10 +113,6 @@ public class CatchAllRegisterShould
         new("src/DM.Infrastructure.Persistence/RelationalStorage/OutboxEventProducer.cs", "SendAsync",
             "A refused outbox save is detached, counted and logged so that the business " +
             "write that raised the event stands."),
-
-        new("src/DM.Infrastructure.Persistence/RelationalStorage/OutboxRelayProcessor.cs", "RelayBatchAsync",
-            "A publish error or timeout is recorded on the row for its retry bookkeeping " +
-            "and stops the pass, so the row is retried rather than lost."),
 
         new("src/DM.Infrastructure.Persistence/Repositories/Account/TwoFactorRepository.cs", "SaveOrClearTracker",
             "Cleanup and rethrow: any save failure clears the change tracker so the context is usable " +
@@ -141,6 +129,10 @@ public class CatchAllRegisterShould
         new("src/DM.Infrastructure.Persistence/Repositories/Search/SearchTextProjection.cs", "Of",
             "Any parser or renderer failure falls back to the text cut before the first private block, " +
             "so the body stays searchable and the private block never reaches the index."),
+
+        new("src/DM.Infrastructure.Persistence/RelationalStorage/QueueMetrics.cs", "Read",
+            "A scrape callback: whatever the reading throws, every queue reads not-a-number, so an " +
+            "outage shows as unknown and not as an empty queue, and the scrape still answers."),
 
         new("src/DM.Infrastructure.Persistence/Shared/UnreadCounters/UnreadCountersRepository.cs", "CountedAsync",
             "The counter write follows work that is already committed, so throwing would fail a request " +
@@ -168,10 +160,6 @@ public class CatchAllRegisterShould
             "A failure while handling an update that passed the checks is logged as an error and " +
             "answered with 200, so that Telegram does not redeliver the same failing update in a loop."),
 
-        new("src/DM.Web.API/HostedServices/OutboxRelayService.cs", "Publish",
-            "Count and rethrow: a publish error is counted and logged, and the same " +
-            "exception goes on to the relay."),
-
         new("src/DM.Web.API/HostedServices/PeriodicHostedService.cs", "Guarded",
             "Cancellation is excluded by the filter; any other failure of one step is logged and the " +
             "next pass retries, so one bad pass does not stop the job for good."),
@@ -188,9 +176,14 @@ public class CatchAllRegisterShould
             "The avatar change is already saved and the push is best-effort, so a SignalR or lookup " +
             "failure is logged rather than failing the change."),
 
-        new("src/DM.Web.API/Realtime/RealtimeNotificationConsumer.cs", "ExecuteAsync",
-            "A failure to compose the push consumer must not stop the host: it is logged and the " +
-            "health check reports push as off."),
+        new("src/DM.Web.API/Realtime/PushListener.cs", "ListenAsync",
+            "Whatever the listener's connection throws, it is logged and the listener reconnects on " +
+            "its ladder: an exception out of a hosted service stops the host, and the health check " +
+            "reports push as off meanwhile."),
+
+        new("src/DM.Web.API/Realtime/PushListener.cs", "DeliverOneAsync",
+            "One push the hub refused is counted on the delivery-failure counter and logged, so the " +
+            "pushes behind it in the buffer still reach their tabs."),
 
         new("src/DM.Web.API/Shared/Authentication/TwoFactorChallengeCookie.cs", "Read",
             "Already filtered to FormatException and CryptographicException, what decryption throws on " +

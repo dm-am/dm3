@@ -21,7 +21,6 @@ cd "$ROOT/docker"
 # and that decision is the same on a runner and on a developer machine.
 export DM_CryptoConfiguration__KeyBase64=validation-placeholder
 export POSTGRES_PASSWORD=validation-placeholder
-export RABBITMQ_DEFAULT_PASS=validation-placeholder
 export STORAGE_APP_PASSWORD=validation-placeholder
 export STORAGE_BACKUP_PASSWORD=validation-placeholder
 export GF_SECURITY_ADMIN_PASSWORD=validation-placeholder

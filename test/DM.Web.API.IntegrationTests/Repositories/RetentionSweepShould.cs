@@ -118,28 +118,48 @@ public class RetentionSweepShould : IntegrationTestBase
             .Should().BeTrue("a live marker never expires, however old its last read is");
     }
 
+    /// <remarks>
+    /// Every row was inserted 30 days ago. Mutation it must fail on: a policy by the moment of
+    /// insertion, which takes the waiting row and the row in retry with the rest.
+    /// </remarks>
     [Fact]
-    public async Task ExpirePublishedOutboxRowsAndOnlyThem()
+    public async Task ExpireProcessedAndDeadOutboxRowsAndOnlyThem()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var dbContext = Context(scope);
-        var expired = OutboxRow(publishedDaysAgo: 8);
-        var fresh = OutboxRow(publishedDaysAgo: 1);
-        // An unpublished row has no stamp at all, and the sweep's cutoff
-        // predicate can never match its NULL - however old the row grows, only
-        // the backlog alert may deal with it.
-        var pending = OutboxRow(publishedDaysAgo: null);
-        dbContext.OutboxEvents.AddRange(expired, fresh, pending);
+        var expired = OutboxRow(processedDaysAgo: 8);
+        var fresh = OutboxRow(processedDaysAgo: 1);
+        // A row that is not processed has no stamp at all, and the sweep's
+        // cutoff predicate can never match its NULL - however old the row grows,
+        // only the backlog alert may deal with it.
+        var pending = OutboxRow(processedDaysAgo: null);
+        var inRetry = OutboxRow(processedDaysAgo: null);
+        inRetry.Attempts = 3;
+        inRetry.LastError = "TimeoutException: the mail server is down";
+        inRetry.NextAttemptUtc = DateTimeOffset.UtcNow.AddMinutes(1);
+        var longDead = OutboxRow(processedDaysAgo: null);
+        longDead.Attempts = 20;
+        longDead.DeadUtc = DateTimeOffset.UtcNow.AddDays(-31);
+        var recentlyDead = OutboxRow(processedDaysAgo: null);
+        recentlyDead.Attempts = 20;
+        recentlyDead.DeadUtc = DateTimeOffset.UtcNow.AddDays(-10);
+        dbContext.OutboxEvents.AddRange(expired, fresh, pending, inRetry, longDead, recentlyDead);
         await dbContext.SaveChangesAsync();
 
         await Sweep(scope);
 
         (await dbContext.OutboxEvents.AsNoTracking().AnyAsync(e => e.EventId == expired.EventId))
-            .Should().BeFalse("a published row's work is done; a week covers the incident review");
+            .Should().BeFalse("a processed row's work is done; a week covers the incident review");
         (await dbContext.OutboxEvents.AsNoTracking().AnyAsync(e => e.EventId == fresh.EventId))
-            .Should().BeTrue("a fresh published row is still evidence in a delivery incident");
+            .Should().BeTrue("a fresh processed row is still evidence in a delivery incident");
         (await dbContext.OutboxEvents.AsNoTracking().AnyAsync(e => e.EventId == pending.EventId))
-            .Should().BeTrue("an unpublished event is a delivery still owed, never garbage");
+            .Should().BeTrue("a waiting event is a delivery still owed, never garbage");
+        (await dbContext.OutboxEvents.AsNoTracking().AnyAsync(e => e.EventId == inRetry.EventId))
+            .Should().BeTrue("a row in retry is work still owed, however old it grows");
+        (await dbContext.OutboxEvents.AsNoTracking().AnyAsync(e => e.EventId == longDead.EventId))
+            .Should().BeFalse("a month after its death nobody is going to return a dead row");
+        (await dbContext.OutboxEvents.AsNoTracking().AnyAsync(e => e.EventId == recentlyDead.EventId))
+            .Should().BeTrue("a dead row stays a month, so it can be looked at and returned");
     }
 
     // The challenge lives five minutes; the day is slack for a row a login failed to delete.
@@ -224,14 +244,15 @@ public class RetentionSweepShould : IntegrationTestBase
     };
 
     private static DM.Infrastructure.Persistence.Entities.Outbox.OutboxEvent OutboxRow(
-        int? publishedDaysAgo) => new()
+        int? processedDaysAgo) => new()
         {
             EventId = Guid.NewGuid(),
+            Queue = DM.Infrastructure.Core.Queues.QueueNames.Notifications,
             EventType = EventType.NewGame,
             EntityId = Guid.NewGuid(),
             OccurredUtc = DateTimeOffset.UtcNow.AddDays(-30),
-            PublishedUtc = publishedDaysAgo.HasValue
-            ? DateTimeOffset.UtcNow.AddDays(-publishedDaysAgo.Value)
+            ProcessedUtc = processedDaysAgo.HasValue
+            ? DateTimeOffset.UtcNow.AddDays(-processedDaysAgo.Value)
             : null,
         };
 

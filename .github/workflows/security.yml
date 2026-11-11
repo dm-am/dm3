@@ -114,7 +114,7 @@ jobs:
         run: |
           cd docker
           docker compose up -d --wait storage seaweedfs
-          docker compose up -d postgres rabbitmq mailpit jaeger
+          docker compose up -d postgres mailpit jaeger
           docker compose up -d --build --wait migration
 
       - name: Build and start API

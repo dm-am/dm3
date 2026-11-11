@@ -112,10 +112,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     EventId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EventType = table.Column<int>(type: "integer", nullable: false),
-                    EntityId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Queue = table.Column<string>(type: "text", nullable: false),
+                    EventType = table.Column<int>(type: "integer", nullable: true),
+                    EntityId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Payload = table.Column<string>(type: "text", nullable: true),
+                    TraceParent = table.Column<string>(type: "text", nullable: true),
                     OccurredUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    PublishedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    NextAttemptUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    ProcessedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    DeadUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Attempts = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     LastError = table.Column<string>(type: "text", nullable: true)
                 },
@@ -2504,10 +2509,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 filter: "\"EventId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
-                name: "IX_OutboxEvents_Pending",
+                name: "IX_OutboxEvents_Ready",
                 table: "OutboxEvents",
-                columns: new[] { "OccurredUtc", "Id" },
-                filter: "\"PublishedUtc\" IS NULL");
+                columns: new[] { "Queue", "OccurredUtc", "Id" },
+                filter: "\"ProcessedUtc\" IS NULL AND \"DeadUtc\" IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_PendingRegistrations_CreatedUtc",

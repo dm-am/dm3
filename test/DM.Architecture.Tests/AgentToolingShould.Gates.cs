@@ -173,6 +173,10 @@ public partial class AgentToolingShould
                 "brings up the deployed pair, edge included",
             ["The edge answers where the deployment needs it to"] =
                 "smoke test against the pair the step before it started",
+            ["Only the application role may connect to the application database"] =
+                "reads the privileges of the database that pair started",
+            ["The nightly dump holds no outbox rows and restores with an empty outbox table"] =
+                "dumps and restores the database that pair started",
             ["Logs on failure"] =
                 "prints container logs of that pair",
 

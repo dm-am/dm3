@@ -27,7 +27,7 @@ public sealed record RetentionPolicy(string Table, string TimestampColumn, TimeS
 /// Login attempts decay in the window the lockout policy reads, owned by
 /// <see cref="AuthenticationConfiguration"/>; the security trail and the notification
 /// stream hold personal data as long as an incident can be investigated; a tombstoned
-/// unread marker and a published outbox row are done, and seven days is slack.
+/// unread marker and a processed outbox row are done, and seven days is slack.
 /// </remarks>
 internal static class RetentionRegistry
 {
@@ -39,11 +39,15 @@ internal static class RetentionRegistry
         // Only tombstones carry a stamp: a live marker's RemovedUtc is NULL and
         // never matches the cutoff predicate.
         new("UnreadCounters", "RemovedUtc", TimeSpan.FromDays(7)),
-        // The same trick as the tombstones above: only published rows carry the
-        // stamp, so an unpublished event is never deleted however old it grows -
-        // the backlog alert calls a human instead. A week of published rows
-        // covers investigating a delivery incident against the consumer's log.
-        new("OutboxEvents", "PublishedUtc", TimeSpan.FromDays(7)),
+        // The same trick as the tombstones above: only processed rows carry the
+        // stamp, so a row that is not processed is never deleted however old it
+        // grows - the backlog alert calls a human instead. A week of processed
+        // rows covers investigating a delivery incident against the worker's log.
+        new("OutboxEvents", "ProcessedUtc", TimeSpan.FromDays(7)),
+        // Dead rows by the moment of death, not of insertion: a month leaves time to
+        // look at one and return it. A row in retry carries no stamp of death and
+        // stays, like a waiting one.
+        new("OutboxEvents", "DeadUtc", TimeSpan.FromDays(30)),
         // A login that stopped between the two factors. It is worth stealing for
         // five minutes and worth nothing after that; the day is slack for the
         // case where the deletion at the end of a login did not happen, and not

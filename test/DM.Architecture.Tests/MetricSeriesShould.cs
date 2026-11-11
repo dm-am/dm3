@@ -29,7 +29,6 @@ public class MetricSeriesShould
         ("http_server_", "dm-api"),
         ("http_client_", "dm-api"),
         ("process_runtime_", "dm-api"),
-        ("rabbitmq_", "rabbitmq"),
         ("pg_", "postgres"),
         ("node_", "node"),
         // The alerting contour is scraped like any other target.
@@ -41,7 +40,7 @@ public class MetricSeriesShould
     {
         "histogram_quantile", "label_replace", "label_join", "clamp_max", "clamp_min",
         "http_route", "http_response_status_code", "job_name", "scrape_interval",
-        "static_configs", "rabbitmq_prometheus", "rule_files", "metrics_path",
+        "static_configs", "rule_files", "metrics_path",
     };
 
     private static readonly string[] Suffixes =

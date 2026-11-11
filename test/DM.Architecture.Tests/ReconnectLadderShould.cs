@@ -24,7 +24,7 @@ public class ReconnectLadderShould
         var first = double.Parse(ladder.Groups["first"].Value, CultureInfo.InvariantCulture);
 
         var host = typeof(DM.Web.API.Startup).Assembly
-            .GetType("DM.Web.API.Realtime.RealtimeNotificationConsumer", throwOnError: true)!
+            .GetType("DM.Web.API.Realtime.PushListener", throwOnError: true)!
             .GetMethod("DefaultRetryDelay", BindingFlags.NonPublic | BindingFlags.Static)!;
 
         for (var attempt = 1; attempt <= 8; attempt++)

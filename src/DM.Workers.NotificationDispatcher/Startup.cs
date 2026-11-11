@@ -10,8 +10,6 @@ using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Mail;
-using DM.Infrastructure.Messaging;
-using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Workers.NotificationDispatcher.Bot;
 using DM.Workers.NotificationDispatcher.Email;
@@ -20,6 +18,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace DM.Workers.NotificationDispatcher;
 
@@ -42,28 +41,28 @@ public class Startup
     {
         services
             .AddDmCoreConfiguration(_configuration)
-            .AddDmMessageQueuing(_configuration)
             .AddDmMailConfiguration(_configuration)
             .AddDmLogging("DM.Notifications.Consumer", _configuration, _environment)
             // Every letter and bot message links back to the site, and without the address it links nowhere.
             .RequireGeneratedLinks()
             .RequireRelationalStorage();
 
-        services.AddDmRetryingConsumer(NotificationDispatcherConsumer.QueueName);
-        services.AddDmConsumerMiddleware<RetryingConsumerMiddleware>();
-        services.AddHostedService<NotificationDispatcherConsumer>();
+        // Events are claimed from the outbox table, and letters are stored in it for the mail worker.
+        services.AddHostedService(NotificationQueue.Worker);
 
-        // The client declares nothing on the producing side.
-        services.AddDmPublishedExchanges(
-            MailTransport.ExchangeName, RealtimeNotificationsTransport.ExchangeName);
-
-        services.AddDmBrokerHealthCheck(_configuration, ["messaging", "ready"]);
-
-        // No EnableRetryOnFailure: the retrying middleware replays the whole read-only handler.
+        // No EnableRetryOnFailure: a failed row is handled again whole on the next pass.
         services
-            .AddDbContext<DmDbContext>(options => options
-                .UseNpgsql(_configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))))
+            .AddDmConnectionSource()
+            .AddDbContext<DmDbContext>((provider, options) => options
+                .UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>()))
             .AddHttpClient();
+
+        // The process's own source, so the check probes the pool the claim and the data layer draw from.
+        services.AddHealthChecks()
+            .AddNpgSql(
+                provider => provider.GetRequiredService<NpgsqlDataSource>(),
+                name: "postgresql",
+                tags: ["db", "ready"]);
 
         // NotificationService declares IIdentityProvider for methods this host never calls.
         services.AddScoped<IIdentityProvider, NoIdentityProvider>();
@@ -76,13 +75,11 @@ public class Startup
 
         services.AddScoped<INotificationBotSender, NotificationBotSender>();
 
-        // Per scope, so the channel closes with the message scope.
         services.AddScoped<IRealtimeNotificationProducer, RealtimeNotificationProducer>();
 
         // After the explicit registrations: the scans only fill gaps.
         services
             .AddDmMail()
-            .AddDmMessaging()
             .AddDmCore()
             .AddDmPersistence()
             .AddDefaultTypes(typeof(Startup).Assembly)

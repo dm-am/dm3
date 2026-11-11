@@ -1,9 +1,8 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Infrastructure.Messaging;
-using DM.Infrastructure.Messaging.GeneralBus;
+using DM.Infrastructure.Persistence.Pushes;
+using Npgsql;
 
 namespace DM.Workers.NotificationDispatcher.Dispatching;
 
@@ -21,20 +20,12 @@ internal interface IRealtimeNotificationProducer
 }
 
 /// <inheritdoc />
-internal class RealtimeNotificationProducer : IRealtimeNotificationProducer, IDisposable
+/// <remarks>
+/// Through database notifications to the listener of every API instance.
+/// </remarks>
+internal class RealtimeNotificationProducer(NpgsqlDataSource dataSource) : IRealtimeNotificationProducer
 {
-    private readonly IDmProducer<RealtimeNotification> producer;
-
-    public RealtimeNotificationProducer(IDmProducerBuilder producerBuilder) =>
-        producer = producerBuilder.Build<RealtimeNotification>(
-            new DmProducerParameters(RealtimeNotificationsTransport.ExchangeName));
-
     /// <inheritdoc />
     public Task SendAsync(RealtimeNotification notification, CancellationToken cancellationToken) =>
-        producer.Send(string.Empty, notification, cancellationToken);
-
-    /// <summary>
-    /// Closes the AMQP channel this producer opened.
-    /// </summary>
-    public void Dispose() => producer.Dispose();
+        PushSender.SendAsync(dataSource, notification, cancellationToken);
 }

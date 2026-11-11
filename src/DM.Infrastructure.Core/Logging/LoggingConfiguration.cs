@@ -122,10 +122,6 @@ public static class LoggingConfiguration
         // Literals EF inlines past parameters stay in the text: accepted, traces reach only our own Jaeger.
         .AddEntityFrameworkCoreInstrumentation()
         .AddSource(DmActivitySource.Name)
-        // The broker client's own sources, which keep one trace across the broker.
-        // Literals, so that this assembly does not reference the broker client.
-        .AddSource("RabbitMQ.Client.Publisher")
-        .AddSource("RabbitMQ.Client.Subscriber")
         .AddOtlpExporter(options => options.Endpoint = new Uri(tracingEndpoint));
 
     private static MeterProviderBuilder Metrics(MeterProviderBuilder builder, string applicationName)

@@ -4,7 +4,6 @@
 # dev server, run separately).
 API http://localhost:5000
 Swagger http://localhost:5000/swagger
-RabbitMQ http://localhost:15672
 Storage http://localhost:9000
 Mailpit http://localhost:8025
 Grafana http://localhost:3000

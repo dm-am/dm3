@@ -1,7 +1,5 @@
 using DM.Infrastructure.Core;
-using DM.Infrastructure.Mail;
-using DM.Infrastructure.Messaging;
-using DM.Infrastructure.Messaging.GeneralBus;
+using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Web.API.HostedServices;
 using DM.Web.API.Realtime;
@@ -16,7 +14,7 @@ internal static class HostedServiceExtensions
 {
     /// <summary>
     /// Registers everything the host runs alongside serving requests: the
-    /// realtime consumer, the schema assertions and the periodic jobs.
+    /// push listener, the schema assertions and the periodic jobs.
     /// </summary>
     /// <remarks>
     /// Nothing here is registered in migration mode: that container applies the
@@ -26,18 +24,15 @@ internal static class HostedServiceExtensions
     /// <param name="services">Service collection.</param>
     public static IServiceCollection AddDmHostedServices(this IServiceCollection services)
     {
-        // Declared by the publisher, so a publish never depends on a consumer having subscribed first.
-        services.AddDmPublishedExchanges(
-            InvokedEventsTransport.ExchangeName, MailTransport.ExchangeName);
-
-        services.AddHostedService<RealtimeNotificationConsumer>();
+        services.AddHostedService<PushListener>();
         services.AddHostedService<WarmupService>();
 
         // Asserts the relational indexes EF cannot express in the model. Keeping
         // them out of the migration is what lets the migration stay generated.
         services.AddHostedService<ExpressionIndexInitializer>();
 
-        services.AddHostedService<OutboxRelayService>();
+        // Read on the scrape, apart from every loop, so a stalled one cannot freeze them.
+        services.AddDmQueueMetrics();
 
         services.AddHostedService<TokenCleanupService>();
         services.AddHostedService<SessionCleanupService>();

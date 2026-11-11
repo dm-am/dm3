@@ -4,8 +4,8 @@ using DM.Domain.Core.Mail;
 namespace DM.Web.API.IntegrationTests;
 
 /// <remarks>
-/// The mail worker does not run here, so the broker drops every letter. A decorator: the real sender still
-/// validates and waits for the confirm. Static, as <see cref="InMemoryObjectStorage" /> is.
+/// The mail worker does not run here, so every letter stays a row of the mail queue. A decorator: the real
+/// sender still validates and stores the row. Static, as <see cref="InMemoryObjectStorage" /> is.
 /// </remarks>
 public sealed class RecordingMailSender : IMailSender, IDisposable
 {
@@ -23,8 +23,8 @@ public sealed class RecordingMailSender : IMailSender, IDisposable
     /// <inheritdoc />
     public async Task SendAsync(EmailLetter letter)
     {
-        // Recorded after the send and not before: a letter the broker refused did
-        // not leave, and counting it here would prove the opposite of what the
+        // Recorded after the send and not before: a letter the queue refused was
+        // never stored, and counting it here would prove the opposite of what the
         // assertion above it reads as.
         await _inner.SendAsync(letter);
         Letters.Enqueue(letter);

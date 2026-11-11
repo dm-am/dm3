@@ -9,7 +9,6 @@ using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Core.Parsing;
 using DM.Infrastructure.Mail;
-using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Persistence;
 using DM.Web.API.Features.General.Upload;
 using DM.Web.API.Features.Personal.Webhooks;
@@ -38,6 +37,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
+using Npgsql;
 using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.AspNetCore;
@@ -83,7 +83,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         services
             .AddOptions()
             .AddDmCoreConfiguration(configuration)
-            .AddDmMessageQueuing(configuration)
             .AddDmMailConfiguration(configuration)
             .AddDmAccountConfiguration(configuration)
             .Configure<MessagingConfiguration>(configuration.GetSection(nameof(MessagingConfiguration)).Bind)
@@ -114,7 +113,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         AddCompromisedPasswordChecker(services);
         AddBackgroundWork(services);
 
-        services.AddDmHealthChecks(configuration);
+        services.AddDmHealthChecks();
         AddRequestBodyLimits(services);
         services.AddDmRateLimiting(configuration);
         services.AddDmSignalR();
@@ -126,7 +125,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         // that differ from the scan default are declared by the owning assembly.
         services
             .AddDmMail()
-            .AddDmMessaging()
             .AddDmAccount()
             .AddDmModeration()
             .AddDmCore()
@@ -173,10 +171,10 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         .Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest)
         .Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
 
-    private void AddDatabase(IServiceCollection services) =>
-        services.AddDbContextPool<DmDbContext>(options =>
+    private static void AddDatabase(IServiceCollection services) =>
+        services.AddDmConnectionSource().AddDbContextPool<DmDbContext>((provider, options) =>
         {
-            options.UseNpgsql(configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
+            options.UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>(),
                 npgsqlOptions =>
                 {
                     npgsqlOptions.EnableRetryOnFailure(
@@ -198,8 +196,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
 
     private void AddBackgroundWork(IServiceCollection services)
     {
-        services.AddDmConsumerMiddleware<RealtimeConsumerMetricsMiddleware>();
-
         if (!_migrateOnStart)
         {
             services.AddDmHostedServices();

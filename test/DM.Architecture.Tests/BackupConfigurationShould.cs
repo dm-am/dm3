@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 using static DM.Architecture.Tests.DeploymentFiles;
 
@@ -64,6 +65,27 @@ public class BackupConfigurationShould
         File.Exists(path).Should().BeTrue($"{script} is scheduled by install-cron.sh");
         File.ReadAllText(path).Should().Contain("_env.sh",
             "cron gives the job no environment, and these scripts need credentials");
+    }
+
+    /// <summary>
+    /// The nightly dump leaves out the rows of the outbox table, where a waiting letter keeps a
+    /// live confirmation link in plaintext.
+    /// </summary>
+    /// <remarks>
+    /// pg_dump folds an unquoted pattern to lower case, so OutboxEvents without the double quotes
+    /// excludes nothing and the dump still succeeds. Whether pg_dump honours the pattern is
+    /// proven on a real dump by check-dump-excludes-outbox.sh in deployment-smoke.
+    /// </remarks>
+    [Fact]
+    public void ExcludeTheOutboxRowsFromTheDumpByTheirQuotedTableName()
+    {
+        var backup = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "backup-postgres.sh"));
+
+        backup.Should().Contain("--exclude-table-data='\"OutboxEvents\"'",
+            "a stolen dump or its offsite copy must hold no working confirmation link");
+        File.ReadAllText(Path.Combine(RepositoryLayout.Root, ".github", "workflows", "dotnet.yml"))
+            .Should().Contain("bash docker/scripts/check-dump-excludes-outbox.sh",
+                "only a dump read back shows that pg_dump matched the pattern");
     }
 
     // Named volumes are what "down -v" removes, and the developer reset runs it.

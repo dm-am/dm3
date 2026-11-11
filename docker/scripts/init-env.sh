@@ -102,11 +102,11 @@ fi
 set_if_empty DM_CryptoConfiguration__KeyBase64 "$(openssl rand -base64 32)"
 
 SECRETS=(POSTGRES_PASSWORD DM_APP_PASSWORD DM_EXPORTER_PASSWORD
-         RABBITMQ_DEFAULT_PASS GF_SECURITY_ADMIN_PASSWORD
+         GF_SECURITY_ADMIN_PASSWORD
          STORAGE_APP_PASSWORD STORAGE_BACKUP_PASSWORD)
 
 if [ "$MODE" = "server" ] && [ "$EXISTING" = 0 ]; then
-    # The only moment these can be chosen: the Postgres and RabbitMQ users are created with
+    # The only moment these can be chosen: the Postgres users are created with
     # them once per empty volume. Only on a file this run created, since rotating them on a
     # running stand locks the API out. The storage accounts are rewritten from these values
     # on every start of seaweedfs.

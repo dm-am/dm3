@@ -196,7 +196,7 @@ side_name() {
 }
 
 compose up -d --wait storage seaweedfs >/dev/null
-compose up -d postgres rabbitmq >/dev/null
+compose up -d postgres >/dev/null
 
 if [ "${#compare[@]}" -eq 0 ]; then
   compose build migration seeder
