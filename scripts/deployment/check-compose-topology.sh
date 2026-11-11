@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fails when the files a server is deployed from stop describing one stand: an overlay that
-# no longer parses, a build context pointing at a removed directory, a systemd unit and an
-# installer that name different compose files, a rollout twin that drifted from its primary,
+# no longer parses, a build context pointing at a removed directory, a systemd unit that stops
+# going through the release script, a rollout twin that drifted from its primary,
 # a connection budget past the server's ceiling. None of that can fail a test in the
 # solution, and all of it fails on the server instead.
 #
@@ -35,32 +35,30 @@ docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.prev
       test -d "$ctx" || { echo "ERROR: build context does not exist: $ctx" >&2; exit 1; }
     done
 
-echo "the unit systemd runs names the same files and profiles as the installer"
-# Profiles as well as files: watchtower lives behind the production profile, and
-# a unit that drops it stops updating the stand at the first reboot with nothing
-# in the logs to say so.
+echo "the unit boots through dm3-release, whose one compose line names both files and no profile but rollout"
+# The unit used to carry a compose line of its own, which had to agree with the installer's by
+# hand. Now there is one line, in the release script, and the unit only names its verbs. A
+# profile other than rollout there would start watchtower beside the signed releases.
 #
-# `|| true` because grep exits 1 on no match and this script runs under
-# pipefail: without it an extraction that found nothing kills the script on the
-# assignment, which is exactly the case the two messages below are written for.
-pattern='(\-f [a-z.-]+\.yml|--profile [a-z]+)'
-installer=$(grep -oE "$pattern" setup-server.sh | sort -u || true)
-unit=$(grep -oE "$pattern" dm3.service | sort -u || true)
-echo "  installer: $(echo "$installer" | tr '\n' ' ')"
-echo "  unit:      $(echo "$unit" | tr '\n' ' ')"
-
-# Non-empty first, and named positively after that. Two empty extractions
-# compare equal, so a switch to --file, to COMPOSE_FILE or to a path outside the
-# character class above would have left this check green on nothing at all -
-# while the failure it exists to catch came back.
-test -n "$installer" || fail "no compose files or profiles found in docker/setup-server.sh"
-test -n "$unit" || fail "no compose files or profiles found in docker/dm3.service"
-printf '%s\n' "$installer" | grep -qx -- '-f docker-compose.preview.yml' ||
-  fail "the installer no longer names the overlay the site lives in"
-printf '%s\n' "$installer" | grep -qx -- '--profile production' ||
-  fail "the installer no longer enables the profile watchtower lives behind"
-test "$installer" = "$unit" ||
-  fail "dm3.service and setup-server.sh disagree on the compose files or profiles"
+# `|| true` because grep exits 1 on no match and this script runs under pipefail: without it
+# a line that is no longer there kills the script on the assignment, which is exactly the case
+# the messages below are written for.
+grep -qx 'ExecStart=/usr/local/sbin/dm3-release boot' dm3.service ||
+  fail "dm3.service does not start the stand through dm3-release boot"
+grep -qx 'ExecStop=/usr/local/sbin/dm3-release stop' dm3.service ||
+  fail "dm3.service does not stop the stand through dm3-release stop"
+if grep -q 'docker compose' dm3.service; then
+  fail "dm3.service runs compose itself, a second definition of the stand"
+fi
+entry_code=$(grep -v '^[[:space:]]*#' scripts/release-entry.sh || true)
+compose_lines=$(grep -c 'docker compose' <<< "$entry_code" || true)
+test "$compose_lines" = 1 || fail "release-entry.sh calls docker compose on $compose_lines lines, not through one command line"
+grep 'docker compose' <<< "$entry_code" |
+  grep -qF -- '-f "$dir/docker/docker-compose.yml" -f "$dir/docker/docker-compose.preview.yml"' ||
+  fail "the compose line of release-entry.sh does not name the base file and the overlay the site lives in"
+profiles=$(grep -oE -- '--profile [a-z]+' <<< "$entry_code" | sort -u || true)
+test "$profiles" = "--profile rollout" ||
+  fail "release-entry.sh enables profiles other than rollout: $(tr '\n' ' ' <<< "$profiles")"
 
 # The resolved model, as the release reads it. node rather than jq: jq is not on every
 # developer machine, node is.

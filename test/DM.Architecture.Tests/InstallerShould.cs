@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
-using DM.Testing;
 using Xunit;
 using static DM.Architecture.Tests.DeploymentFiles;
 
@@ -31,89 +30,66 @@ public class InstallerShould
             "calling this, which is how the environment stayed Development once already");
     }
 
-    // Coherence of the guide, the usage comment and the default, not the choice of branch.
+    /// <summary>
+    /// The server is installed from a checkout of a verified tag, and the layout from the signed tag
+    /// itself, never from a ref that moves.
+    /// </summary>
+    /// <remarks>
+    /// The installer used to be piped from a ref and clone a working tree. Now the host part hands over
+    /// to the layout part, which refuses to start without the signer's key and the tag.
+    /// </remarks>
     [Fact]
-    public void InstallFromTheRefTheDocumentedCommandDownloads()
+    public void InstallTheLayoutFromTheSignedTagAlone()
     {
-        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        var installer = ShellCode(Path.Combine(DockerDirectory, "setup-server.sh"));
+        var layout = ShellCode(Path.Combine(DockerDirectory, "scripts", "install-release.sh"));
 
-        Regex.IsMatch(installer, @"DM_REF=""\$\{DM_REF:-").Should().BeTrue(
-            "the installer picks what it clones, and it has to name a default for a " +
-            "command that passes nothing");
+        installer.Should().NotContain("git clone",
+            "a clone is a tree that moves with its branch; the layout is exported from the signed commit");
+        installer.Should().NotContain("DM_REF",
+            "a ref passed on the command line is text anyone can choose; the tag is verified against the pinned key");
+        installer.Should().Contain("install-release.sh",
+            "the host part prepares the machine and hands the layout to the part that pins the key");
 
-        Regex.IsMatch(installer, @"git clone --branch ""\$DM_REF""").Should().BeTrue(
-            "the clone takes the ref the caller asked for, not a second name for it");
-
-        // README.md is the first page a reader meets.
-        var sources = Directory
-            .GetFiles(Path.Combine(RepositoryLayout.Root, "docs"), "*.md", SearchOption.AllDirectories)
-            .Append(Path.Combine(RepositoryLayout.Root, "README.md"))
-            .Append(Path.Combine(DockerDirectory, "setup-server.sh"));
-
-        var refs = sources
-            .SelectMany(path => Regex.Matches(
-                File.ReadAllText(path),
-                @"raw\.githubusercontent\.com/[\w.\-]+/[\w.\-]+/([^/]+)/docker/setup-server\.sh")
-                .Select(match => (File: Path.GetFileName(path), Ref: match.Groups[1].Value)))
-            .ToList();
-
-        refs.Should().NotBeEmpty(
-            "the automatic installation is documented as a URL with the ref in its path");
-
-        // The ref is written once and read twice.
-        foreach (var (file, reference) in refs)
-        {
-            reference.Should().Be("$DM_REF",
-                $"{file} spells the ref out instead of passing the one the operator chose, " +
-                "so the script downloaded and the tree cloned drift apart");
-        }
+        layout.Should().Contain("--signers").And.Contain("--tag",
+            "without the signer's key the server would accept any tag shaped like a release");
+        layout.Should().Contain("maintain \"$TAG\"",
+            "the first release is installed by the same verified path every later maintenance takes");
     }
 
     // The same invariant as the CI step, off the runner: a reboot must not bring up a bare API.
     [Fact]
-    public void DeployTheSameFilesAndProfilesFromTheUnitAndTheInstaller()
+    public void BootTheReleaseTheLayoutRunsFromItsOwnFiles()
     {
-        var installer = ComposeSelectors(
-            File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh")));
-        var unit = ComposeSelectors(
-            File.ReadAllText(Path.Combine(DockerDirectory, "dm3.service")));
+        var unit = File.ReadAllText(Path.Combine(DockerDirectory, "dm3.service"));
+        var entry = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "release-entry.sh"));
 
-        installer.Should().Contain(BaseCompose).And.Contain(PreviewCompose,
-            "the site lives in the overlay, and a command naming the base file alone starts " +
-            "the API without it");
-        installer.Should().Contain("production",
-            "watchtower sits behind that profile, and a deployment without it stops updating");
-        unit.Should().BeEquivalentTo(installer,
-            "a reboot has to bring up the set the installer deployed");
+        unit.Should().Contain("ExecStart=/usr/local/sbin/dm3-release boot",
+            "a reboot starts what rel/current names and puts the edge back on the primaries");
+        unit.Should().Contain("ExecStop=/usr/local/sbin/dm3-release stop",
+            "the stop goes through the same compose command line as the start");
+        unit.Should().NotContain("docker compose",
+            "a compose line of its own in the unit is a second definition of the stand that drifts");
+
+        ComposeSelectors(entry).Should().BeEquivalentTo(new[] { BaseCompose, PreviewCompose },
+            "the site lives in the overlay, and the release's command line names both files and no profile");
     }
 
     /// <summary>
-    /// The updater the guides call the update mechanism has to be started by the
-    /// commands that deploy.
+    /// The updater never starts on a server layout.
     /// </summary>
-    /// <remarks>watchtower sits behind a profile the deploying commands have to enable.</remarks>
+    /// <remarks>watchtower sits behind the production profile, and nothing that deploys a layout enables it.</remarks>
     [Fact]
-    public void StartTheUpdaterTheDeploymentUpdatesItselfWith()
+    public void LeaveTheUpdaterOutOfTheServerLayout()
     {
-        var compose = Read(BaseCompose);
-        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
-        var unit = File.ReadAllText(Path.Combine(DockerDirectory, "dm3.service"));
+        ServiceBlock(Read(BaseCompose), "watchtower").Should().Contain("production",
+            "a service with no profile starts on every plain up");
 
-        ServiceBlock(compose, "watchtower").Should().Contain("production",
-            "the profile the deployment enables is the one the service has to declare");
-        installer.Should().Contain("--profile production",
-            "a service behind a profile nobody enables never starts");
-        unit.Should().Contain("--profile production",
-            "a reboot must bring up the set the installer deployed");
-
-        foreach (var service in new[] { "dmapi", "dm-mail-worker", "dm-notification-worker" })
+        foreach (var file in new[] { "dm3.service", "setup-server.sh", "scripts/install-release.sh", "scripts/release-entry.sh" })
         {
-            ServiceBlock(compose, service).Should().Contain("watchtower.enable=true",
-                $"{service} runs a published image, and only labelled containers are updated");
+            File.ReadAllText(Path.Combine(DockerDirectory, file)).Should().NotContain("--profile production",
+                $"{file} would start an updater that takes whatever a moving tag names, beside the signed releases");
         }
-
-        ServiceBlock(Read(PreviewCompose), "dmfront").Should().Contain("watchtower.enable=true",
-            "the SPA image is published by the same run and has to move with it");
     }
 
     /// <remarks>
@@ -123,20 +99,24 @@ public class InstallerShould
     [Fact]
     public void CapTheLogOfEveryContainerOnTheServer()
     {
-        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        var installer = ShellCode(Path.Combine(DockerDirectory, "setup-server.sh"));
 
         var policy = installer.IndexOf("/etc/docker/daemon.json", StringComparison.Ordinal);
-        var start = installer.IndexOf("docker compose", StringComparison.Ordinal);
+        var layout = installer.IndexOf("install-release.sh", StringComparison.Ordinal);
 
         policy.Should().BeGreaterThan(-1,
             "the default driver keeps every line of every container until the disk is full");
         installer.Should().Contain("max-size", "a driver with no size limit never rotates");
         installer.Should().Contain("max-file", "one rotated file is one file that keeps growing");
 
-        start.Should().BeGreaterThan(-1, "the installer is still the thing that starts the stack");
-        policy.Should().BeLessThan(start,
+        layout.Should().BeGreaterThan(-1, "the layout part, which starts the stack, is still called from here");
+        policy.Should().BeLessThan(layout,
             "log options apply to containers created after they are set");
     }
+
+    /// <summary>A shell file without its comment lines: the scripts quote the commands they replaced.</summary>
+    private static string ShellCode(string path) => string.Join('\n', File.ReadAllLines(path)
+        .Where(line => !line.TrimStart().StartsWith('#')));
 
     private static List<string> ComposeSelectors(string text)
     {

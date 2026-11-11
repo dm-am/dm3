@@ -22,13 +22,14 @@ public class EnvironmentFileShould
     [Fact]
     public void CreateTheEnvironmentFileBeforeTheInstallerStartsTheStack()
     {
-        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        // The layout part of the installer; its maintain call is the first start of the stack.
+        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "install-release.sh"));
         var generator = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "init-env.sh"));
 
-        var creation = installer.IndexOf("init-env.sh", StringComparison.Ordinal);
-        var start = installer.IndexOf("docker compose", StringComparison.Ordinal);
+        var creation = installer.IndexOf("init-env.sh\" server", StringComparison.Ordinal);
+        var start = installer.IndexOf("maintain \"$TAG\"", StringComparison.Ordinal);
 
-        creation.Should().BeGreaterThan(-1, "nothing else creates docker/.env on a clean server");
+        creation.Should().BeGreaterThan(-1, "nothing else creates shared/env on a clean server");
         start.Should().BeGreaterThan(-1, "the installer is still the thing that starts the stack");
         creation.Should().BeLessThan(start, "compose stops on interpolation before it starts anything");
 

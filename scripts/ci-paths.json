@@ -63,7 +63,7 @@
     },
     "deployment-smoke": {
       "groups": ["client", "client-read-by-server", "server"],
-      "why": "builds the API and the SPA images and serves them through the edge"
+      "why": "builds the four application images, serves them through the edge, and installs the server layout from a signed tag of the commit"
     },
     "dependency-scan": {
       "groups": ["client", "client-read-by-server", "server"],

@@ -28,20 +28,59 @@ if bash docker/scripts/require-empty-install-dir.sh "$WORK/occupied" 2> /dev/nul
   fail "the guard accepts a directory that already holds a stand"
 fi
 
+# The layout spans three directories, and a stand in any one of them is a stand.
+for occupied in opt etc state; do
+  mkdir -p "$WORK/three/$occupied-case/opt" "$WORK/three/$occupied-case/etc" "$WORK/three/$occupied-case/state"
+  touch "$WORK/three/$occupied-case/$occupied/held"
+  if bash docker/scripts/require-empty-install-dir.sh "$WORK/three/$occupied-case/opt" \
+    "$WORK/three/$occupied-case/etc" "$WORK/three/$occupied-case/state" 2> "$WORK/guard.err"; then
+    fail "the guard accepts a layout whose $occupied directory is not empty"
+  fi
+  if grep -q -e watchtower -e 'дерев' "$WORK/guard.err"; then
+    fail "the guard still sends the operator to watchtower or to a tree: updates come as signed releases"
+  fi
+done
+if ! grep -q 'dm3-release status' "$WORK/guard.err" || ! grep -q 'dm3-release maintain' "$WORK/guard.err"; then
+  fail "the guard does not name dm3-release status and maintain, which is how a server is updated"
+fi
+bash docker/scripts/require-empty-install-dir.sh "$WORK/three/none/opt" "$WORK/empty" "$WORK/three/none/state" ||
+  fail "the guard refuses a layout that is absent or empty"
+
 # Order is the whole point: asked after apt, the answer arrives on a machine the
 # installer has already changed.
 #
 # `|| true` because grep exits 1 on no match and this script runs under pipefail:
 # without it a line that is no longer there kills the script on the assignment,
-# and the three messages below are what say which one went missing.
+# and the messages below are what say which one went missing.
 guard=$(grep -n 'require-empty-install-dir.sh' docker/setup-server.sh | head -1 | cut -d: -f1 || true)
-clone=$(grep -n 'git clone' docker/setup-server.sh | head -1 | cut -d: -f1 || true)
 apt=$(grep -n 'apt install' docker/setup-server.sh | head -1 | cut -d: -f1 || true)
+layout=$(grep -n 'install-release.sh' docker/setup-server.sh | grep -v ':\s*#' | head -1 | cut -d: -f1 || true)
 test -n "$guard" || fail "setup-server.sh never asks the guard"
-test -n "$clone" || fail "setup-server.sh no longer clones the tree the guard precedes"
 test -n "$apt" || fail "setup-server.sh no longer installs the packages the guard precedes"
-test "$guard" -lt "$clone" || fail "the guard runs after the clone it exists to precede"
+test -n "$layout" || fail "setup-server.sh no longer hands over to install-release.sh"
 test "$guard" -lt "$apt" || fail "the guard runs after the packages are installed"
+test "$apt" -lt "$layout" || fail "the layout is installed before the packages it needs"
+grep -q 'require-empty-install-dir.sh" /opt/dm3 /etc/dm3 /var/lib/dm3' docker/setup-server.sh ||
+  fail "setup-server.sh does not ask the guard about all three directories of the layout"
+if grep -v '^\s*#' docker/setup-server.sh | grep -q -e 'git clone' -e 'docker compose.* up' -e 'DM_REF'; then
+  fail "setup-server.sh still clones a tree or starts compose itself; the layout part and dm3-release do that"
+fi
+
+echo "the layout installer refuses to start without the signer's key and the tag"
+# Before it touches anything: the same machine-wide paths a wrong call would change.
+for call in "" "--tag v1.0.0" "--signers $WORK/signers" "--tag v1.0.0 --signers" \
+  "--tag v1.0.0 --signers $WORK/missing-signers" "--tag v1.0.0 --signers $WORK/signers --mail-host relay.example"; do
+  : > "$WORK/signers"
+  printf 'release namespaces="git" ssh-ed25519 AAAA\n' > "$WORK/signers"
+  # shellcheck disable=SC2086 # the call is a list of words on purpose
+  if env DM3_ROOT="$WORK/layout/opt" DM3_ETC="$WORK/layout/etc" DM3_STATE="$WORK/layout/state" \
+    bash docker/scripts/install-release.sh $call > /dev/null 2> "$WORK/install.err"; then
+    fail "install-release.sh ran with \"$call\""
+  fi
+  grep -q -e '--signers' -e '--tag' -e '--mail-port' "$WORK/install.err" ||
+    fail "install-release.sh refused \"$call\" for another reason than its arguments: $(cat "$WORK/install.err")"
+  test ! -e "$WORK/layout" || fail "install-release.sh created the layout before refusing \"$call\""
+done
 
 echo "the installer of the environment file carries a new variable over"
 # A variable added to .env.example reaches nobody by itself: docker/.env is
@@ -170,6 +209,23 @@ expect_private
 if env -u DM_LAYOUT_ROOT bash "$release_init" local > /dev/null 2>&1; then
   fail "init-env.sh local ran from a release directory"
 fi
+
+# The installer's first run: the relay it was given reaches a file the run creates, so the
+# credentials are generated in the same run and no second run meets the guard.
+fresh="$BASE/fresh/shared/env"
+DM_LAYOUT_ROOT="$BASE/fresh" MAIL_HOST=relay.example MAIL_PORT=2525 \
+  bash "$BASE/co/docker/scripts/init-env.sh" server > /dev/null ||
+  fail "init-env.sh server refused a first run given MAIL_HOST in the environment"
+if ! grep -q "^MAIL_HOST=relay.example$" "$fresh" || ! grep -q "^MAIL_PORT=2525$" "$fresh"; then
+  fail "init-env.sh server did not write the relay of the environment into $fresh"
+fi
+test -n "$(sed -n 's/^STORAGE_APP_PASSWORD=//p' "$fresh")" ||
+  fail "init-env.sh server given the relay generated no credentials"
+printf "MAIL_HOST=chosen.example\n" > "$BASE/fresh/kept"
+grep -v '^MAIL_HOST=' "$fresh" >> "$BASE/fresh/kept" && cat "$BASE/fresh/kept" > "$fresh"
+DM_LAYOUT_ROOT="$BASE/fresh" MAIL_HOST=other.example bash "$BASE/co/docker/scripts/init-env.sh" server > /dev/null
+grep -q "^MAIL_HOST=chosen.example$" "$fresh" ||
+  fail "init-env.sh server replaced a relay the file already named with the one of the environment"
 
 echo "the edge tools write only where _paths.sh says"
 # They cannot run here (docker run httpd, certbot), so the paths above are what proves

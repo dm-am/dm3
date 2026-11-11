@@ -1,19 +1,18 @@
 [Unit]
-Description=DM3 Application (Docker Compose)
+Description=DM3 (the release rel/current names)
 Requires=docker.service
 After=docker.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/dm3/docker
-# The same overlay and profile the installer deployed with: without the overlay a restart
-# replaces the site with a bare API (no nginx, no frontend), and without the profile
-# watchtower stops updating after the first reboot. CI compares both lines with
-# setup-server.sh.
-ExecStart=/usr/bin/docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d
-ExecStop=/usr/bin/docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml down
-TimeoutStartSec=300
+# The release script holds the one compose command line, so a reboot starts what rel/current
+# names from its own definitions and puts the edge back on the primaries, as recovery does.
+# Both wait for the lock of a run in progress.
+ExecStart=/usr/local/sbin/dm3-release boot
+ExecStop=/usr/local/sbin/dm3-release stop
+# A first start pulls nothing, but recovery waits for the API to be ready behind the edge.
+TimeoutStartSec=600
 
 [Install]
 WantedBy=multi-user.target
