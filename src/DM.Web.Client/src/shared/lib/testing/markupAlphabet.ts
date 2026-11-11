@@ -40,8 +40,10 @@ export interface MarkupAlphabet {
   };
 }
 
+// The parentheses hold the end marker before the semicolon: prettier moves a
+// trailing comment past it, and ClientTable would read the semicolon as JSON.
 // prettier-ignore
-export const MARKUP_ALPHABET: MarkupAlphabet = /* alphabet:begin */ {
+export const MARKUP_ALPHABET: MarkupAlphabet = (/* alphabet:begin */ {
 "pairs": [
 ["[b]","[/b]"],["[B]","[/B]"],["[b]","[/B]"],["[i]","[/i]"],["[I]","[/i]"],["[u]","[/u]"],["[strike]","[/strike]"],["[Strike]","[/STRIKE]"],
 ["[code]","[/code]"],["[CODE]","[/Code]"],["[noparse]","[/noparse]"],["[NOPARSE]","[/NoParse]"],["[noparse]","[/NOPARSE]"],
@@ -100,4 +102,4 @@ export const MARKUP_ALPHABET: MarkupAlphabet = /* alphabet:begin */ {
 "leaves": ["[img]https://example.com/a.png[/img]","[img width=\"300\"]https://example.com/a.png[/img]","[IMG Height=\"20\"]https://example.com/a.png[/IMG]","[img height=\"200\" width=\"300\"]https://example.com/a.png[/img]","[link]https://example.com/[/link]","[link text=\"Главная\"]https://example.com/[/link]","[link text=\"он сказал \"да\" и ушел\"]https://example.com/[/link]","[mention]Коля[/mention]","[mention] Коля [/mention]","[tab]","[TAB]"],
 "text": ["раз","два"," ","  ","\n","\r\n","--","---","___","[1]","[privateer]","a < b & c","[cut]","[s]текст[/s]","\"","=","\u00a0","\u200e"]
 }
-} /* alphabet:end */;
+} /* alphabet:end */);

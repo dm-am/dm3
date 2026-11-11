@@ -40,8 +40,7 @@ function optionsFor(path: string): Record<string, unknown> | undefined {
 /** Whether a call asked the caches to stand aside. */
 function bypassesCache(path: string): boolean {
   const headers = optionsFor(path)?.headers as
-    | Record<string, string>
-    | undefined;
+    Record<string, string> | undefined;
   return headers?.["Cache-Control"] === "no-cache";
 }
 
@@ -59,12 +58,10 @@ const CATALOGUES = [
  * edits them reloads them.
  */
 async function readEveryCatalogue(how: "load" | "reload"): Promise<void> {
-  const { useAchievementCatalog } = await import(
-    "../entities/achievement/model/useAchievementCatalog"
-  );
-  const { useContestSeries } = await import(
-    "../entities/achievement/model/useContestSeries"
-  );
+  const { useAchievementCatalog } =
+    await import("../entities/achievement/model/useAchievementCatalog");
+  const { useContestSeries } =
+    await import("../entities/achievement/model/useContestSeries");
   const { useGamesStore } = await import("../entities/game/model/store");
 
   await useAchievementCatalog()[how]();

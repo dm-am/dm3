@@ -10,12 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 
 export type Group =
-  | "client"
-  | "spec"
-  | "e2e"
-  | "scripts"
-  | "server"
-  | "srvtest";
+  "client" | "spec" | "e2e" | "scripts" | "server" | "srvtest";
 export const GROUPS: readonly Group[] = [
   "client",
   "spec",

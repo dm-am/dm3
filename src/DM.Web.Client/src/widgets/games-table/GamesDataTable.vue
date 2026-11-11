@@ -167,7 +167,8 @@ function pagingAnchor(): HTMLElement | null {
             v-html="highlightMatch(row.title, filterState.search)"
           ></span>
           <template v-else>{{ row.title }}</template> </router-link
-        >{{ " "
+        >{{
+          " "
         }}<!-- First-unread endpoints bind the id as a Guid - pass row.id -->
         <CounterPair
           :first-value="getUnreadPosts(row)"

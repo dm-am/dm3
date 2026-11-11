@@ -127,14 +127,12 @@ class Reader {
     while (isLetter(src.charCodeAt(i))) i++;
     if (i === nameStart) return null;
     const follow = src[i];
-    if (
-      !(
-        follow === undefined ||
-        follow === "]" ||
-        follow === "=" ||
-        isSpace(follow)
-      )
-    ) {
+    if (!(
+      follow === undefined ||
+      follow === "]" ||
+      follow === "=" ||
+      isSpace(follow)
+    )) {
       return null;
     }
     const lower = asciiLower(src.slice(nameStart, i));

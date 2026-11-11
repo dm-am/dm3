@@ -26,15 +26,13 @@ export const profileRoutes: RouteRecordRaw[] = [
       params: { username: to.params.username },
     }),
   },
-  ...SUBPAGES.map(
-    (subpage): RouteRecordRaw => ({
-      name: subpage,
-      path: `/users/:username/${subpage}`,
-      meta: { dynamicTitle: true },
-      component: () => import("@/pages/profile/ProfileSubpage.vue"),
-      props: { subpage },
-    }),
-  ),
+  ...SUBPAGES.map((subpage): RouteRecordRaw => ({
+    name: subpage,
+    path: `/users/:username/${subpage}`,
+    meta: { dynamicTitle: true },
+    component: () => import("@/pages/profile/ProfileSubpage.vue"),
+    props: { subpage },
+  })),
   // Every condition but the session is the server's, asked by the page.
   {
     name: "write-endorsement",

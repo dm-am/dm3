@@ -11,8 +11,7 @@ export type DialogActionResult = { error?: GeneralError | null } | void;
 
 /** The work the main button of a window does. */
 export type DialogAction = () =>
-  | DialogActionResult
-  | Promise<DialogActionResult>;
+  DialogActionResult | Promise<DialogActionResult>;
 
 export interface DialogActionOptions {
   /** The action succeeded, and the window closes with its result. */

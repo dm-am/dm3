@@ -6,10 +6,7 @@ export type PollTypeFilter = "anonymous" | "public" | "";
 
 /** The filters the menu of the bar offers. */
 export type PollsFilterKey =
-  | "status"
-  | "pollType"
-  | "startsRange"
-  | "endsRange";
+  "status" | "pollType" | "startsRange" | "endsRange";
 
 export interface PollsFilterState {
   /** "" is all. */

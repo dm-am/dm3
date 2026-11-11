@@ -24,8 +24,10 @@
 
 export type HintMarkupPair = readonly [input: string, html: string];
 
+// The parentheses hold the end marker before the semicolon: prettier moves a
+// trailing comment past it, and ClientTable would read the semicolon as JSON.
 // prettier-ignore
-export const HINT_MARKUP_PAIRS: readonly HintMarkupPair[] = /* hint:begin */ [
+export const HINT_MARKUP_PAIRS: readonly HintMarkupPair[] = (/* hint:begin */ [
 ["Erotic Role-Play: [tip img=\"/images/erp-tooltip.gif\"]эротические сцены[/tip] как основа игрового процесса", "Erotic Role-Play: <span class=\"bb-tip\" tabindex=\"0\" data-tip-img=\"/images/erp-tooltip.gif\">эротические сцены</span> как основа игрового процесса"],
 ["Игра затрагивает [tip text=\"Политика, религия, национальные конфликты\"]спорные[/tip] темы", "Игра затрагивает <span class=\"bb-tip\" tabindex=\"0\" data-tip-text=\"Политика, религия, национальные конфликты\">спорные</span> темы"],
 ["[tip img=\"https://example.com/a.gif\" text=\"Подпись\"]слово[/tip]", "<span class=\"bb-tip\" tabindex=\"0\" data-tip-text=\"Подпись\" data-tip-img=\"https://example.com/a.gif\">слово</span>"],
@@ -42,4 +44,4 @@ export const HINT_MARKUP_PAIRS: readonly HintMarkupPair[] = /* hint:begin */ [
 ["a < b & c > d -- e", "a &lt; b &amp; c &gt; d -- e"],
 ["[noparse][tip text=\"x\"]a < b[/tip]\n[/noparse]", "[tip text=\"x\"]a &lt; b[/tip]\n"],
 ["[b]жирный[/b] [tipimg:/a.gif]текст[/tipimg]", "[b]жирный[/b] [tipimg:/a.gif]текст[/tipimg]"]
-] /* hint:end */;
+] /* hint:end */);

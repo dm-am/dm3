@@ -8,19 +8,10 @@ export interface ActiveCharacterInfo {
 
 /** Retired is refined by isDead, isPlayerLeft and isPlayerExiled. */
 export type ApiCharacterStatus =
-  | "UnderReview"
-  | "Declined"
-  | "Active"
-  | "Retired";
+  "UnderReview" | "Declined" | "Active" | "Retired";
 
 export type CharacterStatusTransition =
-  | "Accept"
-  | "Decline"
-  | "Kill"
-  | "Exile"
-  | "Leave"
-  | "Resurrect"
-  | "Readmit";
+  "Accept" | "Decline" | "Kill" | "Exile" | "Leave" | "Resurrect" | "Readmit";
 
 /** The character of the player the playerUsername filter names. */
 export interface PlayerCharacterInfo {

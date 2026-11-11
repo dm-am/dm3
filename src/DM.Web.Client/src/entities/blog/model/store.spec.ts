@@ -43,8 +43,7 @@ const lastRequest = () => {
     params: params as Record<string, unknown> | undefined,
     audience: audience as string | undefined,
     options: options as
-      | { ownsRefusal?: boolean; ownsRateLimit?: boolean }
-      | undefined,
+      { ownsRefusal?: boolean; ownsRateLimit?: boolean } | undefined,
   };
 };
 
