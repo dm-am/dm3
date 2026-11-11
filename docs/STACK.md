@@ -206,7 +206,6 @@
 - Собственные образы `ghcr.io/dm-am/dm-api`, `ghcr.io/dm-am/dm-worker-mail`,
   `ghcr.io/dm-am/dm-worker-notification`, `ghcr.io/dm-am/dm-front` и локальный
   `dm-seeder` для тестовых данных.
-- `nickfedor/watchtower` 1.21.0, обновление контейнеров из реестра.
 - `git`, `jq`, `openssh-client`, `iptables-persistent` и `openssl` из пакетов
   сервера: скрипт релиза ими держит зеркало репозитория, читает разрешенную
   конфигурацию compose и проверяет подпись тега через ssh-keygen, установщик

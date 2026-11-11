@@ -461,8 +461,6 @@ services:
   dm-mail-worker:
     container_name: 'dm-mail-worker'
     image: ${DM_IMAGE_WORKER_MAIL:-ghcr.io/dm-am/dm-worker-mail:${IMAGE_TAG:-latest}}
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
@@ -496,8 +494,6 @@ services:
   dm-notification-worker:
     container_name: 'dm-notification-worker'
     image: ${DM_IMAGE_WORKER_NOTIFICATION:-ghcr.io/dm-am/dm-worker-notification:${IMAGE_TAG:-latest}}
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
@@ -531,8 +527,6 @@ services:
   dmapi: &api-service
     container_name: 'dm-api'
     image: ${DM_IMAGE_API:-ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}}
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
@@ -572,12 +566,10 @@ services:
   # with four differences, which check-compose-topology.sh holds to. No published port, which
   # would collide with the primary's; a profile, so no plain "up" starts it; its own container
   # name; and no periodic job, since one started on both instances runs twice. The restart
-  # policy stays, because while it serves alone it is the site. No updater label: the twin
-  # runs only inside a rollout, which brings its own image.
+  # policy stays, because while it serves alone it is the site.
   dmapi-next:
     <<: *api-service
     container_name: 'dm-api-next'
-    labels: []
     ports: []
     environment:
       <<: *workload-env
@@ -609,22 +601,3 @@ services:
     restart: "no"
     profiles:
       - tools
-
-  # --- Infrastructure: Auto-update ---
-
-  # Started by the profile setup-server.sh and dm3.service pass, and by the pop command.
-  # Restarts only containers with the watchtower label; the one-shot migration has none,
-  # because a schema change is a restart of the unit.
-  watchtower:
-    container_name: 'dm-watchtower'
-    image: nickfedor/watchtower:1.21.0
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      WATCHTOWER_CLEANUP: 'true'
-      WATCHTOWER_POLL_INTERVAL: 300  # seconds
-      WATCHTOWER_LABEL_ENABLE: 'true'  # labelled containers only
-    restart: unless-stopped
-    profiles:
-      - production
-      - pop

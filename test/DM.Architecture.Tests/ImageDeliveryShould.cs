@@ -126,8 +126,7 @@ public class ImageDeliveryShould
                 $"{reference} resolves to whatever the registry holds on the day it is pulled");
             name[(separator + 1)..].Should().NotBeEquivalentTo("latest",
                 $"{reference} follows the registry rather than this repository, so the same " +
-                "commit gives a different runtime a month later - and watchtower, the one that " +
-                "would decide it, mounts /var/run/docker.sock");
+                "commit gives a different runtime a month later");
         }
     }
 

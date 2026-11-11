@@ -59,7 +59,7 @@ cd docker
 cp .env.pop.example .env.pop
 # заполнить POP_UPSTREAM и POP_UPSTREAM_HOST, IMAGE_TAG как на основном сервере
 bash scripts/init-ssl.sh <адрес точки присутствия>
-docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.pop.yml --profile pop up -d nginx dmfront watchtower
+docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.preview.yml -f docker-compose.pop.yml up -d nginx dmfront
 ```
 
 Почему сервисы названы поименно, сказано в
@@ -78,7 +78,9 @@ docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.previ
 
 Фронтенд на точке присутствия обязан быть той же сборки, что на основном адресе:
 старый бандл говорит с новым API по контракту, которого больше нет. Поэтому
-`IMAGE_TAG` у них один, а образ обновляет watchtower. Подмена фронтенда
+`IMAGE_TAG` у них один. Релизы сюда не приходят: после выпуска на основном
+сервере оператор ставит в `.env.pop` тег той же сборки и повторяет команду
+запуска, до того точка присутствия отстает на один релиз. Подмена фронтенда
 завершается пересозданием края по правилу из [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Адрес посетителя через два края

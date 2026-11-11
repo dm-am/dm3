@@ -63,6 +63,20 @@ Compose не поднимает стек без `DM_CryptoConfiguration__KeyBase
 (`openssl rand -base64 32`). Его генерирует `init-env.sh`, его же вызывает
 `scripts/dm.ps1`, это держит [EnvironmentFileShould](../../test/DM.Architecture.Tests/EnvironmentFileShould.cs).
 
+### Выпуск на сервере
+
+Эти переменные читают скрипт выпуска и инструменты оператора, приложение их не видит.
+
+| Переменная | Где задается | Что задает |
+|------------|--------------|------------|
+| `DM_IMAGE_API`, `DM_IMAGE_FRONT`, `DM_IMAGE_WORKER_MAIL`, `DM_IMAGE_WORKER_NOTIFICATION` | `release.env` релиза | Образ приложения дайджестом. Без значения compose берет образ по `IMAGE_TAG`, так работают клон и точка присутствия ([docker-compose.yml](../../docker/docker-compose.yml)) |
+| `DM_SCHEMA_REGIME` | `shared/env` | `reset` или `migrate`, без значения `reset`. В `reset` релиз со сменой схемы ставит только `maintain` с ресетом базы, `migrate` оператор ставит один раз, по триггеру из [DATA_STORAGE.md](../conventions/DATA_STORAGE.md#миграции) |
+| `DM_RELEASE_HEADROOM_MIB` | `shared/env` | Запас памяти в МиБ сверх десятой части, который выкатка оставляет свободным, по умолчанию 512 |
+| `DM_LAYOUT_ROOT` | окружение команды | Корень раскладки сервера для инструмента, запущенного не из каталога релиза ([_paths.sh](../../docker/scripts/_paths.sh)) |
+| `DM_EDGE_DIR` | выводит `_paths.sh` | Каталог `.htpasswd`, `tls` и `acme` края: `docker/nginx` в клоне, `shared/edge` на сервере. Руками не задается |
+
+Оба значения `shared/env` ставит `init-env.sh server`, только если они пусты.
+
 ### Область куки сессии
 
 `DM_SessionCookieConfiguration__Domain`, пусто по умолчанию: кука остается на

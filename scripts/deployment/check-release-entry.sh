@@ -261,7 +261,7 @@ offline() {
   test "$(candidates "$listing" v1.1.0)" = "$expected" ||
     fail "a tick would try $(candidates "$listing" v1.1.0 | tr '\n\t' '; '), not $(tr '\n\t' '; ' <<< "$expected")"
   test "$(max_tried_version)" = v1.3.0 || fail "the highest tried version is $(max_tried_version), not v1.3.0"
-  listing="$(for n in $(seq 0 24); do annotated "$((100 + n))" "v3.0.$n"; done)"
+  listing="$(for k in $(seq 0 24); do annotated "$((100 + k))" "v3.0.$k"; done)"
   test "$(candidates "$listing" v1.1.0 | grep -c '^try')" = 20 || fail "a tick would try more than twenty tags"
   candidates "$listing" v1.1.0 | head -n 1 | grep -q "	v3.0.24	" || fail "a tick does not start from the highest tag"
   rm -f "$DM3_STATE/tried" "$DM3_STATE/rejected"

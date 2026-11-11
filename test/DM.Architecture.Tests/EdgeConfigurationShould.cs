@@ -113,73 +113,6 @@ public class EdgeConfigurationShould
     }
 
     /// <summary>
-    /// The edge is recreated whenever a container it resolves by name is replaced.
-    /// </summary>
-    /// <remarks>
-    /// nginx resolves every upstream once, and a variable in proxy_pass drops the URI two routes
-    /// need. Compose never restarts an unhealthy container, so the updater's labels are the
-    /// mechanism, asserted both ways.
-    /// </remarks>
-    [Fact]
-    public void RecreateTheEdgeWhenAContainerItResolvesIsReplaced()
-    {
-        var stack = Read(BaseCompose) + "\n" + Read(PreviewCompose);
-        var edge = ServiceBlock(Read(PreviewCompose), "nginx");
-
-        edge.Should().Contain("watchtower.enable=true",
-            "with WATCHTOWER_LABEL_ENABLE a container without the label does not exist as " +
-            "far as the updater is concerned, so no linked restart can apply to it");
-
-        var declared = EdgeDependencies(edge);
-        declared.Should().NotBeEmpty(
-            "the edge holds the addresses of the containers behind it, so something has to " +
-            "put it back on its feet after one of them is replaced");
-
-        // Forwards: everything the edge resolves by name and the updater replaces. The upstreams
-        // live in their own files, every one of which the edge may load.
-        var hosts = ResolvedHosts(Read(NginxConfiguration) + "\n" + string.Join('\n', UpstreamFiles().Values)).ToList();
-        hosts.Should().Contain(new[] { "dmapi", "dmfront" },
-            "the walk must reach the upstreams, or it passes on a configuration it never read");
-
-        foreach (var host in hosts)
-        {
-            if (!Regex.IsMatch(stack, $@"^  {Regex.Escape(host)}:", RegexOptions.Multiline)) continue;
-            if (!ServiceBlock(stack, host).Contains("watchtower.enable=true", StringComparison.Ordinal)) continue;
-
-            var containerName = Regex.Match(ServiceBlock(stack, host), @"container_name:\s*'([\w-]+)'");
-            containerName.Success.Should().BeTrue($"{host} is a service of the stack and has a container name");
-            declared.Should().Contain(containerName.Groups[1].Value,
-                $"the updater replaces {host} on its own schedule, and the edge resolved it once");
-        }
-
-        // Backwards: a name in the list that the updater never touches.
-        foreach (var dependency in declared)
-        {
-            ServiceWithContainerName(stack, dependency).Should().Contain("watchtower.enable=true",
-                $"{dependency} is named as a reason to recreate the edge, and the updater " +
-                "does not watch it, so it never is one");
-        }
-
-        // The point of presence carries no application, and a list inherited from the
-        // main stand would name a container that does not exist there.
-        var pointOfPresence = ServiceBlock(Read(PopCompose), "nginx");
-        // The service line may carry the anchor its twin is merged from.
-        var api = Regex.Match(Read(BaseCompose), @"^  dmapi:.*\n(?:.*\n)*?\s*container_name:\s*'([\w-]+)'",
-            RegexOptions.Multiline);
-
-        api.Success.Should().BeTrue("the base stack names the API container");
-
-        // Stated as a replacement: the inherited list names the API.
-        pointOfPresence.Should().Contain("labels: !override",
-            "silence here is not an empty list, it is the list of the main stand");
-        EdgeDependencies(pointOfPresence).Should().NotBeEmpty(
-            "the edge of the point of presence holds addresses the same way the main one does")
-            .And.NotContain(api.Groups[1].Value,
-            "the API does not run at the point of presence, and a dependency on a container " +
-            "that is never there is a line that reads like ordering and is not");
-    }
-
-    /// <summary>
     /// The edge accepts a body as large as the endpoint behind it does.
     /// </summary>
     /// <remarks>nginx defaults to one megabyte, and its HTML 413 carries no CORS header the form could read.</remarks>
@@ -315,27 +248,4 @@ public class EdgeConfigurationShould
     private static Dictionary<string, string> UpstreamFiles() => Directory
         .EnumerateFiles(Path.Combine(DockerDirectory, Upstreams))
         .ToDictionary(path => Path.GetFileName(path), File.ReadAllText, StringComparer.Ordinal);
-
-    /// <summary>Container names the edge is told to wait for, as the label lists them.</summary>
-    private static string[] EdgeDependencies(string serviceBlock) => Regex
-        .Match(serviceBlock, @"watchtower\.depends-on=([^""\s]+)")
-        .Groups[1].Value
-        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    /// <summary>
-    /// Hosts an nginx configuration resolves by name and then holds; names with a variable re-resolve.
-    /// </summary>
-    private static IEnumerable<string> ResolvedHosts(string configuration) => configuration
-        .Split('\n')
-        .Select(line => line.Trim())
-        .Where(line => !line.StartsWith('#'))
-        .SelectMany(line => new[]
-        {
-            Regex.Match(line, @"^server\s+([a-z0-9][a-z0-9._-]*):\d+;"),
-            Regex.Match(line, @"^proxy_pass\s+https?://([a-z0-9][a-z0-9._-]*)"),
-        })
-        .Where(match => match.Success)
-        .Select(match => match.Groups[1].Value)
-        .Where(host => !host.Contains('$') && !host.Contains('{'))
-        .Distinct();
 }

@@ -22,13 +22,7 @@ services:
     image: 'nginx:1.30.6-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311'
     # The edge resolves the name of every container behind it at parse time, so a container
     # replaced outside a rollout returns on a new address and every request is a 502 until
-    # the edge is recreated. The first label makes the updater see the container at all
-    # (WATCHTOWER_LABEL_ENABLE); the second names container_name values, which the updater
-    # sorts and restarts by and skips in silence when it does not know them. Anything the
-    # updater does not watch is recreated by hand (DEPLOYMENT.md).
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
-      - "com.centurylinklabs.watchtower.depends-on=dm-api,dm-front"
+    # the edge is reloaded or recreated (DEPLOYMENT.md, "Край держит адреса с момента старта").
     ports:
       - '80:80'
       - '443:443'
@@ -105,8 +99,6 @@ services:
     # Same shape as dmapi: the image CI published, under the tag IMAGE_TAG names, or the
     # digest a release names.
     image: ${DM_IMAGE_FRONT:-ghcr.io/dm-am/dm-front:${IMAGE_TAG:-latest}}
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
     build:
       context: ../src/DM.Web.Client
       dockerfile: Dockerfile
@@ -130,10 +122,9 @@ services:
     restart: unless-stopped
 
   # The frontend's twin, the same as dmfront but for its name and a profile, so no plain
-  # "up" starts it. No updater label: it runs only inside a rollout, which brings its own image.
+  # "up" starts it.
   dmfront-next:
     <<: *front-service
     container_name: 'dm-front-next'
-    labels: []
     profiles:
       - rollout
