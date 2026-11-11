@@ -16,7 +16,7 @@
 
 ## Гейты и проверки
 
-Корень `scripts/`, папки `deployment/`, `hooks/` и `lib/`. Все check-скрипты роняют проверку кодом возврата и называют причину.
+Корень `scripts/`, папки `deployment/`, `hooks/`, `lib/` и `release/`. Все check-скрипты роняют проверку кодом возврата и называют причину.
 
 | Файл | Что делает | Кто зовет | Подробнее |
 |------|-----------|-----------|-----------|
@@ -34,6 +34,8 @@
 | [deployment/check-monitoring.sh](deployment/check-monitoring.sh) | Проверяет, что мониторинг сделает то, что в нем написано: конфигурация Prometheus читается, правило срабатывает на состоянии, под которое написано, алерт доходит до приемника, приемник стартует | CI (джоба compose-topology), `gates.sh`, `pre-push` с `DM_GATES_FULL=1` | [MONITORING.md](../docs/guides/MONITORING.md#alerting) |
 | [deployment/check-nginx-configuration.sh](deployment/check-nginx-configuration.sh) | Проверяет, что конфигурации nginx развертывания разбираются тем образом, который развертывание запускает | CI (джоба compose-topology), `gates.sh`, `pre-push` с `DM_GATES_FULL=1` | [DEPLOYMENT.md](../docs/guides/DEPLOYMENT.md#https) |
 | [deployment/check-server-installer.sh](deployment/check-server-installer.sh) | Проверяет два обещания установщика сервера: он отказывается ставить поверх непустого каталога и переносит новую переменную шаблона в уже существующий файл окружения. Без docker и сети | CI (джоба compose-topology), `gates.sh`, `pre-push` с `DM_GATES_FULL=1` | [DEPLOYMENT.md](../docs/guides/DEPLOYMENT.md#автоматическая-установка) |
+| [release/release.sh](release/release.sh) | Команда выпуска: сверяет прогон коммита на dev, аттестации и метки четырех образов, пишет, подписывает и пушит один тег релиза. Сервер не ждет | человек | [DEPLOYMENT.md](../docs/guides/DEPLOYMENT.md#выпуск-релиза), шапка файла |
+| [release/check-release.sh](release/check-release.sh) | Гонит команду выпуска против заглушек gh и docker, временного origin и сгенерированного ключа: каждый отказ и один тег, который проверяется. Без docker и сети | CI (джоба compose-topology), `gates.sh`, `pre-push` с `DM_GATES_FULL=1` | шапка файла |
 
 ## Управление стендом
 

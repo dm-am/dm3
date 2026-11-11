@@ -593,6 +593,9 @@ jobs:
     - name: The monitoring must parse, fire and reach a receiver
       run: bash scripts/deployment/check-monitoring.sh
 
+    - name: The release command must refuse what it is written to refuse
+      run: bash scripts/release/check-release.sh
+
     - name: Every shell script must pass shellcheck
       run: bash scripts/check-shell-scripts.sh
 
