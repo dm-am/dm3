@@ -11,12 +11,7 @@ export interface Role {
 }
 
 export type RoleName =
-  | "guest"
-  | "user"
-  | "mentor"
-  | "moderator"
-  | "senior"
-  | "admin";
+  "guest" | "user" | "mentor" | "moderator" | "senior" | "admin";
 
 const PASSWORD = "Test123!";
 

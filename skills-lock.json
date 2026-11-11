@@ -49,6 +49,12 @@
       "skillPath": "skills/review/SKILL.md",
       "computedHash": "1b334efe33d27d95700a990d4ee37b2979c717c858a2612807fbda3b2d61f552"
     },
+    "show-me": {
+      "source": "humanlayer/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/show-me/skills/show-me/SKILL.md",
+      "ref": "4d69d20f6e9b57b4fcf0d501ccfb1be961f0f329"
+    },
     "task-to-pr": {
       "source": "owainlewis/blueprint",
       "sourceType": "github",
