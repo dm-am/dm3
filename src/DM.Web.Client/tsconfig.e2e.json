@@ -8,6 +8,10 @@
   "include": ["e2e/**/*", "src/shared/lib/utils/liveTail.ts"],
   "compilerOptions": {
     "composite": true,
+    // The tests run in Node, so ES2022 is theirs, as in tsconfig.vitest.json.
+    // @types/node 22 declared Array.prototype.at itself and hid the gap; 24
+    // leaves it to the library.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"],
     "paths": {
       "@/*": ["./src/*"]

@@ -167,6 +167,9 @@ export async function render({
     pinia,
     stubs,
     beforeMount: departure,
+    // In the document: jsdom computes no style for a detached element, so the
+    // section v-show hides would read as shown.
+    attachTo: document.body.appendChild(document.createElement("div")),
   });
 
   return {
@@ -181,6 +184,7 @@ export async function render({
 }
 
 export function resetPage() {
+  document.body.innerHTML = "";
   for (const shown of [...toast.toasts.value]) toast.dismiss(shown.id);
   vi.restoreAllMocks();
 }

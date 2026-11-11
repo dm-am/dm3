@@ -2,11 +2,7 @@ import type { SortDirection } from "@/shared/lib/filters/types";
 import type { ClosedReason } from "@/shared/api/models/common";
 
 export type RecruitmentFilter =
-  | "any"
-  | "open"
-  | "initial"
-  | "subsequent"
-  | "closed";
+  "any" | "open" | "initial" | "subsequent" | "closed";
 
 export type ClosedReasonFilter = "any" | ClosedReason;
 

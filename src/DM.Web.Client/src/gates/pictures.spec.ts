@@ -125,7 +125,7 @@ function compiledSheets(): { path: string; css: string }[] {
  */
 function subjectOf(selector: string): string {
   let plain = selector.replace(/:(?:deep|global|slotted)\(([^()]*)\)/g, "$1");
-  for (let before = ""; before !== plain; ) {
+  for (let before = ""; before !== plain;) {
     before = plain;
     plain = plain.replace(/\([^()]*\)/g, "");
   }

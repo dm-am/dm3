@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -89,7 +88,7 @@ public class ImageDeliveryShould
             .Where(line => line.StartsWith("FROM ", StringComparison.Ordinal))
             .Select(line => line[5..].Split(' ')[0]);
 
-        var shellImages = ImagesRunByShellScripts();
+        var shellImages = ImagesRunByShellScripts(DockerDirectory).Select(found => found.Image).ToList();
 
         shellImages.Should().HaveCountGreaterThan(1,
             "the parser must find the images the scripts run, in both spellings: the bare " +
@@ -127,64 +126,5 @@ public class ImageDeliveryShould
                 "commit gives a different runtime a month later - and watchtower, the one that " +
                 "would decide it, mounts /var/run/docker.sock");
         }
-    }
-
-    private static readonly HashSet<string> OptionsTakingAValue = new(StringComparer.Ordinal)
-    {
-        "--add-host", "--entrypoint", "--env", "--env-file", "--label", "--name",
-        "--network", "--platform", "--publish", "--pull", "--user", "--volume",
-        "--workdir", "-e", "-l", "-p", "-u", "-v", "-w",
-    };
-
-    // Shell is the third place an image reference lives, and dependabot does not read it.
-    private static List<string> ImagesRunByShellScripts()
-    {
-        var found = new List<string>();
-
-        foreach (var script in Directory
-            .EnumerateFiles(DockerDirectory, "*.sh", SearchOption.AllDirectories)
-            .OrderBy(path => path, StringComparer.Ordinal))
-        {
-            // Continuations are folded first; the second alternative is the installer's "${DOCKER[@]}" array.
-            var folded = Regex.Replace(File.ReadAllText(script), @"\\\r?\n\s*", " ");
-
-            foreach (Match invocation in Regex.Matches(
-                folded, @"(?:docker|DOCKER\[@\]\}""?)\s+run\s+(?<arguments>[^\r\n]*)"))
-            {
-                var image = ImageOperandOf(invocation.Groups["arguments"].Value);
-                if (image != null)
-                {
-                    found.Add(image);
-                }
-            }
-        }
-
-        return found;
-    }
-
-    private static string? ImageOperandOf(string arguments)
-    {
-        var tokens = arguments
-            .Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(token => token.Trim('\'', '"'))
-            .Where(token => token.Length > 0)
-            .ToList();
-
-        for (var index = 0; index < tokens.Count; index++)
-        {
-            if (tokens[index][0] != '-')
-            {
-                return tokens[index];
-            }
-
-            // Without the skip an "--entrypoint sh" hands back sh as the image. The
-            // --option=value spelling is one token and needs none.
-            if (OptionsTakingAValue.Contains(tokens[index]))
-            {
-                index++;
-            }
-        }
-
-        return null;
     }
 }

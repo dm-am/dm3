@@ -28,10 +28,10 @@ const { getBanHistory, liftBan } = vi.hoisted(() => ({
 }));
 
 // The network only: the router, the lift window and the list are the real ones.
+// The original as a plain object: its type would name a file inside another
+// slice, which the layer rule refuses even as a type.
 vi.mock("@/entities/moderation/api/banApi", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/entities/moderation/api/banApi")
-  >()),
+  ...(await importOriginal<object>()),
   default: { getBanHistory, liftBan },
 }));
 

@@ -16,11 +16,7 @@ export type RoomPostReviews = "with" | "without";
 
 /** The filters the menu of the bar offers. */
 export type RoomPostFilterKey =
-  | "author"
-  | "character"
-  | "rating"
-  | "reviews"
-  | "date";
+  "author" | "character" | "rating" | "reviews" | "date";
 
 // Never a character id: ids are GUIDs, so the word cannot collide with one.
 export const WITHOUT_CHARACTER = "none";

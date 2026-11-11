@@ -103,7 +103,7 @@ services:
 
   postgres:
     container_name: 'dm-pg'
-    image: 'postgres:16'
+    image: 'postgres:18'
     ports:
       - '127.0.0.1:5432:5432'
     environment:
@@ -112,7 +112,10 @@ services:
       DM_APP_PASSWORD: ${DM_APP_PASSWORD}
       DM_EXPORTER_PASSWORD: ${DM_EXPORTER_PASSWORD}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # The image of 18 keeps the cluster in a versioned directory under /var/lib/postgresql
+      # and declares that directory as its volume: a mount on the old .../data path would
+      # leave the cluster in an anonymous volume.
+      - pgdata:/var/lib/postgresql
       - ./postgres-init.sh:/docker-entrypoint-initdb.d/postgres-init.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d dm3"]
@@ -159,7 +162,7 @@ services:
   # Mail trap for the stand on the ports MailHog had; MailHog is archived and Mailpit replaces it.
   mailpit:
     container_name: 'dm-mailpit'
-    image: 'axllent/mailpit:v1.31.0'
+    image: 'axllent/mailpit:v1.33.1'
     ports:
       - '127.0.0.1:1025:1025'
       - '127.0.0.1:8025:8025'
@@ -191,7 +194,7 @@ services:
     container_name: 'dm-seaweedfs'
     # Tag and digest: a tag can be rewritten and the one-process mode moves its defaults
     # between releases. A new tag needs check-storage.sh green in deployment-smoke.
-    image: 'chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d'
+    image: 'chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0'
     entrypoint: ["/bin/sh", "/storage-start.sh"]
     environment:
       # Without a limit the heap grows to 233 MiB of the 256M container; with it the peak is
@@ -227,8 +230,8 @@ services:
   # storage-internal. Its health says only that S3 answers through the proxy.
   storage:
     container_name: 'dm-storage'
-    # The same digest as the nginx:1.27-alpine of the preview edge, so both share one cached image.
-    image: 'nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10'
+    # The same digest as the nginx:1.30-alpine of the preview edge, so both share one cached image.
+    image: 'nginx:1.30.6-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311'
     volumes:
       - ./storage/nginx-stream.conf:/etc/nginx/nginx.conf:ro
     ports:
@@ -287,7 +290,7 @@ services:
 
   prometheus:
     container_name: 'dm-prometheus'
-    image: 'prom/prometheus:v3.14.0'
+    image: 'prom/prometheus:v3.13.5'
     ports:
       - '127.0.0.1:9090:9090'
     volumes:
@@ -319,7 +322,7 @@ services:
   # stand, the relay on a server), so there is no token to set.
   alertmanager:
     container_name: 'dm-alertmanager'
-    image: 'prom/alertmanager:v0.34.0'
+    image: 'prom/alertmanager:v0.35.0'
     # Alertmanager expands no environment variables in its config, so the entrypoint renders it first.
     entrypoint: ["/bin/sh", "/alertmanager-init.sh"]
     ports:
@@ -354,7 +357,7 @@ services:
 
   grafana:
     container_name: 'dm-grafana'
-    image: 'grafana/grafana:13.2.0'
+    image: 'grafana/grafana:13.3.1'
     ports:
       - '127.0.0.1:3000:3000'
     environment:

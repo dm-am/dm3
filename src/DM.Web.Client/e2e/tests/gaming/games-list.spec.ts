@@ -202,7 +202,9 @@ test.describe("Games List Page", () => {
       // marked busy while the request is in flight and unmarked once rows
       // arrive.
       await expect(table(page)).toHaveAttribute("aria-busy", "true");
-      await expect(rows(page)).not.toHaveCount(0);
+      // The rows come only after the held request, so their wait counts the
+      // delay too: 5s from the busy state left a slow boot one second.
+      await expect(rows(page)).not.toHaveCount(0, { timeout: 15_000 });
       await expect(table(page)).not.toHaveAttribute("aria-busy", "true");
     });
   });

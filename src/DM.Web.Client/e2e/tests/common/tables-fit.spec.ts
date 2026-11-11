@@ -311,7 +311,7 @@ function readEdges(): string[] {
     // Four pixels of play: the same text measures a few pixels wider under
     // the fonts of another machine, and the page itself is held to one pixel
     // above, so a box that only pokes into its own padding is not a scroll.
-    for (let up = frame.parentElement; up && up !== content; ) {
+    for (let up = frame.parentElement; up && up !== content;) {
       if (up.scrollWidth > up.clientWidth + 4) {
         problems.push(
           `${name(up)} scrolls sideways: ${up.scrollWidth} > ${up.clientWidth}, children ${widths(up)}`,

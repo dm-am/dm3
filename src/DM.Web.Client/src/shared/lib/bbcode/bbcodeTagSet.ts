@@ -8,12 +8,7 @@
  * visual mode, previewed by hintToHtml).
  */
 export type BBCodeContext =
-  | "common"
-  | "post"
-  | "info"
-  | "message"
-  | "direct"
-  | "hint";
+  "common" | "post" | "info" | "message" | "direct" | "hint";
 
 /** The tags of the grammar. */
 export type TagName =

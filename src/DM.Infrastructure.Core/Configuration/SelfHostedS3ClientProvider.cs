@@ -17,7 +17,13 @@ internal class SelfHostedS3ClientProvider(IOptions<CdnConfiguration> cdnConfigur
             {
                 ServiceURL = _cdn.Url,
                 AuthenticationRegion = _cdn.Region,
-                ForcePathStyle = true
+                ForcePathStyle = true,
+                // SDK 3 sent a signed aws-chunked body without a trailer. SDK 4 by default adds a
+                // CRC32 trailer to that body and asks for checksums on reads; WHEN_REQUIRED keeps
+                // the SDK 3 body. SDK 4 still adds "Content-Encoding: aws-chunked", which
+                // SeaweedFS 4.53 drops when it stores the object.
+                RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+                ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED,
             });
     }
 

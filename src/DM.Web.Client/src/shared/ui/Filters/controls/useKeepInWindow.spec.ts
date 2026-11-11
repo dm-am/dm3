@@ -46,15 +46,16 @@ describe("a panel of the bar", () => {
     return el;
   };
 
+  // Read back as a browser serializes it: `Xpx 0` comes back without the zero.
   it("is moved back in from the left edge", async () => {
     // The games list on a phone: the panel hung from a button at the left.
     const el = await openAt(-114, 262);
-    expect(el.style.translate).toBe(`${WINDOW_EDGE + 114}px 0`);
+    expect(el.style.translate).toBe(`${WINDOW_EDGE + 114}px`);
   });
 
   it("is moved back in from the right edge", async () => {
     const el = await openAt(275, 262);
-    expect(el.style.translate).toBe(`${ROOM - WINDOW_EDGE - 275 - 262}px 0`);
+    expect(el.style.translate).toBe(`${ROOM - WINDOW_EDGE - 275 - 262}px`);
   });
 
   it("stays where its stylesheet put it when it fits", async () => {
@@ -64,6 +65,6 @@ describe("a panel of the bar", () => {
 
   it("stands from the left edge when it is wider than the window", async () => {
     const el = await openAt(-50, 400);
-    expect(el.style.translate).toBe(`${WINDOW_EDGE + 50}px 0`);
+    expect(el.style.translate).toBe(`${WINDOW_EDGE + 50}px`);
   });
 });

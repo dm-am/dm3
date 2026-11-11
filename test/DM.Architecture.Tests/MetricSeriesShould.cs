@@ -28,7 +28,8 @@ public class MetricSeriesShould
         // three jobs below scrape /metrics off the same port the app serves on.
         ("http_server_", "dm-api"),
         ("http_client_", "dm-api"),
-        ("process_runtime_", "dm-api"),
+        // The System.Runtime meter of .NET 9 and later; process_runtime_dotnet_* is not exported.
+        ("dotnet_", "dm-api"),
         ("pg_", "postgres"),
         ("node_", "node"),
         // The alerting contour is scraped like any other target.
@@ -39,7 +40,7 @@ public class MetricSeriesShould
     private static readonly HashSet<string> NotASeries = new(StringComparer.Ordinal)
     {
         "histogram_quantile", "label_replace", "label_join", "clamp_max", "clamp_min",
-        "http_route", "http_response_status_code", "job_name", "scrape_interval",
+        "http_route", "http_response_status_code", "gc_heap_generation", "job_name", "scrape_interval",
         "static_configs", "rule_files", "metrics_path",
     };
 

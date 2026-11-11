@@ -6,13 +6,7 @@
 
 /** A subject there are many of, told apart by its identifier. */
 export type DraftEntity =
-  | "topic"
-  | "blog"
-  | "publication"
-  | "game"
-  | "room"
-  | "chat"
-  | "ticket";
+  "topic" | "blog" | "publication" | "game" | "room" | "chat" | "ticket";
 
 /**
  * Subjects there is one of: the site-wide chat and the two ticket forms. A

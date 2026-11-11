@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using AwesomeAssertions;
 using Xunit;
+using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
@@ -31,8 +32,10 @@ namespace DM.Architecture.Tests;
 ///
 /// What the manifests are: the central package versions, the client's package.json
 /// with versions resolved from its lock file and the engines it pins, the images of
-/// the compose files, the base images of the Dockerfiles, the actions of the
-/// workflows, the SDK of global.json and the language version of the build.
+/// the compose files, the base images of the Dockerfiles, the images the scripts of
+/// docker/ and scripts/ run, the packages the server installer puts on the host, the actions and
+/// runners of the workflows, the SDK of global.json and the language version of the
+/// build. A runner label such as ubuntu-24.04 is a name, then a dash and the version.
 /// </remarks>
 public class StackDocumentShould
 {
@@ -53,6 +56,13 @@ public class StackDocumentShould
     private static readonly Regex Action = new(
         @"uses:\s*(?<name>[^@\s'""]+)@(?<version>[^\s'""]+)", RegexOptions.Compiled);
 
+    private static readonly Regex Runner = new(
+        @"^\s*runs-on:\s*['""]?(?<name>[^\s'""]+?)(?:-(?<version>\d[^\s'""]*))?['""]?\s*$",
+        RegexOptions.Compiled | RegexOptions.Multiline);
+
+    private static readonly Regex HostPackages = new(
+        @"^\s*(?:sudo\s+)?apt(?:-get)?\s+install\s+(?<packages>[^\r\n]+)", RegexOptions.Compiled | RegexOptions.Multiline);
+
     private sealed record Entry(string Name, string? Version, string Source);
 
     private sealed record Mention(string Name, string? Version);
@@ -70,7 +80,7 @@ public class StackDocumentShould
             .ToList();
 
         unnamed.Should().HaveCount(0,
-            "every package, image and action the build installs has a line in docs/STACK.md, " +
+            "every package, image, action and runner the build installs has a line in docs/STACK.md, " +
             "by its own name in backticks or by a group such as `Microsoft.Extensions.*`");
     }
 
@@ -134,6 +144,17 @@ public class StackDocumentShould
         mention.Version.Should().Be(version);
     }
 
+    [Theory]
+    [InlineData("    runs-on: ubuntu-24.04", "ubuntu", "24.04")]
+    [InlineData("    runs-on: 'windows-2025'", "windows", "2025")]
+    [InlineData("    runs-on: ubuntu-latest", "ubuntu-latest", null)]
+    public void ReadTheRunnerVersionAfterItsName(string line, string name, string? version)
+    {
+        var match = Runner.Match(line);
+        match.Groups["name"].Value.Should().Be(name);
+        (match.Groups["version"].Success ? match.Groups["version"].Value : null).Should().Be(version);
+    }
+
     private static bool IsGroup(string mention) => mention.EndsWith(".*", StringComparison.Ordinal) || mention.EndsWith("/*", StringComparison.Ordinal);
 
     private static bool Covers(string mention, string name) => IsGroup(mention)
@@ -185,7 +206,10 @@ public class StackDocumentShould
         .. CentralPackages(),
         .. ClientPackages(),
         .. Images(),
+        .. ScriptImages(),
+        .. ServerPackages(),
         .. Actions(),
+        .. Runners(),
         .. Toolchain(),
     ];
 
@@ -261,6 +285,30 @@ public class StackDocumentShould
         .GetFiles(Path.Combine(Root, ".github", "workflows"), "*.yml")
         .SelectMany(file => Action.Matches(File.ReadAllText(file)).Select(match => new Entry(
             match.Groups["name"].Value, match.Groups["version"].Value, ".github/workflows/" + Path.GetFileName(file))));
+
+    /// <summary>The images the scripts of docker/ and scripts/ run.</summary>
+    /// <remarks>
+    /// An image a script computes, such as the monitoring check taking its images from the
+    /// compose file, is still a variable here and is read where it is written.
+    /// </remarks>
+    private static IEnumerable<Entry> ScriptImages() => new[] { DockerDirectory, Path.Combine(Root, "scripts") }
+        .SelectMany(ImagesRunByShellScripts)
+        .Where(found => !found.Image.StartsWith('$'))
+        .Select(found => Split(found.Image, Path.GetRelativePath(Root, found.Script).Replace('\\', '/')));
+
+    /// <summary>What apt puts on the server; the distribution picks the version, so none is read.</summary>
+    private static IEnumerable<Entry> ServerPackages() => HostPackages
+        .Matches(File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh")))
+        .SelectMany(match => match.Groups["packages"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        .Where(token => !token.StartsWith('-'))
+        .Select(package => new Entry(package, null, "docker/setup-server.sh"));
+
+    private static IEnumerable<Entry> Runners() => Directory
+        .GetFiles(Path.Combine(Root, ".github", "workflows"), "*.yml")
+        .SelectMany(file => Runner.Matches(File.ReadAllText(file)).Select(match => new Entry(
+            match.Groups["name"].Value,
+            match.Groups["version"].Success ? match.Groups["version"].Value : null,
+            ".github/workflows/" + Path.GetFileName(file))));
 
     private static IEnumerable<Entry> Toolchain()
     {

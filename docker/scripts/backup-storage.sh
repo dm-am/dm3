@@ -37,7 +37,7 @@ docker run --rm --network "$NETWORK" \
   -e AWS_DEFAULT_REGION=us-east-1 \
   -e AWS_REQUEST_CHECKSUM_CALCULATION=when_required \
   --entrypoint sh \
-  amazon/aws-cli:2.37.9@sha256:92de75724b6a746951f0e8b915d86bbccd7cb55aff96cd0cb4f7017272160780 \
+  amazon/aws-cli:2.39.7@sha256:bba262340b0bc7cbf3a8a48612531263b56f4b280c4f036a07816af1b271bda0 \
   -c 'aws configure set default.s3.addressing_style path && exec aws "$@"' aws \
   s3 sync "s3://$BUCKET" /backup --endpoint-url "$ENDPOINT" --only-show-errors
 

@@ -15,9 +15,8 @@ namespace DM.Web.API.IntegrationTests;
 
 public partial class DatabaseFixture : IAsyncLifetime
 {
-    // The stand's image and locale (postgres:16, en_US.utf8): Alpine has no locales and orders names by byte.
-    private readonly PostgreSqlContainer _postgresContainer = new PostgreSqlBuilder()
-        .WithImage("postgres:16")
+    // The stand's image and locale (postgres:18, en_US.utf8): Alpine has no locales and orders names by byte.
+    private readonly PostgreSqlContainer _postgresContainer = new PostgreSqlBuilder("postgres:18")
         .WithEnvironment("POSTGRES_INITDB_ARGS", "--locale=en_US.utf8")
         .WithDatabase("dm3_test")
         .WithUsername("test")

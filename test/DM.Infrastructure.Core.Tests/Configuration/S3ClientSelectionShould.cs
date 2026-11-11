@@ -1,5 +1,6 @@
 using System;
 using Amazon;
+using Amazon.Runtime;
 using Amazon.S3;
 using DM.Domain.Core.Configuration;
 using AwesomeAssertions;
@@ -24,6 +25,16 @@ public class S3ClientSelectionShould
             "address names a host that does not exist");
         config.AuthenticationRegion.Should().Be("us-east-1");
         config.ServiceURL.Should().StartWith(Endpoint);
+    }
+
+    [Fact]
+    public void SendTheSelfHostedStoreChecksumsOnlyWhereAnOperationRequiresThem()
+    {
+        var config = ClientFor(S3Provider.SelfHosted, "us-east-1");
+
+        config.RequestChecksumCalculation.Should().Be(RequestChecksumCalculation.WHEN_REQUIRED,
+            "the aws-chunked trailer SDK 4 sends by default is a body the store was never checked with");
+        config.ResponseChecksumValidation.Should().Be(ResponseChecksumValidation.WHEN_REQUIRED);
     }
 
     [Fact]

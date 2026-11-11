@@ -102,7 +102,7 @@ function measureInPage(page: Page): Promise<Fit> {
         `the frame of the table spans ${Math.round(inner.left)}-${Math.round(inner.right)}, the column ${Math.round(edge.left)}-${Math.round(edge.right)}`,
       );
     }
-    for (let up = frame.parentElement; up && up !== column; ) {
+    for (let up = frame.parentElement; up && up !== column;) {
       if (up.scrollWidth > up.clientWidth + 1) {
         problems.push(`${up.className} scrolls sideways`);
       }

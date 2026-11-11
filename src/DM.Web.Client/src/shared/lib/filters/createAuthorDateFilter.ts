@@ -31,8 +31,9 @@ const MAX_AUTHOR_LENGTH = 20;
 const MAX_SEARCH_LENGTH = 200;
 
 /** Filter state held in the URL; dates carry the "Utc" suffix. */
-interface AuthorDateFilterState<TSortBy extends string = string>
-  extends BaseFilterState {
+interface AuthorDateFilterState<
+  TSortBy extends string = string,
+> extends BaseFilterState {
   sortBy: TSortBy;
   authors: Set<string>;
   /** YYYY-MM-DD */

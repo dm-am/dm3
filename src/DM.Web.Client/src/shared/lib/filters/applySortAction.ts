@@ -10,8 +10,7 @@ type SortAction<TSortBy extends string> =
   | { type: "TOGGLE_SORT_ORDER" };
 
 type SortOrClearAction<TSortBy extends string> =
-  | SortAction<TSortBy>
-  | { type: "CLEAR_FILTERS" };
+  SortAction<TSortBy> | { type: "CLEAR_FILTERS" };
 
 export function applySortAction<TSortBy extends string>(
   state: { sortBy: TSortBy; sortOrder: SortDirection },

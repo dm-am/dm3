@@ -19,7 +19,7 @@ bash "$(dirname "$0")/scripts/require-empty-install-dir.sh" "$INSTALL_DIR"
 
 echo "=== Установка Docker ==="
 sudo apt update
-sudo apt install -y docker.io docker-compose-plugin git iptables-persistent openssl certbot
+sudo apt install -y docker.io docker-compose-v2 git iptables-persistent openssl certbot
 
 echo "=== Настройка Docker для текущего пользователя ==="
 sudo usermod -aG docker "$USER"

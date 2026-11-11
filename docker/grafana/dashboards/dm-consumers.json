@@ -59,7 +59,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
       "targets": [
         {
-          "expr": "process_runtime_dotnet_gc_heap_size_bytes{job=~\"dm-(notification|mail)-worker\"}",
+          "expr": "sum by (job) (dotnet_gc_last_collection_heap_size_bytes{job=~\"dm-(notification|mail)-worker\"})",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -72,8 +72,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
       "targets": [
         {
-          "expr": "rate(process_runtime_dotnet_gc_collections_count_total{job=~\"dm-(notification|mail)-worker\"}[5m])",
-          "legendFormat": "{{job}} Gen {{generation}}",
+          "expr": "rate(dotnet_gc_collections_total{job=~\"dm-(notification|mail)-worker\"}[5m])",
+          "legendFormat": "{{job}} Gen {{gc_heap_generation}}",
           "refId": "A"
         }
       ],

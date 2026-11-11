@@ -16,8 +16,10 @@ import { mountPage, type MountOptions } from "@/shared/lib/testing/mountPage";
 const { getUsers } = vi.hoisted(() => ({ getUsers: vi.fn() }));
 
 // The network only: the router, the store and the table are the real ones.
+// The original as a plain object: its type would name a file inside another
+// slice, which the layer rule refuses even as a type.
 vi.mock("@/entities/user/api/userApi", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/entities/user/api/userApi")>()),
+  ...(await importOriginal<object>()),
   default: { getUsers },
 }));
 

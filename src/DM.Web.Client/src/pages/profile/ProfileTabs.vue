@@ -14,12 +14,7 @@ import type { TabItem } from "@/shared/ui/Tabs";
 
 // Each content tab holds its list, the best of its category and the subscribers to it.
 export type ProfileTab =
-  | "about"
-  | "games"
-  | "blogs"
-  | "topics"
-  | "achievements"
-  | "moderation";
+  "about" | "games" | "blogs" | "topics" | "achievements" | "moderation";
 
 const DEFAULT_TAB: ProfileTab = "about";
 

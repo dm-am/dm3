@@ -14,13 +14,13 @@ volumes:
 services:
   nginx:
     container_name: 'dm-nginx'
-    image: 'nginx:1.27-alpine'
+    image: 'nginx:1.30-alpine'
     # The edge resolves the name of every container behind it once, at parse time, so a
     # replaced container returns on a new address and every request is a 502 until the edge
     # is recreated. The first label makes the updater see the container at all
     # (WATCHTOWER_LABEL_ENABLE); the second names container_name values, which the updater
     # sorts and restarts by and skips in silence when it does not know them. The edge
-    # follows the nginx:1.27-alpine tag: a pinned digest would never receive a patch, and a
+    # follows the nginx:1.30-alpine tag: a pinned digest would never receive a patch, and a
     # few seconds of downtime per deployment beat a permanent 502. Anything the updater does
     # not watch is recreated by hand (DEPLOYMENT.md).
     labels:

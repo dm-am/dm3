@@ -65,11 +65,7 @@ type WarningsQuery = PagingQuery & {
 };
 
 export type WarningPlaceKind =
-  | "Topic"
-  | "Game"
-  | "Blog"
-  | "GlobalChat"
-  | "Publication";
+  "Topic" | "Game" | "Blog" | "GlobalChat" | "Publication";
 
 /** What the open log and the moderation list both carry. */
 export type WarningRecord = {

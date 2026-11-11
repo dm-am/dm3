@@ -23,9 +23,9 @@
 
 - Kestrel и ASP.NET Core: API, хаб уведомлений, проверка origin изменяющего
   запроса, ограничение частоты запросов.
-- `Swashbuckle.AspNetCore.*` 10.2.3, документ API и страница Swagger.
+- `Swashbuckle.AspNetCore.*` 10.3.1, документ API и страница Swagger.
 - `AspNetCore.HealthChecks.*` 9.0.0, проверки готовности PostgreSQL.
-- `Microsoft.Extensions.*` 10.0.11: конфигурация, опции, контейнер зависимостей,
+- `Microsoft.Extensions.*` 10.0.15: конфигурация, опции, контейнер зависимостей,
   логирование, кэш в памяти, хостинг.
 - Встроенный контейнер зависимостей: явные регистрации плюс скан сборки по
   конвенции, полнота регистраций проверяется при старте.
@@ -33,7 +33,7 @@
 
 ### Доменная логика
 
-- `FluentValidation` 11.9.2, проверка бизнес-правил в доменных модулях.
+- `FluentValidation` 12.2.0, проверка бизнес-правил в доменных модулях.
 - `Riok.Mapperly` 4.3.1, генератор мапперов DTO на компиляции: несведенное поле
   ломает сборку, а не запрос.
   Альтернативы: AutoMapper. Почему не он: маппинг в рантайме, пропущенная карта
@@ -57,13 +57,13 @@
 
 ### Данные
 
-- `postgres` 16, PostgreSQL как единственная СУБД. Формы, которые читаются и
+- `postgres` 18, PostgreSQL как единственная СУБД. Формы, которые читаются и
   пишутся целиком (схема атрибутов, метаданные уведомления, результат броска),
   лежат в jsonb, остальное в таблицах.
   Альтернативы: вторая, документная СУБД (часть данных жила в MongoDB). Почему
   не она: между хранилищами нет ни транзакции, ни соединения таблиц, а два
   ночных бэкапа не дают согласованного снимка.
-- `Microsoft.EntityFrameworkCore.*` 10.0.11 и `Npgsql.EntityFrameworkCore.PostgreSQL`
+- `Microsoft.EntityFrameworkCore.*` 10.0.15 и `Npgsql.EntityFrameworkCore.PostgreSQL`
   10.0.3, EF Core с провайдером Npgsql, один контекст на все модули. Провайдер в
   памяти только для тестов.
 - `Npgsql` на версии, которую приносит провайдер, драйвер PostgreSQL. Своя строка
@@ -90,7 +90,7 @@
 
 ### Файловое хранилище
 
-- `chrislusf/seaweedfs` 4.48, образ закреплен по дайджесту, S3-совместимое
+- `chrislusf/seaweedfs` 4.53, образ закреплен по дайджесту, S3-совместимое
   объектное хранилище для байтов загруженных файлов в режиме одного процесса.
   Записи о файлах в PostgreSQL. Бакет, учетки и публичное чтение задает скрипт
   старта. Предел памяти сборщика держит пик ниже лимита контейнера ценой работы
@@ -98,10 +98,12 @@
   Альтернативы: MinIO, Garage, RustFS. Почему не они: свободные образы MinIO
   больше не раздаются, у Garage нет правил доступа по префиксам, RustFS просит
   от 2 ГБ памяти.
-- `nginx` 1.27.5-alpine, образ закреплен по дайджесту, единственный вход в
+- `nginx` 1.30.6-alpine, образ закреплен по дайджесту, единственный вход в
   объектное хранилище: пропускает к нему S3 и метрики и ничего больше.
-- `AWSSDK.S3` 3.7.400.5, клиент S3 в приложении.
-- `Magick.NET-Q8-AnyCPU` 15.0.0, ImageMagick для .NET под лицензией Apache 2.0,
+- `AWSSDK.S3` 4.0.104.12, клиент S3 в приложении.
+- `amazon/aws-cli` 2.39.7, образ закреплен по дайджесту, клиент S3 скриптов
+  сервера: резервная копия хранилища, восстановление из нее и проверка.
+- `Magick.NET-Q8-AnyCPU` 15.1.0, ImageMagick для .NET под лицензией Apache 2.0,
   разбор загруженной картинки: уменьшение, квадратные превью аватара, минимальный
   размер аватара, защита от бомбы распаковки. Формат определяет сигнатура файла,
   декодер получает его явно.
@@ -110,8 +112,8 @@
 
 ### Почта
 
-- `axllent/mailpit` v1.31.0, локальный SMTP-сервер для разработки и тестов.
-- `MailKit` 4.17.0 и `MimeKit` 4.17.0, отправка из отдельного почтового воркера
+- `axllent/mailpit` v1.33.1, локальный SMTP-сервер для разработки и тестов.
+- `MailKit` 4.18.2 и `MimeKit` 4.18.2, отправка из отдельного почтового воркера
   по очереди, а не из запроса.
 - Brevo, облачный провайдер транзакционных писем, в плане.
 
@@ -126,27 +128,31 @@
 
 ### Фронтенд
 
-- `vue` 3.5.43, фреймворк SPA на Composition API. Исходники по Feature-Sliced
+- `vue` 3.5.45, фреймворк SPA на Composition API. Исходники по Feature-Sliced
   Design, границы слоев держит линтер.
-- `vue-router` 5.2.0, `pinia` 4.0.3, `axios` 1.20.0, `dayjs` 1.11.12.
-- `vue-final-modal` 4.5.4, единственный механизм окон.
+- `vue-router` 5.4.0, `pinia` 4.1.0, `axios` 1.21.0, `dayjs` 1.11.23.
+- `vue-final-modal` 5.0.1, единственный механизм окон.
   Альтернативы: свой механизм. Почему не он: библиотека дает ловушку фокуса,
   клик мимо, остановку закрытия и стек слоев.
-- `@tanstack/vue-virtual` 3.13.23, виртуализация длинных списков.
+- `@tanstack/vue-virtual` 3.13.52, виртуализация длинных списков.
 
 ### Редактор
 
-- `@tiptap/*` 3.31.3, основа редактора. Свои расширения переводят BBCode в HTML
+- `@tiptap/*` 3.33.0, основа редактора. Свои расширения переводят BBCode в HTML
   и обратно только внутри редактора, на сохранение уходит BBCode.
 
 ### Сборка фронтенда
 
-- `node` 24.13.0 и `npm` 11.6.2, закреплены вместе ради одного файла блокировки.
-- `node` 24.13.0-alpine и `nginx` 1.27-alpine, образы сборки и раздачи SPA.
-- `vite` 8.2.4 с `@vitejs/plugin-vue` 6.0.8, сборщик и dev-сервер.
-- `typescript` 6.0.3 и `vue-tsc` 3.3.11, проверка типов, шаблоны Vue отдельным
+- `node` 24.22.2 и `npm` 11.19.1, закреплены вместе ради одного файла блокировки.
+  В файл блокировки попадает выпуск не моложе трех дней: правило min-release-age в
+  .npmrc клиента действует в npm install и npm update, а npm ci ставит записанное
+  в файле блокировки. Обновления Dependabot ждут те же три дня. Вредоносные
+  выпуски npm снимали с реестра за часы или пару дней.
+- `node` 24.22.2-alpine и `nginx` 1.30-alpine, образы сборки и раздачи SPA.
+- `vite` 8.3.6 с `@vitejs/plugin-vue` 6.0.10, сборщик и dev-сервер.
+- `typescript` 6.0.3 и `vue-tsc` 3.3.14, проверка типов, шаблоны Vue отдельным
   проходом.
-- `sass` 1.103.1, модульная система, общие токены подключает сборщик.
+- `sass` 1.108.1, модульная система, общие токены подключает сборщик.
 - `npm-run-all2` 8.0.4, параллельный запуск проверки типов и сборки.
 - `@vue/tsconfig` 0.5.1 и `@types/*`, базовые настройки и типы TypeScript.
 
@@ -155,56 +161,69 @@
 - Сборка .NET считает предупреждения ошибками, nullable включен. Анализ стиля
   идет в той же сборке, и лишний using, неиспользуемый приватный член или
   параметр и член, который может быть статическим, ее роняют.
-- `eslint` 10.9.1 с `@eslint/*`, `vue-eslint-parser` 10.4.1,
-  `eslint-plugin-vue` 10.10.0, `eslint-plugin-vuejs-accessibility` 2.6.0,
-  `eslint-plugin-boundaries` 7.2.0 (слои и публичный API слайса),
+- `eslint` 10.14.0 с `@eslint/*`, `vue-eslint-parser` 10.4.2,
+  `eslint-plugin-vue` 10.12.0, `eslint-plugin-vuejs-accessibility` 2.6.3,
+  `eslint-plugin-boundaries` 7.4.2 (слои и публичный API слайса),
   `eslint-import-resolver-typescript` 4.4.5, `@vue/eslint-config-prettier` 10.2.0
   и `@vue/eslint-config-typescript` 14.9.0.
-- `prettier` 3.3.3, форматирование клиента.
-- `knip` 6.39.0, поиск неиспользуемых файлов, экспортов, типов и пакетов клиента,
+- `prettier` 3.9.10, форматирование клиента.
+- `knip` 6.44.2, поиск неиспользуемых файлов, экспортов, типов и пакетов клиента,
   гейт в хуке и CI, исключения записаны с причинами тегом @public у самого
   экспорта или в его конфиге.
+- `koalaman/shellcheck` v0.10.0, проверка скриптов оболочки в контейнере, чтобы
+  у разработчика и в CI находки давала одна версия.
 - `NSubstitute.Analyzers.CSharp` 1.0.17, анализатор подстановок в тестах.
 - Закрепленные транзитивные зависимости:
-  `System.Security.Cryptography.Pkcs` 10.0.13 и `SSH.NET` 2026.0.0 выше версий с
-  уязвимостями, `System.Text.Json` 10.0.11 не ниже соседей по графу.
+  `System.Security.Cryptography.Pkcs` 10.0.15 выше версии с уязвимостью,
+  `System.Text.Json` 10.0.15 не ниже соседей по графу.
 
 ### Тесты
 
 - `xunit.v3` 3.2.2, `xunit.runner.visualstudio` 3.1.5, `Microsoft.NET.Test.Sdk`
-  17.11.0 и `coverlet.collector` 6.0.2, тесты .NET и покрытие.
+  17.14.2 и `coverlet.collector` 6.0.4, тесты .NET и покрытие.
 - `NSubstitute` 6.2.0, подстановки зависимостей.
   Альтернативы: Moq. Почему не он: инцидент SponsorLink в 4.20.0.
 - `AwesomeAssertions` 9.6.0, проверки в тестах.
-- `Testcontainers.*` 4.3.0, интеграционные тесты против настоящего
+- `Testcontainers.*` 4.16.0, интеграционные тесты против настоящего
   PostgreSQL.
-- `Microsoft.AspNetCore.Mvc.Testing` 10.0.11, хост API в интеграционных тестах.
-- `TngTech.ArchUnitNET.*` 0.13.3, архитектурные правила тестами.
-- `vitest` 4.1.11 с `@vitest/coverage-v8` 4.1.11, `@vue/test-utils` 2.4.6 и
-  `jsdom` 24.1.1, тесты клиента и компонентов.
+- `Microsoft.AspNetCore.Mvc.Testing` 10.0.15, хост API в интеграционных тестах.
+- `TngTech.ArchUnitNET.*` 0.13.5, архитектурные правила тестами.
+- `vitest` 4.1.12 с `@vitest/coverage-v8` 4.1.12, `@vue/test-utils` 2.5.1 и
+  `jsdom` 31.0.0, тесты клиента и компонентов.
 - `fast-check` 4.10.2, тесты свойств разбора разметки.
-- `@playwright/test` 1.58.2, сквозные тесты против поднятого стенда.
+- `@playwright/test` 1.65.0, сквозные тесты против поднятого стенда.
 
 ### Хостинг и контейнеры
 
-- Linux KVM, виртуальный сервер. Docker и Docker Compose, базовый набор плюс
-  оверлеи для края сайта и второго адреса.
+- Linux KVM, виртуальный сервер. Docker и Docker Compose из пакетов `docker.io`
+  и `docker-compose-v2` архива Ubuntu, базовый набор плюс оверлеи для края сайта и второго
+  адреса.
   Альтернативы: k3s, Helm и Terraform. Почему не они: узел один, кластер нужен
   со вторым вычислительным узлом, а точка присутствия узлом не станет, потому
   что намеренно не знает секретов.
-- `nginx` 1.27-alpine, край сайта: статика, прокси API и хаба, файлы хранилища,
+- `nginx` 1.30-alpine, край сайта: статика, прокси API и хаба, файлы хранилища,
   один origin.
 - Собственные образы `ghcr.io/dm-am/dm-api`, `ghcr.io/dm-am/dm-worker-mail`,
   `ghcr.io/dm-am/dm-worker-notification`, `ghcr.io/dm-am/dm-front` и локальный
   `dm-seeder` для тестовых данных.
 - `nickfedor/watchtower` 1.21.0, обновление контейнеров из реестра.
-- Let's Encrypt по ACME, HTTPS для всего трафика.
+- `git`, `iptables-persistent` и `openssl` из пакетов сервера: установщик ими
+  клонирует дерево, сохраняет открытые порты 80 и 443 и создает секреты
+  окружения.
+- `httpd` 2.4.69, из образа берется только htpasswd: скрипт хеширует пароль
+  входа на стенд через bcrypt, его спрашивает край сайта в оверлее стенда,
+  контейнер живет одну команду.
+- Let's Encrypt по ACME, HTTPS для всего трафика. Сертификат выпускает и
+  продлевает `certbot` на самом сервере через webroot края, версию дает
+  дистрибутив.
 
 ### CI/CD
 
 - GitHub Actions: формат и сборка, тесты с порогом покрытия, гейты фронтенда,
   сквозные тесты на стенде, сканирование зависимостей, CodeQL и OWASP ZAP,
   публикация образов в ghcr.io.
+- `ubuntu` 24.04, раннер всех заданий, версия закреплена, чтобы набор
+  инструментов не менялся вместе с ubuntu-latest.
 - `actions/checkout` v7, `actions/setup-dotnet` v6, `actions/setup-node` v7,
   `actions/upload-artifact` v7.
 - `docker/setup-buildx-action` v4, `docker/login-action` v4,
@@ -217,21 +236,24 @@
 
 ### Мониторинг и логи
 
-- `prom/prometheus` v3.14.0, метрики и правила алертов. `prom/alertmanager`
-  v0.34.0, доставка алертов письмом.
+- `prom/prometheus` v3.13.5, метрики и правила алертов. `prom/alertmanager`
+  v0.35.0, доставка алертов письмом.
 - `prometheuscommunity/postgres-exporter` v0.20.1 и `prom/node-exporter` v1.12.1,
   метрики базы и сервера.
-- `grafana/grafana` 13.2.0, просмотр метрик, логов и трасс. `grafana/loki` 3.5.12,
-  хранилище логов. `jaegertracing/jaeger` 2.20.0, трассировка по OTLP.
+- `grafana/grafana` 13.3.1, просмотр метрик, логов и трасс. `grafana/loki` 3.5.12,
+  хранилище логов. `jaegertracing/jaeger` 2.20.0, трассировка по OTLP. Выше 2.20 не
+  поднимаем: с 2.21 Jaeger снял поиск API v1, а источник данных Jaeger в Grafana 13 ищет
+  трассы им, и поиск в Grafana отвечает 404. Свой интерфейс Jaeger и переход к трассе по
+  номеру из лога работают и на 2.23.
 - `OpenTelemetry.*`, инструментирование веб-слоя, HTTP, EF Core и
-  рантайма: `OpenTelemetry.Extensions.Hosting` 1.18.0,
-  `OpenTelemetry.Instrumentation.AspNetCore` 1.18.0,
-  `OpenTelemetry.Instrumentation.Http` 1.18.0,
-  `OpenTelemetry.Instrumentation.Runtime` 1.18.0,
-  `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.18.0.
-  `OpenTelemetry.Instrumentation.EntityFrameworkCore` 1.18.0-beta.1 и
-  `OpenTelemetry.Exporter.Prometheus.AspNetCore` 1.18.0-beta.1 стабильных версий
+  рантайма: `OpenTelemetry.Extensions.Hosting` 1.20.1,
+  `OpenTelemetry.Instrumentation.AspNetCore` 1.20.2,
+  `OpenTelemetry.Instrumentation.Http` 1.20.2,
+  `OpenTelemetry.Instrumentation.Runtime` 1.20.1,
+  `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.20.1.
+  `OpenTelemetry.Instrumentation.EntityFrameworkCore` 1.20.2-beta.1 и
+  `OpenTelemetry.Exporter.Prometheus.AspNetCore` 1.20.1-beta.1 стабильных версий
   не имеют.
-- `Serilog` 4.3.1, `Serilog.AspNetCore` 10.0.0, `Serilog.Formatting.Compact` 3.0.0,
-  `Serilog.Sinks.Console` 6.1.1 и `Serilog.Sinks.Grafana.Loki` 9.0.1, логи с
+- `Serilog` 4.4.0, `Serilog.AspNetCore` 10.0.0, `Serilog.Formatting.Compact` 3.0.0,
+  `Serilog.Sinks.Console` 6.1.1 и `Serilog.Sinks.Grafana.Loki` 9.0.2, логи с
   токеном запроса и идентификатором трассы.
