@@ -3,9 +3,12 @@ set -euo pipefail
 
 # Install backup cron jobs for DM3
 # Usage: sudo bash install-cron.sh [install_dir]
+#   install_dir applies from a checkout (default /opt/dm3). From a release it is ignored: the
+#   lines go through rel/current, so they follow every release without a reinstall.
 
-INSTALL_DIR="${1:-/opt/dm3}"
-SCRIPT_DIR="$INSTALL_DIR/docker/scripts"
+# shellcheck source=docker/scripts/_paths.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_paths.sh" "${1:-}"
+SCRIPT_DIR="$DM_CRON_SCRIPTS_DIR"
 LOG_FILE="/var/log/dm3-backup.log"
 
 if [ ! -d "$SCRIPT_DIR" ]; then
@@ -25,10 +28,12 @@ mkdir -p "$TEXTFILE_DIR"
 # Install crontab entries
 CRON_MARKER="# DM3 automated backups"
 # verify-backup.sh runs last: a backup nobody verifies shows its first fault at the restore.
+# Through bash rather than by the executable bit, which an archive or a Windows checkout can
+# drop without anybody seeing the job fail.
 CRON_JOBS="$CRON_MARKER
-0 2 * * * $SCRIPT_DIR/backup-postgres.sh >> $LOG_FILE 2>&1
-0 4 * * * $SCRIPT_DIR/backup-storage.sh >> $LOG_FILE 2>&1
-0 5 * * * $SCRIPT_DIR/verify-backup.sh >> $LOG_FILE 2>&1"
+0 2 * * * bash $SCRIPT_DIR/backup-postgres.sh >> $LOG_FILE 2>&1
+0 4 * * * bash $SCRIPT_DIR/backup-storage.sh >> $LOG_FILE 2>&1
+0 5 * * * bash $SCRIPT_DIR/verify-backup.sh >> $LOG_FILE 2>&1"
 
 # Remove old DM3 cron entries if present, then add new ones
 (crontab -l 2>/dev/null | grep -v -e "$CRON_MARKER" -e "backup-postgres.sh" -e "backup-storage.sh" -e "verify-backup.sh"; echo "$CRON_JOBS") | crontab -

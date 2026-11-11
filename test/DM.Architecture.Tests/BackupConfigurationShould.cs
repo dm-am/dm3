@@ -51,6 +51,32 @@ public class BackupConfigurationShould
     }
 
     /// <summary>
+    /// Cron runs every backup through bash and from the scripts _paths.sh names.
+    /// </summary>
+    /// <remarks>
+    /// A line that runs the script itself depends on its executable bit, which a checkout on
+    /// Windows or an archive can drop, and cron reports that failure to nobody. The path comes
+    /// from _paths.sh so that on a server it goes through rel/current and follows each release.
+    /// </remarks>
+    [Fact]
+    public void RunEveryScheduledBackupThroughBashFromThePathsHelper()
+    {
+        var cron = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "install-cron.sh"));
+
+        cron.Should().Contain(". \"$(dirname \"${BASH_SOURCE[0]}\")/_paths.sh\"",
+            "the scripts cron runs are where _paths.sh says, a release's through rel/current");
+        cron.Should().Contain("SCRIPT_DIR=\"$DM_CRON_SCRIPTS_DIR\"",
+            "and the schedule takes that directory rather than one of its own");
+
+        var scheduled = Regex.Matches(cron, @"(?m)^[0-9*][0-9* ]* (\S.*)$")
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+        scheduled.Should().HaveCount(3, "the parser must find the three scheduled lines");
+        scheduled.Should().OnlyContain(command => command.StartsWith("bash $SCRIPT_DIR/", StringComparison.Ordinal),
+            "a scheduled line that relies on the executable bit fails silently when the bit is lost");
+    }
+
+    /// <summary>
     /// Every backup script loads the environment file: cron hands a job no credentials, and the
     /// offsite replication switches itself off without them.
     /// </summary>
