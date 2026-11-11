@@ -51,7 +51,8 @@
 | `MessagingConfiguration` | Срок правки своего сообщения | [AUTHORIZATION.md](../architecture/AUTHORIZATION.md#сроки-правки) |
 | `RateLimiting:Enabled` | Выключатель лимита запросов | [API_DESIGN.md](../conventions/API_DESIGN.md#rate-limiting) |
 | `Observability:MinimumLevel` | Уровень логов, в `docker/.env` это `LOG_MINIMUM_LEVEL` | [MONITORING.md](../guides/MONITORING.md#уровень) |
-| `MigrateOnStart` | API накатывает миграцию и выходит (контейнер `migration`) | [DEPLOYMENT.md](../guides/DEPLOYMENT.md#обновление-стенда) |
+| `PeriodicServices:Enabled` | Выключатель периодических служб, у двойника API выключен | [DEPLOYMENT.md](../guides/DEPLOYMENT.md#обновление-стенда) |
+| `MigrateOnStart` | API накатывает миграцию без повторов, без таймаута команд и выходит (контейнер `migration`) | [DEPLOYMENT.md](../guides/DEPLOYMENT.md#обновление-стенда) |
 | `SeedEpochUtc`, `SeedRandomSeed` | Время и зерно сида для повторимых кадров | [scripts/visual](../../scripts/visual/README.md) |
 
 ## Переменные развертывания
