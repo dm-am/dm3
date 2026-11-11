@@ -90,13 +90,12 @@ public class ReferencedPackagesShould
         new("Microsoft.Extensions.Configuration.FileExtensions",
             "Transitive pin: Configuration.Json brings it in, and the pin keeps it level with the rest of the family."),
         new("Microsoft.Extensions.Diagnostics.HealthChecks",
-            "Transitive pin: without it the graph resolves 8.0.11 instead of 10.0.11 in ten projects."),
+            "Transitive pin: without it the graph resolves 8.0.11 instead of the family version in ten projects."),
         new("System.Security.Cryptography.Pkcs", "Transitive via MimeKit, pinned above GHSA-846f-f764-76mx."),
         new("Swashbuckle.AspNetCore.Swagger",
             "Transitive pin: a part of Swashbuckle.AspNetCore, held at its version so the parts move with it."),
         new("Swashbuckle.AspNetCore.SwaggerUI",
             "Transitive pin: a part of Swashbuckle.AspNetCore, held at its version so the parts move with it."),
-        new("SSH.NET", "Testcontainers asks for 2025.1.0, which GHSA-q939-rpr3-3284 covers; the fix is in 2026.0.0."),
     ];
 
     private static readonly string[] EvidenceExtensions =

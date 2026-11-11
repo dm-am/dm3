@@ -12,8 +12,7 @@ namespace DM.Workers.Mail.Tests;
 /// <remarks>MigrateAsync rather than EnsureCreated: the migration is the database the site starts from.</remarks>
 public class MailDatabaseFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("dm3_mail")
         .WithUsername("test")
         .WithPassword("test")

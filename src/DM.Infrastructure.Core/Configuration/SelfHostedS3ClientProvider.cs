@@ -17,7 +17,12 @@ internal class SelfHostedS3ClientProvider(IOptions<CdnConfiguration> cdnConfigur
             {
                 ServiceURL = _cdn.Url,
                 AuthenticationRegion = _cdn.Region,
-                ForcePathStyle = true
+                ForcePathStyle = true,
+                // SDK 4 by default sends a CRC32 trailer in an aws-chunked body and asks for
+                // checksums on reads. Only the plain body of SDK 3 has been proven through nginx
+                // and SeaweedFS, so checksums go only where an operation requires them.
+                RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+                ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED,
             });
     }
 
