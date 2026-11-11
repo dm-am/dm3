@@ -226,7 +226,9 @@
 - `ubuntu` 24.04, раннер всех заданий, версия закреплена, чтобы набор
   инструментов не менялся вместе с ubuntu-latest.
 - `actions/checkout` v7, `actions/setup-dotnet` v6, `actions/setup-node` v7,
-  `actions/upload-artifact` v7.
+  `actions/upload-artifact` v7, `actions/download-artifact` v8.
+- `actions/attest-build-provenance` v4, подписанная аттестация происхождения
+  каждого публикуемого образа.
 - `docker/setup-buildx-action` v4, `docker/login-action` v4,
   `docker/metadata-action` v6, `docker/build-push-action` v7.
 - `github/codeql-action/*` v4, статический анализ.

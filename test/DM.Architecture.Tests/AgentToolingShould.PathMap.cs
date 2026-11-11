@@ -34,7 +34,7 @@ public partial class AgentToolingShould
         ["security"] = "a call into security.yml, whose two jobs are gated there by the inputs this passes",
         ["publish"] = "publishes on its own conditions, and lets a check the map skipped through",
         ["publish-frontend"] = "the same",
-        ["promote-images"] = "moves the names after the publishers, and checks nothing",
+        ["promote-images"] = "moves the names after the publishers, and checks only what they attested",
     };
 
     private static readonly Regex NeedsOfJob = new(@"^    needs:\s*\[([^\]]*)\]", RegexOptions.Compiled | RegexOptions.Multiline);

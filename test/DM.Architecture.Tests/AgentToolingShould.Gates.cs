@@ -102,6 +102,10 @@ public partial class AgentToolingShould
             ["actions/upload-artifact"] =
                 "carries a file onto the run page because the machine that wrote it is about " +
                 "to be destroyed; here the file stays on disk",
+            ["actions/download-artifact"] =
+                "fetches what another job of the same run uploaded; a run exists only in CI",
+            ["actions/attest-build-provenance"] =
+                "signs with the identity of a workflow run, which this machine does not have",
             ["docker/setup-buildx-action"] =
                 "prepares the builder the publishing jobs push from",
             ["docker/login-action"] =
@@ -163,8 +167,12 @@ public partial class AgentToolingShould
             ["Verify project exists"] =
                 "guards a typo in the matrix; the local build compiles the solution, which a " +
                 "missing project makes impossible",
-            ["Point the moving names at this commit"] =
-                "moves tags inside the registry",
+            ["Record the digest"] =
+                "writes down the digest the build step just pushed",
+            ["Check the attestations both ways and move the names by digest"] =
+                "asks GitHub about the attestations of this run and moves tags inside the " +
+                "registry; what the script refuses is checked against stubs in " +
+                "scripts/deployment/check-attestation.sh",
 
             // deployment-smoke
             ["Generate the stand credentials"] =
