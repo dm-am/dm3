@@ -39,8 +39,10 @@ groups:
 
   - name: dm-api
     rules:
+      # The site is down only when no instance answers: between releases the twin
+      # target is down by design and must not page anyone.
       - alert: ApiDown
-        expr: up{job="dm-api"} == 0
+        expr: max(up{job="dm-api"}) == 0
         for: 1m
         labels:
           severity: critical
@@ -77,8 +79,10 @@ groups:
   # told they may not do something they in fact may.
   - name: dm-authorization
     rules:
+      # Summed over instances so one missing resolver is one alert, whichever
+      # instances happened to be asked.
       - alert: AuthorizationResolverMissing
-        expr: increase(dm_authorization_resolver_missing_total[15m]) > 0
+        expr: sum by (intention, target) (increase(dm_authorization_resolver_missing_total[15m])) > 0
         for: 0m
         labels:
           severity: warning
@@ -206,12 +210,15 @@ groups:
 
       # A dead row spent its ladder or was rejected, and no worker takes it again
       # until a human returns it. The gauge is read from the table on every scrape,
-      # one series per queue, so a dead letter and a dead event each fire. NaN, the
-      # value of an unreachable database, compares false and leaves this to the
+      # one series per queue, so a dead letter and a dead event each fire. Every API
+      # instance reads the same table, so the max over instances is one alert per
+      # queue that survives an instance being replaced. NaN, which QueueMetrics gives
+      # every queue when its reading fails, is skipped by max while another instance
+      # has a number, and when all are NaN it compares false and leaves this to the
       # database rules. The command is DeadRows.ReturnCommand, which a gate holds
       # this text to.
       - alert: DeadOutboxRows
-        expr: dm_messaging_outbox_dead > 0
+        expr: max by (queue) (dm_messaging_outbox_dead) > 0
         for: 5m
         labels:
           severity: warning
@@ -261,9 +268,11 @@ groups:
       # minutes is longer than any deploy's restart, so this firing means a
       # worker is down or stuck on a row - either way a human call.
       # The gauge is read from the table on every scrape, one series per queue,
-      # so each queue fires on its own and a hung loop cannot freeze it.
+      # so each queue fires on its own and a hung loop cannot freeze it. The max
+      # over instances keeps the alert from resolving and firing again when the
+      # instance it was keyed to restarts.
       - alert: OutboxBacklogAging
-        expr: dm_messaging_outbox_lag_seconds > 300
+        expr: max by (queue) (dm_messaging_outbox_lag_seconds) > 300
         for: 5m
         labels:
           severity: warning

@@ -8,7 +8,8 @@
 # Не полный набор. Правила, срабатывающие на up == 0 и absent(), проверяются
 # самим наличием цели в prometheus.yml — их дублирование здесь ничего не ловит.
 # Сюда попадает то, где выражение можно написать синтаксически верно и по смыслу
-# мимо: суммы по нескольким сериям и разрезы по меткам.
+# мимо: суммы по нескольким сериям и разрезы по меткам. ApiDown теперь берет
+# максимум по экземплярам API, это уже свертка нескольких серий, и он проверяется здесь.
 
 rule_files:
   - alerts.yml
@@ -100,6 +101,169 @@ tests:
       - eval_time: 10m
         alertname: DeadOutboxRows
         exp_alerts: []
+
+  # Каждый экземпляр API читает одну и ту же таблицу, поэтому два экземпляра
+  # дают одну мертвую запись дважды. Алерт один на очередь и без instance: по
+  # сырому датчику их было бы два, каждый со своим instance.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_dead{job="dm-api",instance="dm-api-1:8080",queue="dm.notifications"}'
+        values: '1+0x10'
+      - series: 'dm_messaging_outbox_dead{job="dm-api",instance="dm-api-2:8080",queue="dm.notifications"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DeadOutboxRows
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dm.notifications
+            exp_annotations:
+              summary: "В очереди dm.notifications есть мертвые записи"
+              description: &dead-description 'Записи очереди исчерпали повторы или не читаются, и больше их никто не возьмет. Причина в поле LastError: SELECT "Id", "DeadUtc", "LastError" FROM "OutboxEvents" WHERE "DeadUtc" IS NOT NULL. Вернуть запись в очередь, когда причина устранена: UPDATE "OutboxEvents" SET "DeadUtc" = NULL, "Attempts" = 0, "NextAttemptUtc" = NULL WHERE "Id" = <Id> AND "DeadUtc" IS NOT NULL AND "ProcessedUtc" IS NULL; Письмо об учетной записи, мертвое больше 48 часов, не возвращать, а удалить: ссылка в нем уже истекла.'
+
+  # Релиз сменяет экземпляр: первый пропадает после 6m, второй читает ту же
+  # таблицу с 5m. Алерт горит без перерыва. По сырому датчику алерт первого
+  # погас бы в 7m, а алерт второго ждал бы своих пяти минут до 10m, и в 8m не
+  # горело бы ничего.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_dead{job="dm-api",instance="dm-api-1:8080",queue="dm.notifications"}'
+        values: '1+0x6 stale'
+      - series: 'dm_messaging_outbox_dead{job="dm-api",instance="dm-api-2:8080",queue="dm.notifications"}'
+        values: '_x5 1+0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: DeadOutboxRows
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dm.notifications
+            exp_annotations:
+              summary: "В очереди dm.notifications есть мертвые записи"
+              description: *dead-description
+
+  # Неудачное чтение дает NaN по каждой очереди (QueueMetrics). max пропускает
+  # NaN, пока есть число: экземпляр, не прочитавший базу, не гасит алерт
+  # соседа. По сырому датчику алерт был бы, но с instance.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_dead{job="dm-api",instance="dm-api-1:8080",queue="dm.notifications"}'
+        values: 'NaN NaN NaN NaN NaN NaN NaN'
+      - series: 'dm_messaging_outbox_dead{job="dm-api",instance="dm-api-2:8080",queue="dm.notifications"}'
+        values: '1+0x6'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DeadOutboxRows
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dm.notifications
+            exp_annotations:
+              summary: "В очереди dm.notifications есть мертвые записи"
+              description: *dead-description
+
+  # Если базу не прочитал ни один экземпляр, max дает NaN, и правило молчит:
+  # это забота правил о базе, а не о мертвых записях.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_dead{job="dm-api",instance="dm-api-1:8080",queue="dm.notifications"}'
+        values: 'NaN NaN NaN NaN NaN NaN NaN'
+      - series: 'dm_messaging_outbox_dead{job="dm-api",instance="dm-api-2:8080",queue="dm.notifications"}'
+        values: 'NaN NaN NaN NaN NaN NaN NaN'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DeadOutboxRows
+        exp_alerts: []
+
+  # Возраст очереди с двух экземпляров: один алерт на очередь и без instance.
+  # По сырому датчику их было бы два.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_lag_seconds{job="dm-api",instance="dm-api-1:8080",queue="dm.mail.sending"}'
+        values: '600+0x10'
+      - series: 'dm_messaging_outbox_lag_seconds{job="dm-api",instance="dm-api-2:8080",queue="dm.mail.sending"}'
+        values: '600+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: OutboxBacklogAging
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dm.mail.sending
+            exp_annotations:
+              summary: "Записи застряли в очереди dm.mail.sending"
+              description: &lag-description "Самая старая ожидающая запись очереди ждет больше 5 минут, уведомления, письма и счетчики по ней не уходят. Ничего не потеряно, записи ждут обработки. Смотреть поля Attempts и LastError у старых записей в базе и docker logs обработчика очереди."
+
+  # Смена экземпляра при релизе не гасит и не поднимает заново алерт о возрасте.
+  # По сырому датчику в 8m не горело бы ничего, как у мертвых записей выше.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_lag_seconds{job="dm-api",instance="dm-api-1:8080",queue="dm.mail.sending"}'
+        values: '600+0x6 stale'
+      - series: 'dm_messaging_outbox_lag_seconds{job="dm-api",instance="dm-api-2:8080",queue="dm.mail.sending"}'
+        values: '_x5 600+0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: OutboxBacklogAging
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dm.mail.sending
+            exp_annotations:
+              summary: "Записи застряли в очереди dm.mail.sending"
+              description: *lag-description
+
+  # Между релизами второй экземпляр API лежит, а первый отвечает: сайт
+  # работает, и ApiDown молчит. По сырому up алерт о втором поднялся бы через
+  # минуту.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="dm-api",instance="dm-api-1:8080"}'
+        values: '1+0x5'
+      - series: 'up{job="dm-api",instance="dm-api-2:8080"}'
+        values: '0+0x5'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ApiDown
+        exp_alerts: []
+
+  # Лежат оба: один алерт без instance. По сырому up их было бы два.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="dm-api",instance="dm-api-1:8080"}'
+        values: '0+0x2'
+      - series: 'up{job="dm-api",instance="dm-api-2:8080"}'
+        values: '0+0x2'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ApiDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "API DM не отвечает"
+              description: "Prometheus больше минуты не может опросить dm-api, сайт, скорее всего, недоступен. Запросы пользователей заканчиваются ошибкой или не доходят. Смотреть docker ps и docker logs dm-api."
+
+  # Один и тот же вопрос без обработчика на двух экземплярах: один алерт на
+  # пару intention и target. По сырому счетчику их было бы два, каждый с instance.
+  - interval: 1m
+    input_series:
+      - series: 'dm_authorization_resolver_missing_total{job="dm-api",instance="dm-api-1:8080",intention="ReadTopic",target="Topic"}'
+        values: '0+1x10'
+      - series: 'dm_authorization_resolver_missing_total{job="dm-api",instance="dm-api-2:8080",intention="ReadTopic",target="Topic"}'
+        values: '0+1x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AuthorizationResolverMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              intention: ReadTopic
+              target: Topic
+            exp_annotations:
+              summary: "Вопрос о правах не дошел до обработчика"
+              description: "ReadTopic для Topic отклоняется потому, что на вопрос о правах никто не отвечает, а не потому, что правила запрещают. Пользователь видит отказ в том, что ему разрешено. Смотреть docker logs dm-api."
 
   # Отказы доставки разрезаются по каналу: одно правило на все каналы назвало бы
   # в письме "channel" пустым, и получатель не узнал бы, какой из них лежит.
