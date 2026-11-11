@@ -15,9 +15,11 @@ alerting:
         - targets: ['dm-alertmanager:9093']
 
 scrape_configs:
+  # The twin is a second target of the same job, so its series sit beside the primary's and
+  # the rules read both with max. Between releases it is down, which ApiDown allows for.
   - job_name: 'dm-api'
     static_configs:
-      - targets: ['dm-api:5000']
+      - targets: ['dm-api:5000', 'dm-api-next:5000']
     metrics_path: '/metrics'
 
   - job_name: 'dm-notification-worker'

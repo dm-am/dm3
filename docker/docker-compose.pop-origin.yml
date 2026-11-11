@@ -16,8 +16,12 @@
 # POP_ADDRESS — адрес точки присутствия и только он, маской /32. Запись шире
 # покрывает соседей по диапазону, и заголовок, который они пришлют, будет принят
 # на веру.
+#
+# Двойник API на время выкладки стоит за теми же краями, поэтому якорь отдает ему те же
+# ключи.
 services:
-  dmapi:
+  dmapi: &origin-api
     environment:
       DM_ReverseProxyConfiguration__ProxyCount: '2'
       DM_ReverseProxyConfiguration__TrustedNetworks__1: ${POP_ADDRESS:?адрес точки присутствия, например 198.51.100.4/32}
+  dmapi-next: *origin-api

@@ -135,9 +135,13 @@ public class EdgeConfigurationShould
             "the edge holds the addresses of the containers behind it, so something has to " +
             "put it back on its feet after one of them is replaced");
 
-        // Forwards: everything the edge resolves by name and the updater replaces.
-        foreach (var host in ResolvedHosts(File.ReadAllText(
-            Path.Combine(DockerDirectory, "nginx", "nginx.conf"))))
+        // Forwards: everything the edge resolves by name and the updater replaces. The upstreams
+        // live in their own files, every one of which the edge may load.
+        var hosts = ResolvedHosts(Read(NginxConfiguration) + "\n" + string.Join('\n', UpstreamFiles().Values)).ToList();
+        hosts.Should().Contain(new[] { "dmapi", "dmfront" },
+            "the walk must reach the upstreams, or it passes on a configuration it never read");
+
+        foreach (var host in hosts)
         {
             if (!Regex.IsMatch(stack, $@"^  {Regex.Escape(host)}:", RegexOptions.Multiline)) continue;
             if (!ServiceBlock(stack, host).Contains("watchtower.enable=true", StringComparison.Ordinal)) continue;
@@ -159,7 +163,8 @@ public class EdgeConfigurationShould
         // The point of presence carries no application, and a list inherited from the
         // main stand would name a container that does not exist there.
         var pointOfPresence = ServiceBlock(Read(PopCompose), "nginx");
-        var api = Regex.Match(Read(BaseCompose), @"^  dmapi:\n(?:.*\n)*?\s*container_name:\s*'([\w-]+)'",
+        // The service line may carry the anchor its twin is merged from.
+        var api = Regex.Match(Read(BaseCompose), @"^  dmapi:.*\n(?:.*\n)*?\s*container_name:\s*'([\w-]+)'",
             RegexOptions.Multiline);
 
         api.Success.Should().BeTrue("the base stack names the API container");
@@ -227,6 +232,89 @@ public class EdgeConfigurationShould
                 "the instrumentation of the process stays on loopback");
         }
     }
+
+    /// <summary>
+    /// The edge serves whatever two links in its own layer name, and every restart sets them to
+    /// the primaries.
+    /// </summary>
+    /// <remarks>
+    /// A rollout moves traffic to the twins by replacing both links and reloading, so each
+    /// upstream exists once per instance as a committed file and nowhere inline. The point of
+    /// presence has no application behind its edge and keeps the image's own start.
+    /// </remarks>
+    [Fact]
+    public void ResolveTheUpstreamsThroughLinksToCommittedFiles()
+    {
+        var running = ActiveDirectives(Read(NginxConfiguration));
+
+        running.Should().NotContain("upstream ",
+            "an upstream written inline cannot be switched without editing the configuration");
+        running.Should().Contain(LiveUpstreamsInclude,
+            "the links the edge's command sets are the only source of its upstreams");
+
+        var expected = new Dictionary<string, (string Upstream, string Server)>
+        {
+            ["api-primary.conf"] = ("api", "dmapi:5000"),
+            ["api-next.conf"] = ("api", "dmapi-next:5000"),
+            ["front-primary.conf"] = ("frontend", "dmfront:80"),
+            ["front-next.conf"] = ("frontend", "dmfront-next:80"),
+        };
+        var files = UpstreamFiles();
+        files.Keys.Should().BeEquivalentTo(expected.Keys,
+            "one file per instance the edge can send traffic to, and nothing the switch does not name");
+
+        var stack = Read(BaseCompose) + "\n" + Read(PreviewCompose);
+        foreach (var (name, (upstream, server)) in expected)
+        {
+            var text = ActiveDirectives(files[name]);
+            Regex.Matches(text, @"upstream\s+(\w+)\s*\{").Select(match => match.Groups[1].Value)
+                .Should().Equal(new[] { upstream }, $"{name} replaces exactly the {upstream} upstream");
+            Regex.Matches(text, @"server\s+(\S+);").Select(match => match.Groups[1].Value)
+                .Should().Equal(new[] { server }, $"{name} sends to one instance, so nginx retries nothing");
+            stack.Should().MatchRegex($@"(?m)^  {Regex.Escape(server.Split(':')[0])}:",
+                $"{name} names a service the stack declares");
+        }
+
+        var edge = ServiceBlock(Read(PreviewCompose), "nginx");
+        edge.Should().Contain("./nginx/upstreams:/etc/nginx/upstreams:ro",
+            "the committed files reach the container as one read-only directory");
+        var command = Between(edge, "command:", "\n    healthcheck:");
+        command.Should().NotBeNull("the edge sets its links in a command written in the compose file");
+        command.Should().Contain("/etc/nginx/upstreams/api-primary.conf /etc/nginx/upstreams-live/api.conf")
+            .And.Contain("/etc/nginx/upstreams/front-primary.conf /etc/nginx/upstreams-live/frontend.conf")
+            .And.NotContain("-next.conf",
+                "a restart of the edge returns to the primaries, whatever a rollout left behind");
+
+        ServiceBlock(Read(PopCompose), "nginx").Should().Contain("command: !reset null",
+            "the point of presence renders its template through the image's own start, and an " +
+            "inherited command would skip it and link upstreams it does not have");
+    }
+
+    /// <remarks>
+    /// The rollout asks the upstreams the edge has loaded without the door's password, so the
+    /// listener answers only inside the container and the edge publishes nothing beyond the site.
+    /// </remarks>
+    [Fact]
+    public void AnswerTheRolloutOnLoopbackInsideTheContainer()
+    {
+        var running = ActiveDirectives(Read(NginxConfiguration));
+        // Directives are trimmed, so the next server block is where this one ends.
+        var listener = Between(running, "listen 127.0.0.1:8081;", "server {");
+
+        listener.Should().NotBeNull("the rollout reads the loaded upstreams through a listener of its own");
+        listener.Should().Contain("proxy_pass http://api/_ready;")
+            .And.Contain("proxy_pass http://frontend/_instance;");
+        running.Should().NotMatchRegex(@"listen\s+(0\.0\.0\.0:)?8081",
+            "on every address the listener would be a door past basic auth for anyone on the network");
+
+        var ports = Between(ServiceBlock(Read(PreviewCompose), "nginx"), "ports:", "volumes:");
+        Regex.Matches(ports ?? string.Empty, @"- '([^']+)'").Select(match => match.Groups[1].Value)
+            .Should().Equal(new[] { "80:80", "443:443" }, "the edge publishes the site and nothing else");
+    }
+
+    private static Dictionary<string, string> UpstreamFiles() => Directory
+        .EnumerateFiles(Path.Combine(DockerDirectory, Upstreams))
+        .ToDictionary(path => Path.GetFileName(path), File.ReadAllText, StringComparer.Ordinal);
 
     /// <summary>Container names the edge is told to wait for, as the label lists them.</summary>
     private static string[] EdgeDependencies(string serviceBlock) => Regex
