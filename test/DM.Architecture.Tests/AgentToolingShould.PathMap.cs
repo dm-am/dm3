@@ -353,6 +353,8 @@ public partial class AgentToolingShould
         "build codeql dependency-scan deployment-smoke e2e frontend")]
     [InlineData("src/DM.Web.Client/nginx.conf",
         "build codeql compose-topology dependency-scan deployment-smoke e2e frontend zap-scan")]
+    [InlineData("src/DM.Web.Client/publish-assets.sh",
+        "build codeql compose-topology dependency-scan deployment-smoke e2e frontend zap-scan")]
     [InlineData("docker/docker-compose.yml", "build codeql compose-topology dependency-scan deployment-smoke e2e frontend zap-scan")]
     [InlineData("scripts/hooks/pre-push", "build codeql compose-topology dependency-scan deployment-smoke e2e frontend zap-scan")]
     [InlineData("src/DM.Web.API/Program.cs|src/DM.Web.Client/src/App.vue",
