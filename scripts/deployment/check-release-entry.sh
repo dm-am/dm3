@@ -529,10 +529,10 @@ STUB
     compose_cmd() { :; }
     switch_check() { :; }
     health_of() {
-      local n
-      n=$(($(cat "$calls.health" 2> /dev/null || echo 0) + 1))
-      echo "$n" > "$calls.health"
-      if [ "$n" -ge 3 ]; then echo healthy; else echo starting; fi
+      local probes
+      probes=$(($(cat "$calls.health" 2> /dev/null || echo 0) + 1))
+      echo "$probes" > "$calls.health"
+      if [ "$probes" -ge 3 ]; then echo healthy; else echo starting; fi
     }
     edge_switch() { printf 'switch after %s\n' "$(cat "$calls.health" 2> /dev/null)" >> "$calls"; }
     recover_stack > /dev/null 2>&1
