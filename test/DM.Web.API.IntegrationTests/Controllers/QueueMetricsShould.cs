@@ -29,6 +29,7 @@ public class QueueMetricsShould : IntegrationTestBase
     {
     }
 
+    /// <remarks>Mutation it must fail on: no zero for an empty queue, which drops its series from the page.</remarks>
     [Fact]
     public async Task ReadZeroOnEverySeriesOfAnEmptyQueue()
     {
@@ -46,6 +47,7 @@ public class QueueMetricsShould : IntegrationTestBase
         }
     }
 
+    /// <remarks>Mutation it must fail on: the age taken over all rows, processed ones included.</remarks>
     [Fact]
     public async Task AgeTheQueueByItsOldestPendingRowAndOnlyWhileItWaits()
     {
@@ -72,6 +74,7 @@ public class QueueMetricsShould : IntegrationTestBase
         Value(after, "dm_messaging_outbox_pending", QueueNames.Notifications).Should().Be(0);
     }
 
+    /// <remarks>Mutation it must fail on: dead rows counted as pending, which ages the queue by a row nobody will take.</remarks>
     [Fact]
     public async Task CountDeadRowsApartFromPendingOnes()
     {
@@ -95,6 +98,7 @@ public class QueueMetricsShould : IntegrationTestBase
             "once the dead row is dealt with the dead-row alert has to clear");
     }
 
+    /// <remarks>Mutation it must fail on: a reading kept from an earlier scrape, which shows a returned row as dead.</remarks>
     [Fact]
     public async Task FollowADeadRowUntilItIsReturnedOrDeleted()
     {

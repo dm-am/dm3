@@ -118,6 +118,8 @@ function freshDatabase(tree) {
       "DROP DATABASE IF EXISTS dm3 WITH (FORCE)",
       "-c",
       `CREATE DATABASE dm3 OWNER "${databaseUser(docker)}"`,
+      "-c",
+      "REVOKE CONNECT ON DATABASE dm3 FROM PUBLIC",
     ],
     docker,
   );

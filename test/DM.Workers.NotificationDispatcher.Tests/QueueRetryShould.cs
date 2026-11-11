@@ -102,6 +102,7 @@ public class QueueRetryShould(NotificationDatabaseFixture fixture)
         (await worker.HandleNextAsync(CancellationToken.None)).Should().BeFalse("no worker claims a dead row");
     }
 
+    /// <remarks>Mutation it must fail on: the whole exception kept as the last error, which PostgreSQL refuses.</remarks>
     [Fact]
     public async Task KeepTheExceptionCutAndWithoutZeroCharactersAsTheLastError()
     {
@@ -205,6 +206,7 @@ public class QueueRetryShould(NotificationDatabaseFixture fixture)
         (await fixture.OutboxRow(row.Id)).ProcessedUtc.Should().Be(Start, "the work is done, and doing it again would duplicate it");
     }
 
+    /// <remarks>Mutation it must fail on: every cancellation taken for the host's stop, which costs the row nothing.</remarks>
     [Fact]
     public async Task CountACancellationThatIsNotTheHostsStopAsAFailure()
     {
@@ -271,6 +273,52 @@ public class QueueRetryShould(NotificationDatabaseFixture fixture)
             Arg.Any<CreateNotification>(), Arg.Any<EventType>(), Arg.Any<CancellationToken>());
     }
 
+    /// <remarks>
+    /// A trigger deferred to the commit fails the commit of this queue alone, after the mark was
+    /// written: the session dying between the mark and the commit. Mutation it must fail on: the
+    /// counters added before the commit.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CountNothingWhenTheCommitOfTheMarkFails(bool rejected)
+    {
+        var queue = OwnQueue();
+        var row = await Store(queue);
+        using var counters = new QueueCounters(queue);
+        await using var services = Services();
+        var worker = Worker(services, queue, new MovingClock(Start), (_, _, _) => rejected
+            ? Task.FromResult(ProcessResult.Failure)
+            : throw new TimeoutException("the mail server is down"));
+        var trigger = $"fail_commit_{Guid.NewGuid():N}";
+        await Run($"""
+            CREATE FUNCTION {trigger}() RETURNS trigger LANGUAGE plpgsql AS
+            $$ BEGIN RAISE EXCEPTION 'the commit is lost'; END $$;
+            CREATE CONSTRAINT TRIGGER {trigger} AFTER UPDATE ON "OutboxEvents"
+            DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+            WHEN (NEW."Queue" = '{queue}') EXECUTE FUNCTION {trigger}();
+            """);
+        try
+        {
+            var handling = () => worker.HandleNextAsync(CancellationToken.None);
+            await handling.Should().ThrowAsync<PostgresException>("a lost commit is a loop error");
+        }
+        finally
+        {
+            await Run($"""DROP TRIGGER {trigger} ON "OutboxEvents"; DROP FUNCTION {trigger}();""");
+        }
+
+        counters.Failed.Should().Be(0, "the row did not become dead, its mark rolled back");
+        counters.Retried.Should().Be(0, "no pause was assigned, its mark rolled back");
+        var untouched = await fixture.OutboxRow(row.Id);
+        (untouched.Attempts, untouched.DeadUtc, untouched.NextAttemptUtc)
+            .Should().Be((0, (DateTimeOffset?)null, (DateTimeOffset?)null));
+
+        (await worker.HandleNextAsync(CancellationToken.None)).Should().BeTrue();
+        (rejected ? counters.Failed : counters.Retried).Should().Be(1, "the mark that commits is counted once");
+    }
+
+    /// <remarks>Mutation it must fail on: a return command without the condition on DeadUtc.</remarks>
     [Fact]
     public async Task ReturnADeadRowByTheReturnCommandAndNothingElse()
     {

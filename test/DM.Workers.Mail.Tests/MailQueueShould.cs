@@ -71,6 +71,7 @@ public class MailQueueShould(MailDatabaseFixture fixture) : IAsyncLifetime
         server.Received.Should().ContainSingle().Which.Address.Should().Be("erased@example.com");
     }
 
+    /// <remarks>Mutation it must fail on: the body stored as text, which PostgreSQL refuses with a zero character.</remarks>
     [Fact]
     public async Task StoreAndSendALetterWithAZeroCharacterInItsBody()
     {

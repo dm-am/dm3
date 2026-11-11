@@ -228,8 +228,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Обработчик очереди {{ $labels.queue }} роняет сообщения"
-          description: "Сообщения завершаются исключением. Где у очереди есть очередь недоставленных, они ждут там, у очереди живых уведомлений ее нет, и сообщения пропадают. Смотреть docker logs обработчика."
+          summary: "В очереди {{ $labels.queue }} записи становятся мертвыми"
+          description: "Запись очереди стала мертвой: двадцать неудач подряд или запись не читается. Она ждет в таблице OutboxEvents с отметкой DeadUtc, причина в поле LastError. Команда возврата в тексте правила DeadOutboxRows. Смотреть docker logs обработчика."
 
       # Retries rise long before failures do: a queue being processed on the
       # second attempt is a queue about to stop being processed.

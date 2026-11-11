@@ -7,6 +7,7 @@ using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Queues;
 using DM.Infrastructure.Core.Tracing;
+using DM.Infrastructure.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -51,7 +52,6 @@ internal sealed class PushListener : BackgroundService
     private readonly Channel<RealtimeNotification> _buffer = Channel.CreateBounded<RealtimeNotification>(
         new BoundedChannelOptions(BufferCapacity) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
 
-    /// <param name="logger">Logger.</param>
     /// <param name="connectionStrings">Where the database is.</param>
     /// <param name="state">Holder the health check and the gauge read.</param>
     /// <param name="scopes">Scopes the push handler is resolved in, one per push.</param>
@@ -157,21 +157,24 @@ internal sealed class PushListener : BackgroundService
             ApplicationName = ApplicationName
         }.ConnectionString;
 
-    // Runs on the connection's reading, so it only checks the shape and buffers.
-    private void OnNotification(object sender, NpgsqlNotificationEventArgs notification)
+    private void OnNotification(object sender, NpgsqlNotificationEventArgs notification) => Hear(notification.Payload);
+
+    /// <summary>Takes one heard notification: checks its shape and buffers the push.</summary>
+    /// <remarks>Runs on the connection's reading, so it does nothing more.</remarks>
+    internal void Hear(string payload)
     {
-        if (!PushPayload.TryRead(notification.Payload, out var push))
+        if (!PushPayload.TryRead(payload, out var push))
         {
             CountFailure(null);
-            _logger.LogWarning("Dropped a notification of a foreign shape on {Channel}", notification.Channel);
+            _logger.LogWarning("Dropped a notification of a foreign shape on {Channel}", QueueNames.PushChannel);
             return;
         }
 
-        if (!_buffer.Writer.TryWrite(push!))
+        if (!_buffer.Writer.TryWrite(push))
         {
-            CountFailure(push!);
+            CountFailure(push);
             _logger.LogWarning("Dropped push {NotificationId}: the buffer of {Capacity} is full",
-                push!.NotificationId, BufferCapacity);
+                push.NotificationId, BufferCapacity);
         }
     }
 
@@ -194,9 +197,12 @@ internal sealed class PushListener : BackgroundService
         try
         {
             await using var scope = _scopes.CreateAsyncScope();
-            var handler = ActivatorUtilities.GetServiceOrCreateInstance<RealtimeNotificationProcessor>(
-                scope.ServiceProvider);
-            await handler.Process(QueueNames.PushChannel, push, stoppingToken);
+            var handler = scope.ServiceProvider.GetRequiredService<RealtimeNotificationProcessor>();
+            if (await handler.Process(QueueNames.PushChannel, push, stoppingToken) != ProcessResult.Success)
+            {
+                CountFailure(push);
+                _logger.LogWarning("The hub refused push {NotificationId}", push.NotificationId);
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
+using System.Diagnostics;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using AwesomeAssertions;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Testing;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Xunit;
 
@@ -17,16 +21,61 @@ namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 /// </remarks>
 public class QueueMetricsShould
 {
+    /// <remarks>Mutation it must fail on: a callback that does not catch, which loses every series.</remarks>
     [Fact]
     public void ReadNotANumberForEveryQueueWhenTheDatabaseIsUnreachable()
     {
         // Nothing listens on port 1, so every connection is refused.
         using var source = NpgsqlDataSource.Create(
             "Host=127.0.0.1;Port=1;Database=dm3;Username=dm_app;Password=unused;Timeout=1");
-        using var metrics = new QueueMetrics(source, new FixedClock(DateTimeOffset.UtcNow));
+        using var metrics = new QueueMetrics(source, new FixedClock(DateTimeOffset.UtcNow), new RecordingLogger<QueueMetrics>());
 
         var observed = Scrape();
 
+        AssertNotANumberForEveryQueue(observed);
+    }
+
+    /// <remarks>
+    /// Mutation it must fail on: the reading without its budget, which waits out the driver's
+    /// connection timeout of 15 seconds and holds the scrape past the one Prometheus gives it.
+    /// </remarks>
+    [Fact]
+    public void AnswerNotANumberWithinItsBudgetWhenTheDatabaseDoesNotAnswer()
+    {
+        // A port that takes the connection and never says a word, like a host that drops packets.
+        using var silent = new TcpListener(IPAddress.Loopback, 0);
+        silent.Start();
+        var port = ((IPEndPoint)silent.LocalEndpoint).Port;
+        using var source = NpgsqlDataSource.Create(
+            $"Host=127.0.0.1;Port={port};Database=dm3;Username=dm_app;Password=unused;Pooling=false");
+        using var metrics = new QueueMetrics(source, new FixedClock(DateTimeOffset.UtcNow), new RecordingLogger<QueueMetrics>());
+
+        var watch = Stopwatch.StartNew();
+        var observed = Scrape();
+
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(8),
+            "the reading has five seconds in all, inside the ten seconds Prometheus waits for a scrape");
+        AssertNotANumberForEveryQueue(observed);
+    }
+
+    /// <remarks>Mutation it must fail on: a catch that logs nothing, or logs on every scrape.</remarks>
+    [Fact]
+    public void WarnOnceWhenTheReadingStartsFailing()
+    {
+        using var source = NpgsqlDataSource.Create(
+            "Host=127.0.0.1;Port=1;Database=dm3;Username=dm_app;Password=unused;Timeout=1");
+        var logger = new RecordingLogger<QueueMetrics>();
+        using var metrics = new QueueMetrics(source, new FixedClock(DateTimeOffset.UtcNow), logger);
+
+        Scrape();
+        Scrape();
+
+        logger.At(LogLevel.Warning).Should().ContainSingle(
+            "an outage is said once when it starts, not on every scrape it lasts");
+    }
+
+    private static void AssertNotANumberForEveryQueue(List<(string Series, string? Queue, double Value)> observed)
+    {
         observed.Select(measurement => (measurement.Series, measurement.Queue))
             .Should().BeEquivalentTo(
                 [

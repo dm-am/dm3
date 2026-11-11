@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace DM.Domain.Personal.Features.Notifications;
 
@@ -19,6 +22,11 @@ public static class PushPayload
     public const int Limit = 7000;
 
     private static readonly JsonSerializerOptions Codec = new(JsonSerializerDefaults.Web);
+
+    private static readonly JsonSerializerOptions StrictCodec = new(Codec)
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+    };
 
     /// <summary>
     /// Cuts a push into the pieces it is sent as.
@@ -50,7 +58,8 @@ public static class PushPayload
         }
 
         // Even one recipient does not fit: the metadata is what is too long, and a push
-        // without it still moves the counter of an open tab.
+        // without it still moves the counter of an open tab. Metadata is declared non-null,
+        // so that piece carries a null the type does not admit: its readers take object?.
         pieces.Add(Write(push, recipients, withMetadata: false));
     }
 
@@ -64,7 +73,7 @@ public static class PushPayload
             RecipientIds = recipients
         }, Codec);
 
-    private static bool Fits(string piece) => System.Text.Encoding.UTF8.GetByteCount(piece) < Limit;
+    private static bool Fits(string piece) => Encoding.UTF8.GetByteCount(piece) < Limit;
 
     /// <summary>
     /// Reads one piece back into a push.
@@ -76,7 +85,7 @@ public static class PushPayload
     /// push without an identifier is a foreign shape. Empty metadata is the site's own, the
     /// shape of a piece that did not fit with it.
     /// </remarks>
-    public static bool TryRead(string payload, out RealtimeNotification? push)
+    public static bool TryRead(string payload, [NotNullWhen(true)] out RealtimeNotification? push)
     {
         push = null;
         RealtimeNotification? read;
@@ -98,9 +107,4 @@ public static class PushPayload
         push = read;
         return true;
     }
-
-    private static readonly JsonSerializerOptions StrictCodec = new(Codec)
-    {
-        UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow
-    };
 }

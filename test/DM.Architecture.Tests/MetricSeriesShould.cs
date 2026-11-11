@@ -112,7 +112,12 @@ public class MetricSeriesShould
     }
 
     private static readonly Regex InstrumentWithUnit = new(
-        @"Create(?<kind>Counter|Histogram|UpDownCounter|ObservableGauge|ObservableCounter|Gauge)<[^>]+>\(\s*""(?<name>dm\.[a-z0-9._]+)""\s*,\s*(?<unit>null|""[^""]*"")",
+        @"Create(?<kind>Counter|Histogram|UpDownCounter|Gauge)<[^>]+>\(\s*""(?<name>dm\.[a-z0-9._]+)""\s*,\s*(?<unit>null|""[^""]*"")",
+        RegexOptions.Compiled);
+
+    // An observable instrument takes its callback second, on one line, and its unit third.
+    private static readonly Regex ObservableWithUnit = new(
+        @"Create(?<kind>ObservableGauge|ObservableCounter|ObservableUpDownCounter)<[^>]+>\(\s*""(?<name>dm\.[a-z0-9._]+)""\s*,\s*[^\n]*?\s*,\s*(?<unit>null|""[^""]*"")\s*,",
         RegexOptions.Compiled);
 
     // The exporter maps the UCUM table and appends anything else verbatim.
@@ -123,7 +128,8 @@ public class MetricSeriesShould
     public void DeclareOnlyUnitsTheExporterUnderstands()
     {
         var declarations = RepositoryFiles.ProductionSources()
-            .SelectMany(path => InstrumentWithUnit.Matches(File.ReadAllText(path)))
+            .SelectMany(path => InstrumentWithUnit.Matches(File.ReadAllText(path))
+                .Concat(ObservableWithUnit.Matches(File.ReadAllText(path))))
             .Select(match => (
                 Name: match.Groups["name"].Value,
                 Kind: match.Groups["kind"].Value,
@@ -133,6 +139,9 @@ public class MetricSeriesShould
         declarations.Should().NotBeEmpty(
             "the expression has to find the declarations, and one that matches none passes " +
             "whatever they say");
+        declarations.Should().Contain(declaration => declaration.Kind.StartsWith("Observable", StringComparison.Ordinal),
+            "the observable form puts its callback before the unit, and an expression that reads " +
+            "the callback as the unit passes those instruments unread");
 
         foreach (var (name, kind, unit) in declarations)
         {
@@ -144,7 +153,7 @@ public class MetricSeriesShould
                 continue;
             }
 
-            if (kind == "Gauge" && unit == "null")
+            if (kind.EndsWith("Gauge", StringComparison.Ordinal) && unit == "null")
             {
                 // A level gauge over a count is dimensionless: UCUM has nothing to map "rows" to.
                 continue;

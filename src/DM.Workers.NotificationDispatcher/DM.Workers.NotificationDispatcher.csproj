@@ -8,7 +8,6 @@
     <ItemGroup>
         <!-- Source generator only: nothing of Mapperly reaches the runtime. -->
         <PackageReference Include="Riok.Mapperly" PrivateAssets="all" />
-        <PackageReference Include="AspNetCore.HealthChecks.Npgsql" />
     </ItemGroup>
 
     <ItemGroup>

@@ -22,6 +22,7 @@ public class MailOutboxShould : IntegrationTestBase
     {
     }
 
+    /// <remarks>Mutation it must fail on: a letter stored without the trace parent of the request.</remarks>
     [Fact]
     public async Task KeepTheRegistrationLetterInTheMailQueueWithTheTraceOfTheRequest()
     {

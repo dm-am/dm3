@@ -65,9 +65,9 @@ internal static class SharedModel
 
     private static void Outbox(ModelBuilder modelBuilder)
     {
-        // One partial index over the live rows serves the claim of each queue and the
-        // backlog metrics; the retention delete of a week of rows scans rather than pay
-        // a second index on every insert.
+        // One partial index over the live rows serves the claim of each queue. The queue
+        // gauges, which count the dead rows too, and the retention delete of a week of rows
+        // scan rather than pay a second index on every insert.
         modelBuilder.Entity<Entities.Outbox.OutboxEvent>(entity =>
         {
             entity.Property(e => e.Attempts).HasDefaultValue(0);

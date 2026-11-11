@@ -8,16 +8,12 @@
     <ItemGroup>
         <PackageReference Include="MailKit" />
         <PackageReference Include="MimeKit" />
-        <!-- The database check probes the process's connection source, as the API's does. -->
-        <PackageReference Include="AspNetCore.HealthChecks.Npgsql" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Mail\DM.Infrastructure.Mail.csproj" />
         <ProjectReference Include="..\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
-        <!-- For the process's one connection source; the worker composes nothing else of the data layer. -->
-        <ProjectReference Include="..\DM.Infrastructure.Persistence\DM.Infrastructure.Persistence.csproj" />
     </ItemGroup>
 
     <!-- None, not Content: outside the Web SDK appsettings.json is not a Content item. -->

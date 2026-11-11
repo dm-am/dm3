@@ -6,8 +6,8 @@ namespace DM.Infrastructure.Core.Queues;
 /// pushes.
 /// </summary>
 /// <remarks>
-/// One home, because a typo on one end leaves rows that nobody drains. The queue
-/// names are the ones the broker queues had, so the metric labels do not change.
+/// One home, because a typo on one end leaves rows that nobody drains. The metric
+/// labels and the dashboards read the queue names, so a rename changes them too.
 /// The push channel is a plain lower-case identifier, so LISTEN needs no quoting.
 /// </remarks>
 public static class QueueNames

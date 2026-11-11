@@ -109,7 +109,8 @@ compose() {
 reset_databases() {
   compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -c 'DROP DATABASE IF EXISTS dm3 WITH (FORCE)' \
-    -c "CREATE DATABASE dm3 OWNER \"$APP_DB_USER\"" >/dev/null
+    -c "CREATE DATABASE dm3 OWNER \"$APP_DB_USER\"" \
+    -c 'REVOKE CONNECT ON DATABASE dm3 FROM PUBLIC' >/dev/null
 
   # --force-recreate: a one-shot service that already exited is "up to date" to compose, and
   # the second run would be seeded into a database with no schema.

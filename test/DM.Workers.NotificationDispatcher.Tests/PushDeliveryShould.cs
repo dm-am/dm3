@@ -36,6 +36,7 @@ public class PushDeliveryShould(NotificationDatabaseFixture fixture)
 {
     private static readonly TimeSpan HeardWithin = TimeSpan.FromSeconds(5);
 
+    /// <remarks>Mutation it must fail on: a processor that stores the notification and sends no push.</remarks>
     [Fact]
     public async Task GiveAPushHeardByAListenerForAProcessedEvent()
     {
