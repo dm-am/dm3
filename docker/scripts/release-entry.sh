@@ -6,6 +6,9 @@
 # mechanism.
 #
 # Usage, as root:
+#   dm3-release poll                                one tick: the highest new signed tag, rolled out
+#   dm3-release deploy <tag>                        a tick for one tag, the tried list ignored
+#   dm3-release rollback                            roll back to the release the live one replaced
 #   dm3-release maintain <tag> [--reset-database]   install a verified tag, downtime allowed
 #   dm3-release recover                             start what current names, edge on the primaries
 #   dm3-release boot | stop                         the dm3 unit's start and stop
@@ -28,7 +31,23 @@ SIGNERS="$DM3_ETC/release-signers"
 CONF="$DM3_ETC/release.conf"
 MARKER="$DM3_STATE/in-flight"
 SCRATCH="$DM3_STATE/scratch"
+# One line per decision about a tag, appended and never rewritten: the timer takes no version at
+# or below one listed here, and the newest failure in it is what ReleaseFailed reports.
+TRIED="$DM3_STATE/tried"
+# Object ids that failed verification, so a writer's tag costs one fetch, not one per tick.
+REJECTED="$DM3_STATE/rejected"
+WAITING="$DM3_STATE/waiting"
+FETCHED="$DM3_STATE/fetched"
 RELEASE_USER=dm-release
+# Where the node exporter's textfile collector reads, as for the backup check.
+TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}"
+MEMINFO=/proc/meminfo
+# A tick verifies at most this many tags, so a flood of pushed tags cannot hold the lock for long.
+MAX_CANDIDATES=20
+# What a rollout replaces; any other service changes only by maintain (3.8).
+APP_SERVICES='["migration","dmapi","dmapi-next","dmfront","dmfront-next","dm-mail-worker","dm-notification-worker"]'
+# The return code of a release that waits: the site is untouched and the next tick asks again.
+WAITS=3
 
 # What an unverified tag may cost: its fetch stops after two minutes or at a file of 256 MiB
 # (ulimit counts in 1024-byte blocks), whatever a writer pushes under a release-shaped name.
@@ -403,7 +422,8 @@ pull_images() {
     local commit=$1 ref label
     shift
     for ref in "$@"; do
-        docker pull -q "$ref" > /dev/null || { refuse "$ref could not be pulled"; return; }
+        # 2, not 1: a registry that does not answer is a release that waits, not a refused one.
+        docker pull -q "$ref" > /dev/null || { refuse "$ref could not be pulled"; return 2; }
         label="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$ref")"
         [ "$label" = "$commit" ] ||
             { refuse "$ref was built from ${label:-an unlabelled commit}, not $commit"; return; }
@@ -444,21 +464,38 @@ edge_exec() {
     compose_cmd "$REL/current" exec -T nginx "$@"
 }
 
-# The API's request counter, summed over its series, read from inside the edge.
+# The API's request counter, summed over its series, read from inside the edge; with a second
+# argument only the series of 5xx answers. An instance that is not there counts 0, which is what
+# the switch check wants of an old instance that recovery already removed.
 request_count() {
-    edge_exec curl -s "http://$1:5000/metrics" |
-        awk '/^http_server_request_duration_seconds_count[{ ]/ { sum += $NF } END { printf "%d\n", sum }'
+    { edge_exec curl -s "http://$1:5000/metrics" 2> /dev/null || true; } |
+        awk -v errors="${2:-}" '/^http_server_request_duration_seconds_count[{ ]/ {
+            if (errors && $0 !~ /http_response_status_code="5[0-9][0-9]"/) next
+            sum += $NF
+        } END { printf "%d\n", sum }'
+}
+
+api_host() {
+    case "$1" in
+        primary) echo dmapi ;;
+        next) echo dmapi-next ;;
+    esac
 }
 
 # The switch check (3.6) towards one pair: through the loaded configuration, 20 readiness
-# answers of 200 that the pair's API counted, and the frontend that answers is the pair's.
-# The counter is read again for up to 3 s, since the metrics endpoint answers from a cache.
+# answers of 200 that the pair's API counted while the old pair's counted fewer than 5, and the
+# frontend that answers is the pair's. The counters are read again for up to 3 s, since the
+# metrics endpoint answers from a cache. With seconds, the pair then serves that long at two
+# requests a second with no failure and no 5xx on its counter.
 switch_check() {
-    local pair=$1 api front tries before after codes instance hostname
+    local pair=$1 old=${2:-} seconds=${3:-0} api front tries before after codes instance hostname
+    local old_api="" old_before=0 old_after=0 errors_before errors_after
+    api="$(api_host "$pair")"
     case "$pair" in
-        primary) api=dmapi front=dm-front ;;
-        next) api=dmapi-next front=dm-front-next ;;
+        primary) front=dm-front ;;
+        next) front=dm-front-next ;;
     esac
+    [ -z "$old" ] || old_api="$(api_host "$old")"
     tries=0
     until [ "$(edge_exec curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8081/_ready 2> /dev/null || true)" = 200 ]; do
         tries=$((tries + 1))
@@ -466,6 +503,7 @@ switch_check() {
         sleep 2
     done
     before="$(request_count "$api")"
+    [ -z "$old_api" ] || old_before="$(request_count "$old_api")"
     # shellcheck disable=SC2016 # expanded by the shell in the edge container
     codes="$(edge_exec sh -c 'for i in $(seq 20); do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8081/_ready; done')"
     [ "$(grep -cx 200 <<< "$codes" || true)" = 20 ] ||
@@ -478,10 +516,26 @@ switch_check() {
         [ "$tries" -lt 6 ] || { refuse "$api counted $((after - before)) of the 20 requests: the edge serves another API"; return; }
         sleep 0.5
     done
+    if [ -n "$old_api" ]; then
+        old_after="$(request_count "$old_api")"
+        [ "$((old_after - old_before))" -lt 5 ] ||
+            { refuse "$old_api still counted $((old_after - old_before)) requests after the switch to the $pair pair"; return; }
+    fi
     instance="$(edge_exec curl -s http://127.0.0.1:8081/_instance)"
     hostname="$(docker inspect --format '{{.Config.Hostname}}' "$front")"
     [ "$instance" = "$hostname" ] ||
         { refuse "the edge serves the frontend $(printf '%q' "$instance"), not $front ($hostname)"; return; }
+    [ "$seconds" -gt 0 ] || return 0
+
+    errors_before="$(request_count "$api" 5xx)"
+    # shellcheck disable=SC2016 # expanded by the shell in the edge container
+    codes="$(edge_exec sh -c 'end=$(($(date +%s) + $1)); while [ "$(date +%s)" -lt "$end" ]; do
+        curl -s -o /dev/null --max-time 5 -w "%{http_code}\n" http://127.0.0.1:8081/_ready; sleep 0.5; done' sh "$seconds")"
+    [ -z "$(grep -vx 200 <<< "$codes" || true)" ] ||
+        { refuse "the $pair pair failed requests within $seconds s: $(grep -vx 200 <<< "$codes" | sort | uniq -c | tr '\n' ' ')"; return; }
+    errors_after="$(request_count "$api" 5xx)"
+    [ "$errors_after" = "$errors_before" ] ||
+        { refuse "$api answered $((errors_after - errors_before)) requests with 5xx within $seconds s"; return; }
 }
 
 # Services whose bind-mounted files under the project directory differ from the previous
@@ -575,41 +629,611 @@ reset_database() {
     fi
 }
 
+# The fields fetch_and_verify printed, into the F_ globals every verb after it reads.
+take_fields() {
+    local key value
+    F_COMMIT="" F_API="" F_FRONT="" F_MAIL="" F_NOTIFICATION="" F_SIGNED="" F_ID=""
+    while IFS='=' read -r key value; do
+        case "$key" in
+            commit) F_COMMIT=$value ;;
+            api) F_API=$value ;;
+            front) F_FRONT=$value ;;
+            worker-mail) F_MAIL=$value ;;
+            worker-notification) F_NOTIFICATION=$value ;;
+            signed) F_SIGNED=$value ;;
+            id) F_ID=$value ;;
+        esac
+    done <<< "$1"
+}
+
+# The marker names the run, so the tick that finds it lists the right tag as tried.
+write_marker() {
+    printf 'tag=%s\nsigned=%s\n' "$1" "$2" > "$MARKER"
+}
+
+live_tag() {
+    local id
+    id="$(live_id)"
+    [ -z "$id" ] || env_value "$REL/$id/release.env" RELEASE_TAG
+}
+
+# version_above <a> <b>: a is the higher release version; anything is above an empty b.
+version_above() {
+    local -a a b
+    [ -n "$2" ] || return 0
+    IFS=. read -r -a a <<< "${1#v}"
+    IFS=. read -r -a b <<< "${2#v}"
+    if [ "${a[0]}" -ne "${b[0]}" ]; then
+        [ "${a[0]}" -gt "${b[0]}" ]
+    elif [ "${a[1]}" -ne "${b[1]}" ]; then
+        [ "${a[1]}" -gt "${b[1]}" ]
+    else
+        [ "${a[2]}" -gt "${b[2]}" ]
+    fi
+}
+
+# tried_add <tag> <signed> <outcome> <reason>: outcome is started, released, refused, failed or
+# rolled-back. The reason is folded onto its line, since one line is one decision.
+tried_add() {
+    local reason=${4//[$'\t\n']/ }
+    mkdir -p "$DM3_STATE"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$(date +%s)" "$1" "${2:0:12}" "$3" "$reason" >> "$TRIED"
+}
+
+max_tried_version() {
+    local version max=""
+    [ -f "$TRIED" ] || return 0
+    while IFS=$'\t' read -r _ version _; do
+        valid_tag_name "$version" || continue
+        if version_above "$version" "$max"; then
+            max=$version
+        fi
+    done < "$TRIED"
+    printf '%s\n' "$max"
+}
+
+is_rejected() {
+    grep -qxF -- "$1" "$REJECTED" 2> /dev/null
+}
+
+remember_rejected() {
+    mkdir -p "$DM3_STATE"
+    is_rejected "$1" || printf '%s\n' "$1" >> "$REJECTED"
+}
+
+# wait_for <tag> <reason>: the candidate is not taken now and nothing is listed. The time kept is
+# the first time anything waited, which is what ReleaseWaiting counts the hour from.
+wait_for() {
+    say "$1 waits: $2"
+    [ -s "$WAITING" ] || printf '%s\t%s\t%s\n' "$(date +%s)" "$1" "${2//[$'\t\n']/ }" > "$WAITING"
+}
+
+# candidates <ls-remote listing> <live version>: what a tick may look at, highest first, as
+# kind<TAB>name<TAB>id lines. A strict name above the live version and every tried one, whose id
+# was not rejected before: "try" when annotated, "lightweight" when not, since only an annotated
+# tag carries a signature. A release-shaped name that is not strict is "misnamed", quoted, so the
+# journal names it without running it.
+candidates() {
+    local listing=$1 live=$2 floor id ref name major minor patch
+    local -A tag=() peeled=()
+    floor="$(max_tried_version)"
+    while read -r id ref; do
+        [[ $ref == refs/tags/* ]] || continue
+        name=${ref#refs/tags/}
+        if [[ $name == *'^{}' ]]; then
+            peeled[${name%'^{}'}]=$id
+        else
+            tag[$name]=$id
+        fi
+    done <<< "$listing"
+    for name in "${!tag[@]}"; do
+        if ! valid_tag_name "$name"; then
+            if [[ $name =~ ^v[0-9] ]]; then
+                printf '%s\tmisnamed\t%q\n' 000000000000000000 "$name"
+            fi
+            continue
+        fi
+        version_above "$name" "$live" || continue
+        version_above "$name" "$floor" || continue
+        id=${tag[$name]}
+        ! is_rejected "$id" || continue
+        IFS=. read -r major minor patch <<< "${name#v}"
+        if [[ -n ${peeled[$name]:-} && ${peeled[$name]} != "$id" ]]; then
+            printf '%06d%06d%06d\ttry\t%s\t%s\n' "$major" "$minor" "$patch" "$name" "$id"
+        else
+            printf '%06d%06d%06d\tlightweight\t%s\t%s\n' "$major" "$minor" "$patch" "$name" "$id"
+        fi
+    done | sort -r | cut -f2- | awk -F '\t' -v max="$MAX_CANDIDATES" '$1 != "try" || ++tries <= max'
+}
+
+# The build time of the oldest image the live release runs, as epoch seconds.
+oldest_build() {
+    local env=$1 ref created epoch oldest=""
+    while IFS= read -r ref; do
+        created="$(docker image inspect --format '{{.Created}}' "$ref" 2> /dev/null || true)"
+        [ -n "$created" ] || continue
+        epoch="$(date -d "$created" +%s 2> /dev/null || true)"
+        [ -n "$epoch" ] || continue
+        if [ -z "$oldest" ] || [ "$epoch" -lt "$oldest" ]; then
+            oldest=$epoch
+        fi
+    done < <(sed -n 's/^DM_IMAGE_[A-Z_]*=//p' "$env")
+    printf '%s\n' "$oldest"
+}
+
+# write_metric <rejected this tick>: the one family of 3.15, from what is true now, so a run that
+# died cannot leave it stale. Renamed into place, as the collector may read at any moment.
+write_metric() {
+    local rejected=${1:-0} id tag built tmp
+    mkdir -p "$TEXTFILE_DIR"
+    tmp="$(mktemp "$TEXTFILE_DIR/.dm_release.XXXXXX")"
+    {
+        echo "# HELP dm_release What the release script last found; field names the fact (release design 3.15)."
+        echo "# TYPE dm_release gauge"
+        id="$(live_id)"
+        if [ -n "$id" ]; then
+            tag="$(env_value "$REL/$id/release.env" RELEASE_TAG)"
+            # The link itself, not its target: renaming current is the change.
+            printf 'dm_release{field="changed",tag="%s"} %s\n' "$tag" "$(stat -c %Y "$REL/current")"
+            built="$(oldest_build "$REL/$id/release.env")"
+            if [ -n "$built" ]; then
+                printf 'dm_release{field="built"} %s\n' "$built"
+            fi
+        fi
+        if [ -f "$TRIED" ]; then
+            awk -F '\t' '$4 == "failed" || $4 == "refused" { time = $1; tag = $2 }
+                END { if (time) printf "dm_release{field=\"failed\",tag=\"%s\"} %s\n", tag, time }' "$TRIED"
+        fi
+        printf 'dm_release{field="waiting_since"} %s\n' "$(cut -f1 "$WAITING" 2> /dev/null || echo 0)"
+        printf 'dm_release{field="fetched"} %s\n' "$(cat "$FETCHED" 2> /dev/null || echo 0)"
+        printf 'dm_release{field="rejected"} %s\n' "$rejected"
+    } > "$tmp"
+    chmod 644 "$tmp"
+    mv -f "$tmp" "$TEXTFILE_DIR/dm_release.prom"
+}
+
+# Application images of releases older than the live one and the one it replaced. docker refuses
+# to remove an image a container runs, and that is left as it is.
+prune_app_images() {
+    local id prev keep="" prefix repo ref
+    id="$(live_id)"
+    [ -n "$id" ] || return 0
+    prev="$(env_value "$REL/$id/release.env" RELEASE_REPLACES)"
+    for id in "$id" "$prev"; do
+        if [ -n "$id" ] && [ -f "$REL/$id/release.env" ]; then
+            keep+="$(sed -n 's/^DM_IMAGE_[A-Z_]*=//p' "$REL/$id/release.env")"$'\n'
+        fi
+    done
+    prefix="$(conf_value image_prefix)" || return 0
+    for repo in dm-api dm-front dm-worker-mail dm-worker-notification; do
+        while IFS= read -r ref; do
+            if [ -z "$ref" ] || grep -qxF -- "$ref" <<< "$keep"; then
+                continue
+            fi
+            docker image rm "$ref" > /dev/null 2>&1 || true
+        done < <(docker image ls --digests --format '{{.Repository}}@{{.Digest}}' "$prefix$repo" | grep -v '@<none>$' || true)
+    done
+}
+
+# memory_fits: what a rollout adds still leaves a tenth of the memory, the line of HighMemoryUsage
+# (4.3). The headroom is the operator's, in shared/env.
+memory_fits() {
+    local total available headroom
+    headroom="$(env_value "$SHARED/env" DM_RELEASE_HEADROOM_MIB)"
+    headroom=${headroom:-512}
+    [[ $headroom =~ ^[0-9]{1,7}$ ]] || { refuse "DM_RELEASE_HEADROOM_MIB in $SHARED/env is not a number of MiB"; return; }
+    total="$(awk '$1 == "MemTotal:" { print $2 }' "$MEMINFO")"
+    available="$(awk '$1 == "MemAvailable:" { print $2 }' "$MEMINFO")"
+    [[ $total =~ ^[0-9]+$ && $available =~ ^[0-9]+$ ]] || { refuse "$MEMINFO gives no MemTotal or MemAvailable"; return; }
+    [ "$(((available - headroom * 1024) * 10))" -ge "$total" ]
+}
+
+descends() {
+    release_git -C "$REPO" merge-base --is-ancestor "$1" "$2" 2> /dev/null
+}
+
+# A rollback keeps the schema the newer release migrated to, so it passes over migrations only the
+# live release has and refuses one that both have in different forms.
+refuse_schema_rollback() {
+    local live=$1 target=$2 name=$3 differing
+    differing="$({ sed 's/^/live\t/' "$live"; sed 's/^/target\t/' "$target"; } | awk -F '\t' '
+        $3 ~ /ModelSnapshot\.cs$/ { next }
+        $1 == "live" { live[$3] = $2; next }
+        ($3 in live) && live[$3] != $2 { print $3 }')"
+    [ -z "$differing" ] ||
+        { refuse "rolling back to $name: an existing migration differs ($(tr '\n' ' ' <<< "$differing"))"; return; }
+}
+
+# Migrations the candidate adds, which regime migrate runs before the twins start.
+added_migrations() {
+    awk -F '\t' '$1 == "live" { live[$3] = 1; next } !($3 in live) && $3 ~ /\/Migrations\// && $3 !~ /ModelSnapshot\.cs$/ { print $3 }' \
+        <(sed 's/^/live\t/' "$1") <(sed 's/^/candidate\t/' "$2")
+}
+
+# The configuration as the server runs it: the rollout profile and no other. The seeder (tools)
+# and the updater (production) never start on a server, and the seeder takes the application's
+# settings, so counting it would refuse every change of the settings list.
+resolved_config() {
+    compose_cmd "$REL/$1" --profile rollout config --format json
+}
+
+# classify_configs <live.json> <candidate.json>: one line per difference outside the application
+# services. jq compares objects whatever the order of their keys.
+classify_configs() {
+    jq -n -r --argjson app "$APP_SERVICES" --slurpfile live "$1" --slurpfile candidate "$2" '
+        def outside: (.services // {}) | with_entries(select(.key as $k | $app | index($k) | not));
+        ($live[0] | outside) as $l | ($candidate[0] | outside) as $c
+        | ([$l, $c] | map(keys) | add | unique | .[] | select($l[.] != $c[.]) | "the service \(.)"),
+          ([$live[0], $candidate[0]] | map(del(.services) | keys) | add | unique | .[]
+           | select($live[0][.] != $candidate[0][.]) | "the top-level \(.)")'
+}
+
+# classify_files <live dir> <candidate dir> <project dir/> <config.json>...: the mounted files and
+# the release machinery, which a container or root's cron reads by path.
+classify_files() {
+    local live=$1 candidate=$2 base=$3 relative unit
+    shift 3
+    while IFS= read -r relative; do
+        [ -n "$relative" ] || continue
+        if [ -e "$live/docker/$relative" ] || [ -e "$candidate/docker/$relative" ]; then
+            diff -r -q "$live/docker/$relative" "$candidate/docker/$relative" > /dev/null 2>&1 ||
+                printf 'the mounted file docker/%s\n' "$relative"
+        fi
+    done < <(jq -r --arg base "$base" '.services[] | (.volumes // [])[]
+        | select(.type == "bind" and (.source | startswith($base))) | .source | ltrimstr($base)' "$@" | sort -u)
+    diff -r -q "$live/docker/scripts" "$candidate/docker/scripts" > /dev/null 2>&1 ||
+        echo "the release machinery under docker/scripts"
+    for unit in dm3.service dm3-release.service dm3-release.timer; do
+        cmp -s "$live/docker/$unit" "$candidate/docker/$unit" 2> /dev/null || echo "the unit docker/$unit"
+    done
+}
+
+# classify <live id> <candidate id> <timer|deploy|rollback> (3.8): succeeds when the candidate
+# differs from the live release only in the application; otherwise prints the one-line reason.
+classify() {
+    local live=$1 candidate=$2 mode=$3 work differences
+    work="$(mktemp -d)"
+    if ! resolved_config "$live" > "$work/live.json" || ! resolved_config "$candidate" > "$work/candidate.json"; then
+        rm -rf "$work"
+        echo "the configuration could not be resolved with $SHARED/env; compose names what is missing"
+        return 1
+    fi
+    differences="$(classify_configs "$work/live.json" "$work/candidate.json"
+        classify_files "$REL/$live" "$REL/$candidate" "$REL/current/docker/" "$work/live.json" "$work/candidate.json")"
+    rm -rf "$work"
+    if [ -n "$differences" ]; then
+        printf 'needs dm3-release maintain: %s\n' "$(paste -sd ',' <<< "$differences" | sed 's/,/, /g')"
+        return 1
+    fi
+    if [ "$mode" = rollback ]; then
+        refuse_schema_rollback "$REL/$live/schema.manifest" "$REL/$candidate/schema.manifest" \
+            "$(env_value "$REL/$candidate/release.env" RELEASE_TAG)" 2>&1 | sed 's/^dm3-release: refused: //'
+        return "${PIPESTATUS[0]}"
+    fi
+    refuse_schema_change "$(schema_regime)" 0 "$REL/$live/schema.manifest" "$REL/$candidate/schema.manifest" \
+        "$(env_value "$REL/$candidate/release.env" RELEASE_TAG)" 2>&1 | sed 's/^dm3-release: refused: //'
+    return "${PIPESTATUS[0]}"
+}
+
+health_of() {
+    docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$1" 2> /dev/null || true
+}
+
+image_matches() {
+    local running wanted
+    running="$(docker inspect --format '{{.Image}}' "$1" 2> /dev/null || true)"
+    wanted="$(docker image inspect --format '{{.Id}}' "$2" 2> /dev/null || true)"
+    [ -n "$running" ] && [ "$running" = "$wanted" ]
+}
+
+# The stand a rollout may start from (3.5 step 5): the edge and both primaries healthy on the live
+# images, no twin, the links on the primaries. Says what is wrong.
+stand_healthy() {
+    local env="$REL/$1/release.env" container
+    for container in dm-nginx dm-api dm-front; do
+        [ "$(health_of "$container")" = healthy ] || { say "$container is not healthy"; return 1; }
+    done
+    image_matches dm-api "$(env_value "$env" DM_IMAGE_API)" || { say "dm-api does not run the live image"; return 1; }
+    image_matches dm-front "$(env_value "$env" DM_IMAGE_FRONT)" || { say "dm-front does not run the live image"; return 1; }
+    [ -z "$(docker ps -a -q --filter name='^dm-(api|front)-next$')" ] || { say "a twin is there"; return 1; }
+    if [ "$(edge_exec readlink /etc/nginx/upstreams-live/api.conf 2> /dev/null || true)" != /etc/nginx/upstreams/api-primary.conf ] ||
+        [ "$(edge_exec readlink /etc/nginx/upstreams-live/frontend.conf 2> /dev/null || true)" != /etc/nginx/upstreams/front-primary.conf ]; then
+        say "the edge is not on the primaries"
+        return 1
+    fi
+}
+
+# The start gate (3.6) of one pair, 90 s at most: docker health; three readiness answers of 200
+# in a row and one board list asked inside the API; the document and one asset it names asked of
+# the frontend from the edge; each image the one release.env names.
+start_gate() {
+    local dir=$1 pair=$2 api front service deadline container ok=0 code document asset
+    case "$pair" in
+        primary) api=dm-api front=dm-front service=dmfront ;;
+        next) api=dm-api-next front=dm-front-next service=dmfront-next ;;
+    esac
+    deadline=$((SECONDS + 90))
+    for container in "$api" "$front"; do
+        until [ "$(health_of "$container")" = healthy ]; do
+            [ "$SECONDS" -lt "$deadline" ] || { refuse "$container is not healthy within 90 s"; return; }
+            sleep 2
+        done
+    done
+    while [ "$ok" -lt 3 ]; do
+        code="$(docker exec "$api" curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/_ready 2> /dev/null || true)"
+        if [ "$code" = 200 ]; then ok=$((ok + 1)); else ok=0; fi
+        [ "$ok" -eq 3 ] || [ "$SECONDS" -lt "$deadline" ] || { refuse "$api is not ready three times in a row within 90 s"; return; }
+        [ "$ok" -eq 3 ] || sleep 1
+    done
+    code="$(docker exec "$api" curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/v1/boards 2> /dev/null || true)"
+    [ "$code" = 200 ] || { refuse "$api answered $code to GET /v1/boards"; return; }
+    document="$(edge_exec curl -fsS "http://$service/" 2> /dev/null)" || { refuse "$front does not serve the document"; return; }
+    asset="$(grep -o '/assets/[A-Za-z0-9._-]*' <<< "$document" | head -n 1 || true)"
+    [ -n "$asset" ] || { refuse "the document of $front names no asset"; return; }
+    edge_exec curl -fsS -o /dev/null "http://$service$asset" 2> /dev/null || { refuse "$front does not serve $asset"; return; }
+    image_matches "$api" "$(env_value "$dir/release.env" DM_IMAGE_API)" || { refuse "$api does not run the image the release names"; return; }
+    image_matches "$front" "$(env_value "$dir/release.env" DM_IMAGE_FRONT)" || { refuse "$front does not run the image the release names"; return; }
+}
+
+remove_twins() {
+    compose_cmd "$REL/current" --profile rollout rm -s -f dmapi-next dmfront-next > /dev/null 2>&1 ||
+        { refuse "the twins could not be removed"; return; }
+}
+
+# 3.12: the outgoing frontend's files are touched first, so the live bundle is never older than
+# the cut, and only then is what no release touched for 30 days deleted.
+retire_assets() {
+    # shellcheck disable=SC2016 # expanded by the shell in the frontend container
+    docker exec dm-front sh -c 'for file in /usr/share/nginx/html/assets/*; do
+        touch -c "/var/lib/dm-front/assets/${file##*/}"; done
+        find /var/lib/dm-front/assets -type f -mtime +30 -delete'
+}
+
+# The schema step (3.9) from the candidate's definition and image. The gate is the newest
+# migration being in the history table, not the exit code.
+schema_step() {
+    local dir=$1 newest found
+    say "regime migrate with added migrations: the nightly backup, then the schema step"
+    bash "$REL/current/docker/scripts/backup-postgres.sh" || { refuse "the backup before the schema step failed"; return; }
+    compose_cmd "$dir" up --no-deps --no-build --pull never --force-recreate --exit-code-from migration migration ||
+        { refuse "the migration service failed"; return; }
+    newest="$(awk -F '\t' '$2 ~ /\/Migrations\/[^\/]+\.cs$/ && $2 !~ /(Designer|ModelSnapshot)\.cs$/ {
+        sub(/.*\//, "", $2); sub(/\.cs$/, "", $2); print $2 }' "$dir/schema.manifest" | sort | tail -n 1)"
+    [[ $newest =~ ^[A-Za-z0-9_]+$ ]] || { refuse "the manifest names no migration"; return; }
+    found="$(docker exec dm-pg psql -U postgres -d dm3 -tAc \
+        "SELECT 1 FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = '$newest'" 2> /dev/null || true)"
+    [ "$found" = 1 ] || { refuse "$newest is not in __EFMigrationsHistory after the schema step"; return; }
+}
+
+# From step 4 on the old primaries are gone: recovery brings back what current names.
+recover_after() {
+    say "$1; recovering the release current names"
+    if ! recover_stack; then
+        tried_add "$(live_tag)" "" failed "recovery after a failed rollout failed"
+    fi
+    return 1
+}
+
+# rollout <live id> <candidate id> <forward|back> (3.6): from a healthy stand on the live release to
+# the candidate, the candidate's definitions throughout. current moves only at the end, so a
+# failure leaves recovery the definitions it needs. The fixed "switched to" lines are what the
+# proof kills a run on.
+rollout() {
+    local live=$1 candidate=$2 how=$3 dir="$REL/$2" added
+    local up=(up -d --no-deps --no-build --pull never)
+    if [ "$how" = forward ] && [ "$(schema_regime)" = migrate ]; then
+        added="$(added_migrations "$REL/$live/schema.manifest" "$dir/schema.manifest")"
+        if [ -n "$added" ]; then
+            schema_step "$dir" || { remove_twins; rm -f "$MARKER"; return 1; }
+        fi
+    fi
+
+    retire_assets || say "the assets of the outgoing frontend could not be retired; the next release tries again"
+    if ! compose_cmd "$dir" --profile rollout "${up[@]}" dmapi-next dmfront-next || ! start_gate "$dir" next; then
+        refuse "the twins did not pass the start gate"
+        remove_twins || true
+        rm -f "$MARKER"
+        return 1
+    fi
+
+    say "switching to next"
+    if ! edge_switch next || ! { say "switched to next" && switch_check next primary 30; }; then
+        if edge_switch primary && switch_check primary next; then
+            refuse "the switch check towards the twins failed; the primaries serve again"
+            remove_twins || true
+            rm -f "$MARKER"
+            return 1
+        fi
+        recover_after "the edge could not be put back on the primaries"
+        return 1
+    fi
+
+    compose_cmd "$dir" stop dmapi dmfront || { recover_after "the primaries could not be stopped"; return 1; }
+    compose_cmd "$dir" up -d --no-deps --no-build --pull never --force-recreate dmapi dmfront ||
+        { recover_after "the primaries could not be recreated"; return 1; }
+    start_gate "$dir" primary || { recover_after "the new primaries did not pass the start gate"; return 1; }
+    say "switching to primary"
+    { edge_switch primary && say "switched to primary" && switch_check primary next; } ||
+        { recover_after "the switch check towards the new primaries failed"; return 1; }
+    remove_twins || { recover_after "the twins could not be removed"; return 1; }
+    compose_cmd "$dir" up -d --no-deps --no-build --pull never --force-recreate --wait dm-mail-worker dm-notification-worker ||
+        { recover_after "the workers did not become healthy"; return 1; }
+    commit_current "$candidate"
+    rm -f "$MARKER"
+}
+
+refuse_release() {
+    refuse "$1: $2"
+    tried_add "$1" "$F_SIGNED" refused "$2"
+    rm -f "$WAITING"
+}
+
+# Steps 4 to 9 of a tick (3.5) for one verified tag, whose fields are in F_. Returns 0 when it is
+# live, WAITS when it waits, 1 when it was refused or failed.
+try_candidate() {
+    local name=$1 mode=$2 live live_commit rid reason status=0
+    live="$(live_id)"
+    [ -n "$live" ] || { refuse "no release is live: install one with dm3-release maintain"; return 1; }
+    mirror_fetch "$name" "$F_ID" || { wait_for "$name" "the mirror could not fetch it"; return "$WAITS"; }
+    live_commit="$(env_value "$REL/$live/release.env" RELEASE_COMMIT)"
+    descends "$live_commit" "$F_COMMIT" ||
+        { refuse_release "$name" "commit $F_COMMIT does not descend from the live commit $live_commit"; return 1; }
+    stand_healthy "$live" || { wait_for "$name" "the stand is not healthy"; return "$WAITS"; }
+    pull_images "$F_COMMIT" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" || status=$?
+    case "$status" in
+        0) ;;
+        2) wait_for "$name" "an image could not be pulled"; return "$WAITS" ;;
+        *) refuse_release "$name" "an image is not labelled with commit $F_COMMIT"; return 1 ;;
+    esac
+    rid="$(release_id "$name" "$F_COMMIT" "$F_SIGNED")"
+    build_release_dir "$rid" "$name" "$F_COMMIT" "$live" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" > /dev/null ||
+        { refuse_release "$name" "the release directory could not be built"; return 1; }
+    reason="$(classify "$live" "$rid" "$mode")" || { refuse_release "$name" "$reason"; return 1; }
+    memory_fits || { wait_for "$name" "the memory would leave less than a tenth free"; return "$WAITS"; }
+
+    rm -f "$WAITING"
+    write_marker "$name" "$F_SIGNED"
+    tried_add "$name" "$F_SIGNED" started "the rollout began"
+    if ! rollout "$live" "$rid" forward; then
+        tried_add "$name" "$F_SIGNED" failed "the rollout failed; the journal names the step"
+        return 1
+    fi
+    tried_add "$name" "$F_SIGNED" released "live as $rid"
+    say "$name is live as $rid"
+}
+
+# A run that died left its marker: recovery, and its tag is not taken again.
+recover_died() {
+    local tag signed
+    tag="$(sed -n 's/^tag=//p' "$MARKER")"
+    signed="$(sed -n 's/^signed=//p' "$MARKER")"
+    valid_tag_name "$tag" || tag="$(live_tag)"
+    say "a run of $tag did not finish; recovering the release current names"
+    if recover_stack; then
+        tried_add "$tag" "$signed" failed "the run did not finish"
+    else
+        tried_add "$tag" "$signed" failed "recovery after a run that did not finish failed"
+    fi
+}
+
+# One tick of the timer (3.5).
+verb_poll() {
+    local origin listing line kind name id fields rejected=0 tried=0
+    local -a lines=()
+    if [ -e "$MARKER" ]; then
+        recover_died
+        write_metric 0
+        return 0
+    fi
+    [ -n "$(live_id)" ] || { say "no release is live; dm3-release maintain installs one"; return 0; }
+    prune_app_images
+    origin="$(conf_value origin)" || return
+    if ! listing="$(release_git -C "$DM3_STATE" ls-remote --tags -- "$origin" 2> /dev/null)"; then
+        say "the origin $origin cannot be listed"
+        write_metric 0
+        return 0
+    fi
+    date +%s > "$FETCHED"
+    # Read whole first: the docker commands of a rollout would otherwise read the rest of the list.
+    mapfile -t lines < <(candidates "$listing" "$(live_tag)")
+    for line in "${lines[@]}"; do
+        IFS=$'\t' read -r kind name id <<< "$line"
+        case "$kind" in
+            misnamed)
+                say "passed over the tag $name: not vMAJOR.MINOR.PATCH with numbers of at most six digits"
+                ;;
+            lightweight)
+                say "rejected $name: a lightweight tag carries no signature"
+                remember_rejected "$id"
+                rejected=$((rejected + 1))
+                ;;
+            try)
+                if ! fields="$(fetch_and_verify "$name")"; then
+                    remember_rejected "$id"
+                    rejected=$((rejected + 1))
+                    continue
+                fi
+                take_fields "$fields"
+                say "$name verified: commit $F_COMMIT"
+                tried=1
+                try_candidate "$name" timer || true
+                break
+                ;;
+        esac
+    done
+    [ "$tried" = 1 ] || rm -f "$WAITING"
+    write_metric "$rejected"
+}
+
+# deploy <tag>: a tick for one named tag, the tried list ignored; the operator's retry.
+verb_deploy() {
+    local name=$1 live status=0 fields
+    live="$(live_tag)"
+    [ -n "$live" ] || { refuse "no release is live: install one with dm3-release maintain"; return; }
+    version_above "$name" "$live" ||
+        { refuse "$name is not above the live version $live; dm3-release rollback goes back"; return; }
+    fields="$(fetch_and_verify "$name")" || return
+    take_fields "$fields"
+    say "$name verified: commit $F_COMMIT"
+    try_candidate "$name" deploy || status=$?
+    write_metric 0
+    return "$status"
+}
+
+# rollback (3.7): the rollout towards the release the live one replaced; the one left is listed as
+# tried, so the timer does not bring it back.
+verb_rollback() {
+    local live target left reason target_tag
+    local -a images=()
+    live="$(live_id)"
+    [ -n "$live" ] || { refuse "no release is live"; return; }
+    target="$(env_value "$REL/$live/release.env" RELEASE_REPLACES)"
+    if [ -z "$target" ] || [ ! -d "$REL/$target" ]; then
+        refuse "$live replaced no release that is kept"
+        return
+    fi
+    stand_healthy "$live" || { refuse "the stand is not healthy: dm3-release recover first"; return; }
+    reason="$(classify "$live" "$target" rollback)" || { refuse "$reason"; return; }
+    mapfile -t images < <(sed -n 's/^DM_IMAGE_[A-Z_]*=//p' "$REL/$target/release.env")
+    pull_images "$(env_value "$REL/$target/release.env" RELEASE_COMMIT)" "${images[@]}" || return
+    left="$(live_tag)"
+    target_tag="$(env_value "$REL/$target/release.env" RELEASE_TAG)"
+    write_marker "$target_tag" "${target##*-}"
+    if ! rollout "$live" "$target" back; then
+        tried_add "$target_tag" "${target##*-}" failed "the rollback from $left failed; the journal names the step"
+        write_metric 0
+        return 1
+    fi
+    tried_add "$left" "${live##*-}" rolled-back "rolled back to $target_tag"
+    write_metric 0
+    say "rolled back from $left to $target_tag ($target)"
+}
+
 # Maintenance (3.7): any verified tag the operator names, downtime allowed. Also the first
 # installation, on an empty layout.
 verb_maintain() {
-    local name=$1 reset=$2 fields key value commit api front mail notification signed id prev rid
+    local name=$1 reset=$2 fields prev rid
     fields="$(fetch_and_verify "$name")" || return
-    while IFS='=' read -r key value; do
-        case "$key" in
-            commit) commit=$value ;;
-            api) api=$value ;;
-            front) front=$value ;;
-            worker-mail) mail=$value ;;
-            worker-notification) notification=$value ;;
-            signed) signed=$value ;;
-            id) id=$value ;;
-        esac
-    done <<< "$fields"
-    say "$name verified: commit $commit"
+    take_fields "$fields"
+    say "$name verified: commit $F_COMMIT"
 
-    mirror_fetch "$name" "$id" || return
+    mirror_fetch "$name" "$F_ID" || return
     prev="$(live_id)"
-    manifest_of "$commit" > "$DM3_STATE/candidate.manifest" ||
-        { refuse "the schema sources of $commit could not be listed"; return; }
+    manifest_of "$F_COMMIT" > "$DM3_STATE/candidate.manifest" ||
+        { refuse "the schema sources of $F_COMMIT could not be listed"; return; }
     local live_manifest="$DM3_STATE/none.manifest"
     [ -z "$prev" ] || live_manifest="$REL/$prev/schema.manifest"
     refuse_schema_change "$(schema_regime)" "$reset" "$live_manifest" "$DM3_STATE/candidate.manifest" "$name" ||
         return
-    pull_images "$commit" "$api" "$front" "$mail" "$notification" || return
+    pull_images "$F_COMMIT" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" || return
 
-    rid="$(release_id "$name" "$commit" "$signed")"
-    build_release_dir "$rid" "$name" "$commit" "$prev" "$api" "$front" "$mail" "$notification" > /dev/null ||
+    rid="$(release_id "$name" "$F_COMMIT" "$F_SIGNED")"
+    build_release_dir "$rid" "$name" "$F_COMMIT" "$prev" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" > /dev/null ||
         return
 
     # From here on the stand changes; a run that dies leaves the marker, and boot or recover
     # brings back whatever current names.
-    : > "$MARKER"
+    write_marker "$name" "$F_SIGNED"
     if [ "$reset" = 1 ]; then
         reset_database || return
     fi
@@ -622,12 +1246,18 @@ verb_maintain() {
         recover_stack "$prev" || return
     fi
     prune_release_dirs
+    write_metric 0
     say "$name is live as $rid"
 }
 
 verb_recover() {
     [ -n "$(live_id)" ] || { refuse "no release is live: $REL/current does not exist"; return; }
-    recover_stack
+    if ! recover_stack; then
+        tried_add "$(live_tag)" "" failed "recovery failed"
+        write_metric 0
+        return 1
+    fi
+    write_metric 0
 }
 
 verb_boot() {
@@ -642,7 +1272,7 @@ verb_stop() {
 
 # What is live and how its containers are, read only.
 verb_status() {
-    local id env key
+    local id env key since tag reason
     id="$(live_id)"
     if [ -z "$id" ]; then
         echo "no release is live: $REL/current does not exist"
@@ -661,6 +1291,16 @@ verb_status() {
     else
         echo "in-flight: no"
     fi
+    if [ -s "$WAITING" ]; then
+        IFS=$'\t' read -r since tag reason < "$WAITING"
+        printf 'waiting: %s since %s: %s\n' "$tag" "$(date -d "@$since" '+%F %T' 2> /dev/null || echo "$since")" "$reason"
+    else
+        echo "waiting: nothing"
+    fi
+    if [ -s "$TRIED" ]; then
+        echo "tried, newest last:"
+        tail -n 10 "$TRIED" | awk -F '\t' '{ printf "  %s %s %s: %s\n", $2, $4, $3, $5 }'
+    fi
     compose_cmd "$REL/current" --profile rollout ps --all --format '{{.Service}}\t{{.State}}'
 }
 
@@ -669,7 +1309,7 @@ require_root() {
 }
 
 usage() {
-    echo "Usage: dm3-release maintain <tag> [--reset-database] | recover | boot | stop | status" >&2
+    echo "Usage: dm3-release poll | deploy <tag> | rollback | maintain <tag> [--reset-database] | recover | boot | stop | status" >&2
     return 2
 }
 
@@ -677,6 +1317,41 @@ main() {
     local verb="${1:-}"
     [ "$#" -eq 0 ] || shift
     case "$verb" in
+        poll)
+            [ "$#" -eq 0 ] || { usage; return; }
+            require_root || return
+            if [ "${DM3_IN_UNIT:-}" != 1 ]; then
+                run_in_unit poll
+                return
+            fi
+            # A tick that finds a run in progress has nothing to do; the next one comes in minutes.
+            if ! take_lock nowait 2> /dev/null; then
+                say "another dm3-release run holds the lock; this tick does nothing"
+                return 0
+            fi
+            verb_poll
+            ;;
+        deploy)
+            [ "$#" -eq 1 ] || { usage; return; }
+            valid_tag_name "$1" || { refuse_bad_name "$1"; return; }
+            require_root || return
+            if [ "${DM3_IN_UNIT:-}" != 1 ]; then
+                run_in_unit deploy "$1"
+                return
+            fi
+            take_lock nowait || return
+            verb_deploy "$1"
+            ;;
+        rollback)
+            [ "$#" -eq 0 ] || { usage; return; }
+            require_root || return
+            if [ "${DM3_IN_UNIT:-}" != 1 ]; then
+                run_in_unit rollback
+                return
+            fi
+            take_lock nowait || return
+            verb_rollback
+            ;;
         maintain)
             local name="" reset=0 argument
             for argument in "$@"; do

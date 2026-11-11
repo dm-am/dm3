@@ -25,7 +25,7 @@ public partial class AgentToolingShould
     /// and eslint, called by path, check the frame stand in scripts/visual, out of reach of the npm scripts.
     /// </remarks>
     private static readonly Regex GateSyntax = new(
-        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-release-entry\.sh|check-monitoring\.sh|check-release\.sh|check-attestation\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js|block-in-subagents\.test\.js|lint-agent-files\.test\.js|lint-size-hint\.test\.js|compare-code\.test\.mjs|ci-paths\.mjs|node_modules/\.bin/(?:vue-tsc|eslint) [^\r\n)]+)",
+        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-release-entry\.sh|check-rollout\.sh|check-monitoring\.sh|check-release\.sh|check-attestation\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js|block-in-subagents\.test\.js|lint-agent-files\.test\.js|lint-size-hint\.test\.js|compare-code\.test\.mjs|ci-paths\.mjs|node_modules/\.bin/(?:vue-tsc|eslint) [^\r\n)]+)",
         RegexOptions.Compiled);
 
     /// <summary>The gate commands of a shell script, in the order it runs them.</summary>
@@ -190,6 +190,10 @@ public partial class AgentToolingShould
             ["The server layout installs a signed release and boots back to it"] =
                 "installs the server layout as root with systemd and docker on a throwaway " +
                 "machine; the local gates run the same script without --layout, which needs none of them",
+            ["Releases roll out under the probe without a failed request"] =
+                "rolls releases out as root with systemd and docker on the layout the step before " +
+                "installed; the local gates run the same script without --layout, which checks the " +
+                "probe's verdict on made-up logs",
             ["Logs on failure"] =
                 "prints container logs of that pair and the journal of the layout's units",
 

@@ -238,8 +238,102 @@ offline() {
     fail "the first release of a server was refused for its schema"
   fi
 
+  echo "a rollback keeps the schema: it passes over added migrations and refuses an edited one"
+  refuse_schema_rollback "$WORK/added.manifest" "$WORK/live.manifest" v1.0.0 ||
+    fail "a rollback over an added migration was refused"
+  refuse_schema_rollback "$WORK/snapshot.manifest" "$WORK/live.manifest" v1.0.0 ||
+    fail "a rollback over a changed model snapshot alone was refused"
+  refused "a rollback over an edited migration" "existing migration differs" \
+    refuse_schema_rollback "$WORK/edited.manifest" "$WORK/live.manifest" v1.0.0
+
+  echo "a tick picks the tags it may try from the listing, highest first"
+  # Digits are hex too, so a number padded to 40 is an object id.
+  idof() { printf '%040d\n' "$1"; }
+  annotated() { printf '%s\trefs/tags/%s\n%s\trefs/tags/%s^{}\n' "$(idof "$1")" "$2" "$(idof "$((1000 + $1))")" "$2"; }
+  lightweight() { printf '%s\trefs/tags/%s\n' "$(idof "$1")" "$2"; }
+  printf '1\tv1.3.0\taaaaaaaaaaaa\trefused\tthe edge changed\n' > "$DM3_STATE/tried"
+  idof 7 > "$DM3_STATE/rejected"
+  local listing expected
+  listing="$(annotated 1 v1.2.0; annotated 2 v1.4.0; annotated 3 v1.10.0; annotated 4 v1.0.5
+    lightweight 5 v1.5.0; annotated 6 v01.2.0; annotated 7 v2.0.0; annotated 8 foo; lightweight 9 v1.1.0)"
+  expected="$(printf 'try\tv1.10.0\t%s\nlightweight\tv1.5.0\t%s\ntry\tv1.4.0\t%s\nmisnamed\tv01.2.0\n' \
+    "$(idof 3)" "$(idof 5)" "$(idof 2)")"
+  test "$(candidates "$listing" v1.1.0)" = "$expected" ||
+    fail "a tick would try $(candidates "$listing" v1.1.0 | tr '\n\t' '; '), not $(tr '\n\t' '; ' <<< "$expected")"
+  test "$(max_tried_version)" = v1.3.0 || fail "the highest tried version is $(max_tried_version), not v1.3.0"
+  listing="$(for n in $(seq 0 24); do annotated "$((100 + n))" "v3.0.$n"; done)"
+  test "$(candidates "$listing" v1.1.0 | grep -c '^try')" = 20 || fail "a tick would try more than twenty tags"
+  candidates "$listing" v1.1.0 | head -n 1 | grep -q "	v3.0.24	" || fail "a tick does not start from the highest tag"
+  rm -f "$DM3_STATE/tried" "$DM3_STATE/rejected"
+
+  echo "a release waits when the headroom would leave less than a tenth of the memory"
+  MEMINFO="$WORK/meminfo"
+  printf 'MemTotal:        8000000 kB\nMemFree:          100000 kB\nMemAvailable:    2000000 kB\n' > "$MEMINFO"
+  memory_fits || fail "8 GB with 2 GB available and the default headroom did not fit"
+  printf 'MemTotal:        8000000 kB\nMemAvailable:    1300000 kB\n' > "$MEMINFO"
+  if memory_fits 2> /dev/null; then
+    fail "1.3 GB available less 512 MiB of headroom fit, which leaves under a tenth of 8 GB"
+  fi
+  printf 'DM_RELEASE_HEADROOM_MIB=64\n' > "$DM3_ROOT/shared/env"
+  memory_fits || fail "the headroom of shared/env was not read"
+  printf 'DM_RELEASE_HEADROOM_MIB=lots\n' > "$DM3_ROOT/shared/env"
+  refused "a headroom that is not a number" "not a number of MiB" memory_fits
+  rm "$DM3_ROOT/shared/env"
+
+  echo "the classification tells the application from what needs maintenance"
+  local jqok=missing
+  command -v jq > /dev/null && jqok=ok
+  if only_where "$jqok" "the classification of two resolved configurations"; then
+    local base="$WORK/c/current/docker/" c="$WORK/c"
+    mkdir -p "$c/live/docker/nginx" "$c/live/docker/scripts"
+    printf 'conf\n' > "$c/live/docker/nginx/nginx.conf"
+    printf 'script\n' > "$c/live/docker/scripts/release-entry.sh"
+    printf 'unit\n' > "$c/live/docker/dm3.service"
+    cp -r "$c/live" "$c/cand"
+    printf '{"name":"dm","services":{"dmapi":{"image":"a"},"nginx":{"image":"n","volumes":[{"type":"bind","source":"%snginx/nginx.conf","target":"/etc/nginx/nginx.conf"}]}},"volumes":{"pgdata":{}}}\n' \
+      "$base" > "$c/live.json"
+    classified() { classify_configs "$c/live.json" "$c/$1.json"; }
+    sed 's/"image":"a"/"image":"b"/' "$c/live.json" > "$c/app.json"
+    test -z "$(classified app)" || fail "a new API image needs maintenance: $(classified app)"
+    printf '{"volumes":{"pgdata":{}},"services":{"nginx":{"volumes":[{"target":"/etc/nginx/nginx.conf","source":"%snginx/nginx.conf","type":"bind"}],"image":"n"},"dmapi":{"image":"a"}},"name":"dm"}\n' \
+      "$base" > "$c/order.json"
+    test -z "$(classified order)" || fail "the order of keys changed the classification: $(classified order)"
+    sed 's/"image":"n"/"image":"m"/' "$c/live.json" > "$c/edge.json"
+    test "$(classified edge)" = "the service nginx" || fail "a new edge image classified as: $(classified edge)"
+    sed 's/"dmapi":/"grafana":{},"dmapi":/' "$c/live.json" > "$c/added.json"
+    test "$(classified added)" = "the service grafana" || fail "an added service classified as: $(classified added)"
+    sed 's/"pgdata":{}/"pgdata":{"name":"x"}/' "$c/live.json" > "$c/volumes.json"
+    test "$(classified volumes)" = "the top-level volumes" || fail "a changed volume classified as: $(classified volumes)"
+
+    files() { classify_files "$c/live" "$c/cand" "$base" "$c/live.json" "$c/live.json"; }
+    test -z "$(files)" || fail "two equal trees classified as: $(files)"
+    printf 'other\n' > "$c/cand/docker/nginx/nginx.conf"
+    test "$(files)" = "the mounted file docker/nginx/nginx.conf" || fail "a changed mounted file classified as: $(files)"
+    cp "$c/live/docker/nginx/nginx.conf" "$c/cand/docker/nginx/nginx.conf"
+    printf 'other\n' > "$c/cand/docker/scripts/release-entry.sh"
+    test "$(files)" = "the release machinery under docker/scripts" || fail "a changed script classified as: $(files)"
+    cp "$c/live/docker/scripts/release-entry.sh" "$c/cand/docker/scripts/release-entry.sh"
+    printf 'other\n' > "$c/cand/docker/dm3.service"
+    test "$(files)" = "the unit docker/dm3.service" || fail "a changed unit classified as: $(files)"
+  fi
+
+  echo "the verbs take their arguments and nothing else"
+  local rc
+  for args in "deploy" "deploy v1.0.0 v1.0.1" "rollback now" "poll v1.0.0"; do
+    rc=0
+    # shellcheck disable=SC2086 # the words of one case, split on purpose
+    main $args > /dev/null 2>&1 || rc=$?
+    test "$rc" = 2 || fail "dm3-release $args exited $rc, not with its usage"
+  done
+  # shellcheck disable=SC2016 # a name with shell syntax in it, kept literal on purpose
+  refused "deploy of a name with shell syntax" "is not vMAJOR.MINOR.PATCH" main deploy 'v1.0.0$(id)'
+
   echo "a release directory holds the commit's docker/, release.env and schema.manifest, read-only"
   git clone -q --bare "$ORIGIN" "$DM3_ROOT/repo.git"
+  descends "$commit" "$other" || fail "a commit on top of the live one does not descend from it"
+  if descends "$other" "$commit"; then
+    fail "the live commit's parent descends from it"
+  fi
   local signed rid dir
   signed="$(sed -n 's/^signed=//p' <<< "$(verify_tag_object "$ORIGIN" v1.0.0 "$id")")"
   rid="$(release_id v1.0.0 "$commit" "$signed")"
@@ -278,6 +372,7 @@ offline() {
 printf '%s\n' "DM_EDGE_DIR=${DM_EDGE_DIR:-}" "$@" > "$DOCKER_CALL"
 case " $* " in
   *' ps '*) printf 'dmapi\trunning\nnginx\trunning\n' ;;
+  *' image inspect '*) echo 2026-10-01T00:00:00Z ;;
 esac
 STUB
   chmod +x "$WORK/bin/docker"
@@ -315,6 +410,38 @@ STUB
     rm "$DM3_STATE/in-flight"
   fi
   test "$(find "$WORK/opt" "$WORK/etc" "$WORK/state" | sort)" = "$listing" || fail "status changed the layout"
+
+  echo "the metric says what is true now: the live release, the tried list, what waits"
+  if only_where "$links" "the metric of a live release"; then
+    TEXTFILE_DIR="$WORK/textfile"
+    local prom="$WORK/textfile/dm_release.prom" first last
+    has() { grep -qxF -- "$1" "$prom" || fail "the metric lacks \"$1\": $(cat "$prom")"; }
+    write_metric 0
+    has "dm_release{field=\"changed\",tag=\"v1.0.0\"} $(stat -c %Y "$DM3_ROOT/rel/current")"
+    has 'dm_release{field="waiting_since"} 0'
+    has 'dm_release{field="fetched"} 0'
+    has 'dm_release{field="rejected"} 0'
+    has "dm_release{field=\"built\"} $(date -d 2026-10-01T00:00:00Z +%s)"
+    ! grep -q 'field="failed"' "$prom" || fail "the metric reports a failure with an empty tried list"
+    tried_add v1.2.0 "$(printf 'b%.0s' {1..64})" refused "the edge changed"
+    tried_add v1.3.0 "$(printf 'c%.0s' {1..64})" failed "$(printf 'the start gate\tof the twin\nfailed')"
+    test "$(wc -l < "$DM3_STATE/tried")" = 2 || fail "a reason with a tab and a newline broke a line of the tried list"
+    wait_for v1.4.0 "the stand is not healthy" > /dev/null
+    first="$(cut -f1 "$DM3_STATE/waiting")"
+    sleep 1
+    wait_for v1.4.0 "a pull failed" > /dev/null
+    test "$(cut -f1 "$DM3_STATE/waiting")" = "$first" || fail "a second wait moved the time the first was seen"
+    echo 1700000000 > "$DM3_STATE/fetched"
+    write_metric 2
+    last="$(tail -n 1 "$DM3_STATE/tried" | cut -f1)"
+    has "dm_release{field=\"failed\",tag=\"v1.3.0\"} $last"
+    has "dm_release{field=\"waiting_since\"} $first"
+    has 'dm_release{field="fetched"} 1700000000'
+    has 'dm_release{field="rejected"} 2'
+    test "$(grep -c 'field="failed"' "$prom")" = 1 || fail "the metric carries more than the newest failure"
+    verb_status | grep -q "^waiting: v1.4.0" || fail "status does not say what waits"
+    rm -f "$DM3_STATE/tried" "$DM3_STATE/waiting" "$DM3_STATE/fetched"
+  fi
   PATH=$path_before
 
   echo "a second run that changes something exits while the lock is held, boot waits for it"
@@ -348,10 +475,14 @@ layout() {
   # 5001, since the API publishes 5000 on loopback. Loopback is a registry docker trusts over
   # plain http.
   local prefix='127.0.0.1:5001/dm-am/' name=v1.0.0 password=smoke-test-password
-  WORK="$(mktemp -d /var/tmp/dm3-layout.XXXXXX)"
+  # A fixed place that outlives this script: check-rollout.sh --layout goes on from the origin, the
+  # signing key and the registry left here, since the installed release.conf names that origin.
+  # The runner is thrown away after the job, so nothing removes them.
+  WORK=/var/tmp/dm3-proof
+  mkdir "$WORK" || fail "$WORK exists: the layout installs once per machine"
   # The release account reads the origin from here.
   chmod 755 "$WORK"
-  trap 'docker rm -f dm-smoke-registry > /dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
+  printf '%s\n' "$password" > "$WORK/password"
 
   echo "run 0: maintain of a signed tag on an empty layout"
   docker run -d --name dm-smoke-registry -p 127.0.0.1:5001:5000 registry:2.8.3 > /dev/null
@@ -419,6 +550,15 @@ layout() {
   test "$(systemctl is-active dm3-release.timer || true)" = inactive || fail "--no-timer started the release timer"
   local pinned
   pinned="$(stat -c '%n %i %a %U %Y' /opt/dm3/shared/env /etc/dm3 /etc/dm3/release-signers /etc/dm3/release.conf)"
+
+  echo "two directories exported from one commit classify as equal"
+  local again_id reason
+  again_id="$(release_id "$name" "$commit" "$(printf '0%.0s' {1..64})")"
+  build_release_dir "$again_id" "$name" "$commit" "$rid" "${refs[dm-api]}" "${refs[dm-front]}" \
+    "${refs[dm-worker-mail]}" "${refs[dm-worker-notification]}" > /dev/null || fail "a second export of $commit failed"
+  reason="$(classify "$rid" "$again_id" timer)" || fail "two exports of one commit differ: $reason"
+  test -z "$reason" || fail "two exports of one commit classify with a reason: $reason"
+  chmod -R u+w "/opt/dm3/rel/$again_id" && rm -rf "/opt/dm3/rel/$again_id"
 
   echo "run 8: a rollout that died after the primaries were recreated, the daemon's restarts, then boot"
   compose_cmd "$REL/current" --profile rollout up -d --no-deps --no-build --pull never dmapi-next dmfront-next

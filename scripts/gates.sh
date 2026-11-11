@@ -158,6 +158,7 @@ if full_requested; then
   step compose-topology "Развертывание: конфигурации nginx" bash "$ROOT/scripts/deployment/check-nginx-configuration.sh"
   step compose-topology "Развертывание: установщик сервера" bash "$ROOT/scripts/deployment/check-server-installer.sh"
   step compose-topology "Развертывание: скрипт релиза" bash "$ROOT/scripts/deployment/check-release-entry.sh"
+  step compose-topology "Развертывание: вердикт пробы выкатки" bash "$ROOT/scripts/deployment/check-rollout.sh"
   step compose-topology "Развертывание: мониторинг" bash "$ROOT/scripts/deployment/check-monitoring.sh"
   step compose-topology "Развертывание: команда выпуска" bash "$ROOT/scripts/release/check-release.sh"
   step compose-topology "Развертывание: проверка аттестаций" bash "$ROOT/scripts/deployment/check-attestation.sh"
