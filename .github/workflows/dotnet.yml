@@ -646,6 +646,9 @@ jobs:
     - name: The release command must refuse what it is written to refuse
       run: bash scripts/release/check-release.sh
 
+    - name: The attestation check must refuse what it is written to refuse
+      run: bash scripts/deployment/check-attestation.sh
+
     - name: Every shell script must pass shellcheck
       run: bash scripts/check-shell-scripts.sh
 
