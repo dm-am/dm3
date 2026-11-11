@@ -339,7 +339,7 @@ offline() {
   rid="$(release_id v1.0.0 "$commit" "$signed")"
   test "$rid" = "v1.0.0-${commit:0:7}-${signed:0:12}" ||
     fail "the release id is $rid, not the tag, the short commit and 12 hex of the signed text"
-  dir="$(build_release_dir "$rid" v1.0.0 "$commit" v0.9.0-0000000-000000000000 \
+  dir="$(build_release_dir "$rid" v1.0.0 "$commit" \
     "${prefix}dm-api@$digest" "${prefix}dm-front@$digest" \
     "${prefix}dm-worker-mail@$digest" "${prefix}dm-worker-notification@$digest")" ||
     fail "build_release_dir refused a verified release"
@@ -349,12 +349,12 @@ offline() {
   if [ -e "$dir/README.md" ] || [ -e "$dir/src" ]; then
     fail "the release directory holds more than docker/"
   fi
-  printf '%s\n' "RELEASE_TAG=v1.0.0" "RELEASE_COMMIT=$commit" "RELEASE_REPLACES=v0.9.0-0000000-000000000000" \
+  printf '%s\n' "RELEASE_TAG=v1.0.0" "RELEASE_COMMIT=$commit" \
     "DM_IMAGE_API=${prefix}dm-api@$digest" "DM_IMAGE_FRONT=${prefix}dm-front@$digest" \
     "DM_IMAGE_WORKER_MAIL=${prefix}dm-worker-mail@$digest" \
     "DM_IMAGE_WORKER_NOTIFICATION=${prefix}dm-worker-notification@$digest" \
     "SOURCE_REVISION=$commit" | cmp -s - "$dir/release.env" ||
-    fail "release.env is not the eight keys of a release: $(cat "$dir/release.env")"
+    fail "release.env is not the seven keys of a release: $(cat "$dir/release.env")"
   git -C "$ORIGIN" ls-tree -r "$commit" -- "$migrations" "$initializer" | cmp -s - "$dir/schema.manifest" ||
     fail "schema.manifest is not the ls-tree lines of the migrations and the index initializer"
   mkdir "$WORK/mode-probe" && chmod a-w "$WORK/mode-probe"
@@ -558,6 +558,75 @@ STUB
   test ! -e "$calls" || fail "a candidate that waits on memory pulled its images"
   rm -f "$DM3_STATE/waiting"
   rmdir "$DM3_ROOT/rel/$old_rid"
+
+  echo "maintain back to an earlier tag leaves no predecessor: rollback is refused, the prunes keep only it"
+  # current is a file here, since Git Bash cannot link; the release directories are real, and
+  # the one maintain finds again keeps what it was built with.
+  rep() { printf "$1%.0s" {1..64}; }
+  # shellcheck disable=SC2317 # stubs: the sourced script calls them in place of its own
+  stood_in() (
+    commit_current() { printf '%s\n' "$1" > "$WORK/current"; }
+    live_id() { cat "$WORK/current" 2> /dev/null || true; }
+    fetch_and_verify() {
+      printf 'commit=%s\nsigned=%s\nid=%s\napi=%s\nfront=%s\n' "$commit" "$(rep "${hex[$1]}")" \
+        "$(idof 9)" "${prefix}dm-api@sha256:$(rep "${hex[$1]}")" "${prefix}dm-front@$digest"
+    }
+    mirror_fetch() { :; }
+    refuse_schema_change() { :; }
+    pull_images() { :; }
+    pull_missing_images() { :; }
+    install_machinery() { :; }
+    recover_stack() { rm -f "$MARKER"; }
+    descends() { :; }
+    stand_healthy() { :; }
+    memory_fits() { :; }
+    classify() { :; }
+    schema_regime() { echo reset; }
+    retire_assets() { :; }
+    compose_cmd() { :; }
+    start_gate() { :; }
+    edge_switch() { :; }
+    switch_check() { :; }
+    remove_twins() { :; }
+    write_metric() { :; }
+    docker() {
+      case "$1 $2 ${*: -1}" in
+        "image ls ${prefix}dm-api") printf '%s\n' "${prefix}dm-api@sha256:$(rep 1)" "${prefix}dm-api@sha256:$(rep 2)" ;;
+        "image rm "*) printf 'removed %s\n' "$3" >> "$calls" ;;
+      esac
+    }
+    "$@"
+  )
+  released() { take_fields "$(fetch_and_verify "$1")" && try_candidate "$1" timer; }
+  kept_dirs() {
+    local entry
+    for entry in "$DM3_ROOT"/rel/* "$DM3_ROOT"/rel/.[!.]*; do
+      [ -e "$entry" ] || [ -L "$entry" ] || continue
+      [ "${entry##*/}" = current ] || printf '%s ' "${entry##*/}"
+    done
+  }
+  local -A hex=([v1.1.0]=1 [v1.2.0]=2)
+  local a_rid b_rid
+  a_rid="$(release_id v1.1.0 "$commit" "$(rep 1)")"
+  b_rid="$(release_id v1.2.0 "$commit" "$(rep 2)")"
+  echo "$live_rid" > "$WORK/current"
+  stood_in verb_maintain v1.1.0 0 > /dev/null 2>&1 || fail "maintain of v1.1.0 failed with its steps stood in for"
+  stood_in released v1.2.0 > /dev/null 2>&1 || fail "the release of v1.2.0 failed with its steps stood in for"
+  test "$(cat "$WORK/current")" = "$b_rid" || fail "the release of v1.2.0 did not move current to $b_rid"
+  test "$(stood_in predecessor)" = "$a_rid" || fail "v1.2.0 does not have v1.1.0 as the release it replaced"
+  stood_in verb_rollback > /dev/null 2>&1 || fail "the rollback from v1.2.0 failed with its steps stood in for"
+  test "$(cat "$WORK/current")" = "$a_rid" || fail "the rollback from v1.2.0 did not move current to $a_rid"
+  test -z "$(stood_in predecessor)" || fail "after a rollback v1.1.0 still names $(stood_in predecessor) as replaced"
+  stood_in released v1.2.0 > /dev/null 2>&1 || fail "the second release of v1.2.0 failed"
+  stood_in verb_maintain v1.1.0 0 > /dev/null 2>&1 || fail "maintain back to v1.1.0 failed"
+  test "$(cat "$WORK/current")" = "$a_rid" || fail "maintain back to v1.1.0 did not move current to $a_rid"
+  refused "a rollback after maintain back to an earlier tag" "replaced no release that is kept" stood_in verb_rollback
+  test "$(kept_dirs)" = "$a_rid " || fail "the directory prune after maintain back kept $(kept_dirs)not only $a_rid"
+  rm -f "$calls"
+  stood_in prune_app_images
+  test "$(cat "$calls" 2> /dev/null)" = "removed ${prefix}dm-api@sha256:$(rep 2)" ||
+    fail "the image prune after maintain back removed: $(tr '\n' ' ' < "$calls" 2> /dev/null)"
+  rm -f "$calls" "$WORK/current" "$DM3_STATE/tried"
   PATH=$path_before
 
   echo "a second run that changes something exits while the lock is held, boot waits for it"
@@ -670,7 +739,7 @@ layout() {
   echo "two directories exported from one commit classify as equal"
   local again_id reason
   again_id="$(release_id "$name" "$commit" "$(printf '0%.0s' {1..64})")"
-  build_release_dir "$again_id" "$name" "$commit" "$rid" "${refs[dm-api]}" "${refs[dm-front]}" \
+  build_release_dir "$again_id" "$name" "$commit""${refs[dm-api]}" "${refs[dm-front]}" \
     "${refs[dm-worker-mail]}" "${refs[dm-worker-notification]}" > /dev/null || fail "a second export of $commit failed"
   reason="$(classify "$rid" "$again_id" timer)" || fail "two exports of one commit differ: $reason"
   test -z "$reason" || fail "two exports of one commit classify with a reason: $reason"

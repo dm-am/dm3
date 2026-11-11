@@ -38,6 +38,9 @@ TRIED="$DM3_STATE/tried"
 REJECTED="$DM3_STATE/rejected"
 WAITING="$DM3_STATE/waiting"
 FETCHED="$DM3_STATE/fetched"
+# "<id> <the release it replaced>" per line, here and not in the read-only directory: maintain
+# reuses a directory that exists, and what it replaces then is not what it replaced when built.
+PREDECESSORS="$DM3_STATE/replaced"
 RELEASE_USER=dm-release
 # Where the node exporter's textfile collector reads, as for the backup check.
 TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}"
@@ -345,7 +348,7 @@ valid_release_id() {
 # rel/<id>: the commit's docker/ tree, release.env and schema.manifest, built aside and renamed
 # into place read-only. An id that exists is the same signed bytes and is kept as it is.
 build_release_dir() {
-    local id=$1 tag=$2 commit=$3 replaces=$4 api=$5 front=$6 mail=$7 notification=$8
+    local id=$1 tag=$2 commit=$3 api=$4 front=$5 mail=$6 notification=$7
     local dir="$REL/$id" tmp="$REL/.building-$id"
     if [ -d "$dir" ]; then
         printf '%s\n' "$dir"
@@ -357,7 +360,7 @@ build_release_dir() {
     mkdir -p "$tmp"
     release_git -C "$REPO" archive --format=tar "$commit" docker | tar -x -C "$tmp" ||
         { refuse "the docker/ tree of $commit could not be exported"; return; }
-    printf '%s\n' "RELEASE_TAG=$tag" "RELEASE_COMMIT=$commit" "RELEASE_REPLACES=$replaces" \
+    printf '%s\n' "RELEASE_TAG=$tag" "RELEASE_COMMIT=$commit" \
         "DM_IMAGE_API=$api" "DM_IMAGE_FRONT=$front" "DM_IMAGE_WORKER_MAIL=$mail" \
         "DM_IMAGE_WORKER_NOTIFICATION=$notification" "SOURCE_REVISION=$commit" > "$tmp/release.env"
     manifest_of "$commit" > "$tmp/schema.manifest" ||
@@ -381,6 +384,36 @@ commit_current() {
     rm -f "$REL/.current.new"
     ln -s "$1" "$REL/.current.new"
     mv -T "$REL/.current.new" "$REL/current"
+}
+
+# The release <id> (the live one by default) replaced, when its directory is kept.
+predecessor() {
+    local id=${1:-$(live_id)} pred
+    [ -n "$id" ] || return 0
+    pred="$(awk -v id="$id" '$1 == id { print $2; exit }' "$PREDECESSORS" 2> /dev/null || true)"
+    if valid_release_id "$pred" && [ -d "$REL/$pred" ]; then
+        printf '%s\n' "$pred"
+    fi
+}
+
+# move_current <id> <the live id>: the predecessor first, then the commit point. A predecessor is
+# always a lower version, so rollback only goes back: after a rollback, or a maintain back to an
+# earlier tag, the release left is the one turned away from, and the new live one has none. The
+# live release's own line is kept, so a run that dies between the two renames still finds it.
+move_current() {
+    local id=$1 left=${2:-} pred=""
+    if [ -n "$left" ] && version_above "${id%-*-*}" "${left%-*-*}"; then
+        pred=$left
+    fi
+    mkdir -p "$DM3_STATE"
+    {
+        printf '%s %s\n' "$id" "$pred"
+        if [ -n "$left" ] && [ "$left" != "$id" ]; then
+            awk -v id="$left" '$1 == id { print; exit }' "$PREDECESSORS" 2> /dev/null || true
+        fi
+    } > "$PREDECESSORS.new"
+    mv -f "$PREDECESSORS.new" "$PREDECESSORS"
+    commit_current "$id"
 }
 
 # The one compose command line (3.2). The project directory goes through current, so a relative
@@ -623,7 +656,7 @@ install_machinery() {
 prune_release_dirs() {
     local keep prev path id
     keep="$(live_id)"
-    prev="$(env_value "$REL/$keep/release.env" RELEASE_REPLACES)"
+    prev="$(predecessor "$keep")"
     for path in "$REL"/*/; do
         id="$(basename "$path")"
         [[ $id != current && $id != "$keep" && $id != "$prev" ]] || continue
@@ -827,7 +860,7 @@ prune_app_images() {
     local id prev keep="" prefix repo ref
     id="$(live_id)"
     [ -n "$id" ] || return 0
-    prev="$(env_value "$REL/$id/release.env" RELEASE_REPLACES)"
+    prev="$(predecessor "$id")"
     for id in "$id" "$prev"; do
         if [ -n "$id" ] && [ -f "$REL/$id/release.env" ]; then
             keep+="$(sed -n 's/^DM_IMAGE_[A-Z_]*=//p' "$REL/$id/release.env")"$'\n'
@@ -1096,7 +1129,7 @@ rollout() {
     remove_twins || { recover_after "the twins could not be removed"; return 1; }
     compose_cmd "$dir" up -d --no-deps --no-build --pull never --force-recreate --wait dm-mail-worker dm-notification-worker ||
         { recover_after "the workers did not become healthy"; return 1; }
-    commit_current "$candidate"
+    move_current "$candidate" "$live"
     rm -f "$MARKER"
 }
 
@@ -1127,7 +1160,7 @@ try_candidate() {
         *) refuse_release "$name" "an image is not labelled with commit $F_COMMIT"; return 1 ;;
     esac
     rid="$(release_id "$name" "$F_COMMIT" "$F_SIGNED")"
-    build_release_dir "$rid" "$name" "$F_COMMIT" "$live" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" > /dev/null ||
+    build_release_dir "$rid" "$name" "$F_COMMIT" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" > /dev/null ||
         { refuse_release "$name" "the release directory could not be built"; return 1; }
     reason="$(classify "$live" "$rid" "$mode")" || { refuse_release "$name" "$reason"; return 1; }
 
@@ -1235,7 +1268,7 @@ verb_rollback() {
     local -a images=()
     live="$(live_id)"
     [ -n "$live" ] || { refuse "no release is live"; return; }
-    target="$(env_value "$REL/$live/release.env" RELEASE_REPLACES)"
+    target="$(predecessor "$live")"
     if [ -z "$target" ] || [ ! -d "$REL/$target" ]; then
         refuse "$live replaced no release that is kept"
         return
@@ -1280,7 +1313,7 @@ verb_maintain() {
     pull_images "$F_COMMIT" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" || return
 
     rid="$(release_id "$name" "$F_COMMIT" "$F_SIGNED")"
-    build_release_dir "$rid" "$name" "$F_COMMIT" "$prev" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" > /dev/null ||
+    build_release_dir "$rid" "$name" "$F_COMMIT" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" > /dev/null ||
         return
 
     # Before current moves: a registry that does not answer then leaves the live release whole.
@@ -1294,7 +1327,7 @@ verb_maintain() {
     if [ "$reset" = 1 ]; then
         reset_database || return
     fi
-    [ "$prev" = "$rid" ] || commit_current "$rid"
+    [ "$prev" = "$rid" ] || move_current "$rid" "$prev"
     if [ -z "$prev" ]; then
         pull_missing_images || return
     fi

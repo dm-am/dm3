@@ -111,12 +111,13 @@ require_tools() {
   fi
 }
 
-# Release tags from origin and from this clone: name -> commit. Origin's answer wins, it is
-# what the server reads.
-declare -A TAG_COMMIT=()
+# Release tags from origin and from this clone: name -> commit and name -> the object the ref
+# names. Origin's answer wins, it is what the server reads.
+declare -A TAG_COMMIT=() TAG_OBJECT=()
 HIGHEST=""
 collect_tags() {
   local listing sha ref name
+  local -a missing=()
   listing=$(g ls-remote --tags origin) || refuse "cannot list the tags of origin"
   while read -r sha ref; do
     [[ -n $ref ]] || continue
@@ -127,13 +128,26 @@ collect_tags() {
       continue
     fi
     [[ $name =~ $RELEASE_NAME ]] || continue
+    TAG_OBJECT[$name]=$sha
     [[ -n ${TAG_COMMIT[$name]:-} ]] || TAG_COMMIT[$name]=$sha
   done <<< "$listing"
   while read -r name; do
     [[ -n $name && $name =~ $RELEASE_NAME && -z ${TAG_COMMIT[$name]:-} ]] || continue
     TAG_COMMIT[$name]=$(g rev-parse "refs/tags/$name^{commit}")
+    TAG_OBJECT[$name]=$(g rev-parse "refs/tags/$name")
   done <<< "$(g tag -l)"
-  for name in "${!TAG_COMMIT[@]}"; do
+  # Any name takes a version, but only the signer's tags set the bar: anyone who can push
+  # could otherwise block every release with an unsigned v9.9.9. The objects only, no refs.
+  for name in "${!TAG_OBJECT[@]}"; do
+    g cat-file -e "${TAG_OBJECT[$name]}" 2> /dev/null || missing+=("refs/tags/$name")
+  done
+  if ((${#missing[@]})); then
+    g fetch --quiet --no-tags --no-write-fetch-head origin "${missing[@]}" ||
+      refuse "cannot fetch the release tags of origin"
+  fi
+  write_allowed_signers
+  for name in "${!TAG_OBJECT[@]}"; do
+    signed_by_signer "$name" "${TAG_OBJECT[$name]}" || continue
     if [[ -z $HIGHEST ]] || above "$name" "$HIGHEST"; then
       HIGHEST=$name
     fi
@@ -269,11 +283,23 @@ signing_public_key() {
   fi
 }
 
-verify_own_tag() {
+write_allowed_signers() {
   local public
   public=$(signing_public_key "$SIGNING_KEY") || public=""
   [[ -n $public ]] || refuse "cannot read the public half of user.signingkey"
   printf 'release namespaces="git" %s\n' "$public" > "$WORK/allowed_signers"
+}
+
+# signed_by_signer <name> <object>: an annotated tag that names itself <name>, signed with
+# user.signingkey. A signed tag pushed under a higher name verifies too, so the name is read.
+signed_by_signer() {
+  [[ $(g cat-file -t "$2" 2> /dev/null) == tag ]] || return 1
+  [[ $(g cat-file tag "$2" | sed -n '/^$/q; s/^tag //p') == "$1" ]] || return 1
+  g -c "gpg.ssh.allowedSignersFile=$WORK/allowed_signers" verify-tag "$2" > /dev/null 2>&1
+}
+
+verify_own_tag() {
+  write_allowed_signers
   g -c "gpg.ssh.allowedSignersFile=$WORK/allowed_signers" verify-tag "$VERSION" > /dev/null 2>&1 ||
     refuse "the signature of $VERSION does not verify with the key that made it"
   g cat-file tag "$VERSION" |
