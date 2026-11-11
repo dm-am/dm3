@@ -217,6 +217,9 @@ if full_requested && wants compose-topology; then
 
   say "Развертывание: мониторинг"
   bash "$ROOT/scripts/deployment/check-monitoring.sh"
+
+  say "Развертывание: команда выпуска"
+  bash "$ROOT/scripts/release/check-release.sh"
 fi
 
 # The client unit tests read documents (file names in comments are checked against the tree,
