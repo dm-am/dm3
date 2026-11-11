@@ -16,7 +16,7 @@ Independent tasks may start together. Start a dependent task after every prerequ
 ## Phase 1: Build the code
 
 1. Create or reuse a branch and worktree for the task. Start independent work from the latest default branch and dependent work from its reviewed prerequisite or stacked base.
-2. Write the code.
+2. Write the code. For a logic change go red first, one vertical slice at a time: write the test for the next behavior, run it and see it fail for the reason it names, then write only enough code to pass it. Refactor once green. Keep the red run: it is part of the proof.
 3. Use `/test` to prove the task works, affected failures are handled, and refactors preserve behavior.
 4. Commit and push the changes.
 5. Create or update one pull request on GitHub. Include a short summary and the current proof, then mark it ready for review.

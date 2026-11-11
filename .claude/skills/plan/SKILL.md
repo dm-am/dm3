@@ -11,10 +11,10 @@ argument-hint: "<design, brief, issue, or request>"
 
 1. Read the source, repository instructions, and relevant code.
 2. Stop and return to design if an unresolved choice would change behavior, interfaces, data, security, scale, performance, compatibility, operations, cost, or proof.
-3. Split the work into tasks that each deliver working behavior, fit one agent run, and produce one focused pull request.
+3. Split the work into vertical slices. Each task cuts a narrow but complete path through every layer it touches (data, API, client, tests), delivers working behavior that can be checked on its own, fits one agent run, and produces one focused pull request.
 4. Keep shared contracts in one task. Do not make two tasks answer the same question independently.
 5. Separate refactoring when it would hide a behavior change.
-6. Order tasks by dependency. Add a milestone only when it creates a useful delivery or review boundary.
+6. Give each task its blocking edges: the tasks that must finish before it can start, and only those that truly gate it. The tasks form a graph. The frontier, every open task whose blockers are all done, runs in parallel. A mechanical change that breaks every caller at once is the exception to slicing: add the new form beside the old, move the callers in batches blocked by that, then remove the old form in a task blocked by every batch. Add a milestone only when it creates a useful delivery or review boundary.
 7. Return the plan in chat. Create tracker tickets only when the user asks. Never write a plan document.
 8. Stop after planning. Do not implement.
 
@@ -48,7 +48,7 @@ In one or two short sentences, explain the practical value to a user, operator, 
 Exact commands and required manual checks.
 
 ### Agent notes
-- Depends on: <task titles, or None>
+- Blocked by: <task titles, or None (can start now)>
 - Source: <durable design, brief, issue, or request path/URL, pinned when needed>
 - Only the definitions, decisions, constraints, and failure behavior specific to this task.
 

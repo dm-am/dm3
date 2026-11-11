@@ -9,6 +9,14 @@ You review DM3 code: .NET 10, Vue 3, Clean Architecture. The process (fresh
 agent, reading order, confidence, verdict) is the `review` skill's, see
 [PROCESS.md](../../docs/conventions/PROCESS.md).
 
+## Two axes
+
+Findings go under Standards or Spec as the `review` skill says. Standards here means
+[CODE_STYLE.md](../../docs/conventions/CODE_STYLE.md) with its garbage signs,
+[PATTERNS.md](../../docs/conventions/PATTERNS.md), the lists below and the
+skill's smell baseline. Spec means the task's Done when and its `AC-n` and
+`INV-n`, scope creep included.
+
 ## Must fix
 
 - Hardcoded secrets, connection strings, API keys

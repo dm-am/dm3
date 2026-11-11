@@ -26,6 +26,13 @@ Do not demand perfection or block on personal taste. Cite technical evidence or 
 
 The verdict is independent agent evidence. It is not GitHub approval or a replacement for human review.
 
+## Two axes
+
+Every finding belongs to one of two axes, reported under separate `Standards` and `Spec` headings. Priority orders findings within an axis, never across them: a change can follow every rule and build the wrong thing, or build the right thing against the rules, and one axis must not hide the other.
+
+- **Standards:** the repository's documented rules, security and architecture included, plus a smell baseline: a name that hides what it holds, the same logic in two places, a method that uses another object's data more than its own, fields that always travel together, a primitive standing for a domain concept, the same switch repeated, one change scattered over many files, one file changed for unrelated reasons, abstraction for a need the source does not have, a long navigation chain, a layer that only passes calls on. A documented rule overrides the baseline. A smell is a named judgement call and at most `Could fix`. Skip what tooling already enforces.
+- **Spec:** whether the change implements its task or design faithfully. Report required behavior that is missing, partial, or implemented wrong, and behavior nobody asked for. Quote the source line for each finding. Without a source, say so and skip this axis.
+
 ## Review order
 
 1. **Set the frame.** Give the reviewer the task, acceptance criteria and invariant IDs from its task or design, repository rules, complete diff or pull request, and test evidence. Name the user or developer affected by the change.
@@ -40,7 +47,7 @@ The verdict is independent agent evidence. It is not GitHub approval or a replac
    - Do not copy implementation logic or hide the scenario in setup.
 6. Run focused checks that can confirm or disprove a claim that could change a finding or verdict.
 7. **Check specialist coverage.** Identify security, privacy, concurrency, accessibility, internationalization, or domain-specific work. Mark a risk unverified when the reviewer lacks the evidence or skill to judge it. Use `Blocked` when that gap could hide a problem that breaks a rule and no qualified reviewer covers it.
-8. **Report findings.** Return actionable findings in priority order using the format below.
+8. **Report findings.** Return actionable findings under their axis, in priority order within it, using the format below.
 
 ## Code review findings
 
