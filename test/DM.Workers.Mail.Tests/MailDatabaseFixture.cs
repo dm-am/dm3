@@ -13,7 +13,7 @@ namespace DM.Workers.Mail.Tests;
 public class MailDatabaseFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+        .WithImage("postgres:18-alpine")
         .WithDatabase("dm3_mail")
         .WithUsername("test")
         .WithPassword("test")

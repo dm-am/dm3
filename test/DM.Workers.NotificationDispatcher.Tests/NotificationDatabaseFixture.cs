@@ -15,7 +15,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 public class NotificationDatabaseFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+        .WithImage("postgres:18-alpine")
         .WithDatabase("dm3_notifications")
         .WithUsername("test")
         .WithPassword("test")

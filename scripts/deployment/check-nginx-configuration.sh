@@ -6,7 +6,7 @@
 # the answer is the one nginx gives there.
 set -euo pipefail
 
-IMAGE="nginx:1.27-alpine"
+IMAGE="nginx:1.30-alpine"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
