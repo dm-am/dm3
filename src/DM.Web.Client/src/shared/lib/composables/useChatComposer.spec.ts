@@ -104,11 +104,9 @@ describe("useChatComposer", () => {
 
   it("closes the confirmation even when the delete is refused", async () => {
     const { options, composer } = setup({
-      remove: vi.fn(
-        async (): Promise<ChatActionResult> => ({
-          error: refusal,
-        }),
-      ),
+      remove: vi.fn(async (): Promise<ChatActionResult> => ({
+        error: refusal,
+      })),
     });
 
     composer.requestDelete("m1");

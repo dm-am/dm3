@@ -39,10 +39,7 @@ type CreateTicketIntakeResult = {
 };
 
 export type TicketStatus =
-  | "WaitingForModeration"
-  | "WaitingForUser"
-  | "Closed"
-  | "Spam";
+  "WaitingForModeration" | "WaitingForUser" | "Closed" | "Spam";
 
 /** One wire shape whatever the role; the server decides which fields are filled. */
 export type Ticket = {

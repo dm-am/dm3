@@ -89,7 +89,7 @@ export function canonicalCss(css: string, keepLegalComments = false): string[] {
     depth: 0,
     keepLegalComments,
   };
-  for (let i = 0; i < css.length; ) i = readToken(writer, css, i);
+  for (let i = 0; i < css.length;) i = readToken(writer, css, i);
   closeDeclaration(writer);
   return writer.lines;
 }
@@ -190,12 +190,10 @@ function readQuoted(writer: CssWriter, css: string, i: number) {
  */
 function readUnquotedUrl(writer: CssWriter, css: string, i: number) {
   const c = css[i];
-  if (
-    !(
-      (c === "u" || c === "U") &&
-      /^url\(\s*[^\s"')]/i.test(css.slice(i, i + 64))
-    )
-  )
+  if (!(
+    (c === "u" || c === "U") &&
+    /^url\(\s*[^\s"')]/i.test(css.slice(i, i + 64))
+  ))
     return undefined;
   const close = css.indexOf(")", i);
   put(

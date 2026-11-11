@@ -14,10 +14,10 @@ import { mountPage } from "@/shared/lib/testing/mountPage";
 const { getBanHistory } = vi.hoisted(() => ({ getBanHistory: vi.fn() }));
 
 // The network only: the router and the list are the real ones.
+// The original as a plain object: its type would name a file inside another
+// slice, which the layer rule refuses even as a type.
 vi.mock("@/entities/moderation/api/banApi", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/entities/moderation/api/banApi")
-  >()),
+  ...(await importOriginal<object>()),
   default: { getBanHistory },
 }));
 

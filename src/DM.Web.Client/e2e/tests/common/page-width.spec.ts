@@ -280,7 +280,7 @@ function pageWidth({ rightColumn }: { rightColumn: boolean }): string[] {
 
   /** A part a box of its own holds: one that clips or scrolls, or a layer. */
   const heldInside = (el: Element) => {
-    for (let up = el.parentElement; up && up !== content; ) {
+    for (let up = el.parentElement; up && up !== content;) {
       const s = getComputedStyle(up);
       if (s.overflowX !== "visible" || s.position === "fixed") return true;
       up = up.parentElement;

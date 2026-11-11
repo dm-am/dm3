@@ -119,8 +119,10 @@ export interface GrammarCase {
   expect: GrammarPiece[];
 }
 
+// The parentheses hold the end marker before the semicolon: prettier moves a
+// trailing comment past it, and ClientTable would read the semicolon as JSON.
 // prettier-ignore
-export const BBCODE_GRAMMAR_CASES: readonly GrammarCase[] = /* grammar:begin */ [
+export const BBCODE_GRAMMAR_CASES: readonly GrammarCase[] = (/* grammar:begin */ [
 {"id":"a-b","rule":"A","input":"[b]текст[/b]","surface":"any","editor":true,"expect":[{"tag":"b","children":[{"text":"текст"}]}]},
 {"id":"a-i","rule":"A","input":"[i]текст[/i]","surface":"any","editor":true,"expect":[{"tag":"i","children":[{"text":"текст"}]}]},
 {"id":"a-u","rule":"A","input":"[u]текст[/u]","surface":"any","editor":true,"expect":[{"tag":"u","children":[{"text":"текст"}]}]},
@@ -470,4 +472,4 @@ export const BBCODE_GRAMMAR_CASES: readonly GrammarCase[] = /* grammar:begin */ 
 {"id":"p-noparse-in-image","rule":"P","input":"[img][noparse]https://example.com/a.png[/noparse][/img]","surface":"Comment","broken":"bad-content","expect":[{"text":"[img]"},{"tag":"noparse","children":[{"text":"https://example.com/a.png"}]},{"text":"[/img]"}]},
 {"id":"p-links-in-noparse","rule":"P","input":"[noparse][img]https://example.com/a.png[/img] [link]https://example.com/[/link][/noparse]","surface":"Comment","expect":[{"tag":"noparse","children":[{"text":"[img]https://example.com/a.png[/img] [link]https://example.com/[/link]"}]}]},
 {"id":"p-noparse-silences-the-check","rule":"P","input":"[noparse][b]раз [/i] [tab=1] [img width=300]адрес[/img] [private=Вася] [spoiler text=\"a[b\"][/noparse]","surface":"GamePost","expect":[{"tag":"noparse","children":[{"text":"[b]раз [/i] [tab=1] [img width=300]адрес[/img] [private=Вася] [spoiler text=\"a[b\"]"}]}]}
-] /* grammar:end */;
+] /* grammar:end */);

@@ -64,7 +64,7 @@ jobs:
         fetch-depth: 0
     - uses: actions/setup-node@v7
       with:
-        node-version: '24.13.0'
+        node-version: '24.22.2'
     # The summary says which groups of paths changed and whether each job runs and why.
     - name: Select the jobs this change needs
       id: select
@@ -119,7 +119,7 @@ jobs:
     # the tests. The same Node as the frontend job.
     - uses: actions/setup-node@v7
       with:
-        node-version: '24.13.0'
+        node-version: '24.22.2'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     - name: Install client packages
@@ -169,7 +169,7 @@ jobs:
     # src/DM.Web.Client/Dockerfile; FrontendToolchainShould holds the three equal.
     - uses: actions/setup-node@v7
       with:
-        node-version: '24.13.0'
+        node-version: '24.22.2'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     - run: npm ci
@@ -227,7 +227,7 @@ jobs:
     # Pinned to the patch, as everywhere (see the frontend job).
     - uses: actions/setup-node@v7
       with:
-        node-version: '24.13.0'
+        node-version: '24.22.2'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
 
@@ -371,7 +371,7 @@ jobs:
     # Pinned to the patch, as everywhere (see the frontend job).
     - uses: actions/setup-node@v7
       with:
-        node-version: '24.13.0'
+        node-version: '24.22.2'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     # --omit=dev: an advisory in vite, eslint or playwright is for dependabot to raise as a
@@ -411,7 +411,7 @@ jobs:
     # node_modules, as in the build job.
     - uses: actions/setup-node@v7
       with:
-        node-version: '24.13.0'
+        node-version: '24.22.2'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     - name: Install client packages

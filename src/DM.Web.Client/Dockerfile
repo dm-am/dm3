@@ -6,7 +6,7 @@
 # been written by the 11.6.2 that comes with 24.13.0, and `npm ci` refused it.
 # Whoever raises this raises package.json and the workflow with it - the version
 # is one decision in three files, and FrontendToolchainShould holds them equal.
-FROM node:24.13.0-alpine AS build
+FROM node:24.22.2-alpine AS build
 
 WORKDIR /app
 

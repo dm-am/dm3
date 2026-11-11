@@ -21,9 +21,7 @@ export function isNearBottom(
  * (the items it does not hold yet, in order).
  */
 type TailUpdate<T> =
-  | { kind: "none" }
-  | { kind: "append"; fresh: T[] }
-  | { kind: "gap" };
+  { kind: "none" } | { kind: "append"; fresh: T[] } | { kind: "gap" };
 
 /** Decides the newest page against the window, as API_DESIGN.md ("Realtime") states. */
 export function tailUpdate<T extends { id: unknown }>(

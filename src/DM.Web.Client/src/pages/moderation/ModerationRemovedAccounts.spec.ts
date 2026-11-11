@@ -27,10 +27,10 @@ const { getRemovedAccounts, restoreAccount } = vi.hoisted(() => ({
 }));
 
 // The network only: the router, the store, the plates and the window are the real ones.
+// The original as a plain object: its type would name a file inside another
+// slice, which the layer rule refuses even as a type.
 vi.mock("@/entities/moderation/api/moderationApi", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/entities/moderation/api/moderationApi")
-  >()),
+  ...(await importOriginal<object>()),
   default: { getRemovedAccounts, restoreAccount },
 }));
 

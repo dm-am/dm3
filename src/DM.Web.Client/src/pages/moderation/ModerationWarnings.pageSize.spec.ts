@@ -14,10 +14,10 @@ import { mountPage } from "@/shared/lib/testing/mountPage";
 const { getAllWarnings } = vi.hoisted(() => ({ getAllWarnings: vi.fn() }));
 
 // The network only: the router, the store and the windows are the real ones.
+// The original as a plain object: its type would name a file inside another
+// slice, which the layer rule refuses even as a type.
 vi.mock("@/entities/moderation/api/warningApi", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("@/entities/moderation/api/warningApi")
-  >()),
+  ...(await importOriginal<object>()),
   default: { getAllWarnings },
 }));
 

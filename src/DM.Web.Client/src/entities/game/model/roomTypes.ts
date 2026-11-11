@@ -37,8 +37,7 @@ export interface RoomAccess {
  * character or the reader only what names them, and the policy.
  */
 export type RoomAccessGrant = { policy: RoomAccessPolicy } & (
-  | { character: { id: string } }
-  | { user: { username: string } }
+  { character: { id: string } } | { user: { username: string } }
 );
 
 /** Stays in the payload once answered, with fulfilledUtc, so every reader filters. */

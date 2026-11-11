@@ -150,7 +150,8 @@ onMounted(() => store.fetchBoards());
     </template>
 
     <template #cell-comments="{ row }">
-      {{ row.commentsCount || 0
+      {{
+        row.commentsCount || 0
       }}<!-- Unread suffix only for authenticated viewers with unread comments.
            Guests have no "unread" concept, so they see just the total. -->
       <template v-if="user && row.unreadCommentsCount"

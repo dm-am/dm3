@@ -11,11 +11,7 @@ import { type BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import { type BBCodeIssue } from "@/shared/lib/bbcode/bbcodeWarnings";
 
 export type MarkupSurface =
-  | "GamePost"
-  | "Comment"
-  | "GlobalChatMessage"
-  | "Profile"
-  | "DirectMessage";
+  "GamePost" | "Comment" | "GlobalChatMessage" | "Profile" | "DirectMessage";
 
 /** The editor context each surface of the server is written in. */
 export const CONTEXT_OF: Record<MarkupSurface, BBCodeContext> = {

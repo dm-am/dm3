@@ -21,6 +21,4 @@ export type ClosedReason = (typeof ClosedReason)[keyof typeof ClosedReason];
 
 /** A newbie's game or blog on premoderation, the backend PremoderationStatus; "Approved" is not shown. */
 export type PremoderationStatus =
-  | "Approved"
-  | "AwaitingApproval"
-  | "AwaitingEdits";
+  "Approved" | "AwaitingApproval" | "AwaitingEdits";
