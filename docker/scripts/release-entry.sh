@@ -53,6 +53,8 @@ WAITS=3
 # (ulimit counts in 1024-byte blocks), whatever a writer pushes under a release-shaped name.
 FETCH_TIMEOUT=120
 FETCH_FILE_BLOCKS=262144
+# One image pull under the lock: a registry that stops answering would otherwise hold it for good.
+PULL_TIMEOUT=900
 
 refuse() {
     printf 'dm3-release: refused: %s\n' "$*" >&2
@@ -90,6 +92,19 @@ release_git() {
     as_release_user git "$@"
 }
 
+# git that talks to the origin, under the time limit: the timer's unit has no start timeout, so a
+# connection that hangs would hold the lock from every later tick and from the operator's verbs.
+release_git_timed() {
+    as_release_user timeout "$FETCH_TIMEOUT" git "$@"
+}
+
+# And under the size limit too, for a fetch that writes whatever the origin sends.
+release_git_bounded() {
+    # shellcheck disable=SC2016 # expanded by the shell bash -c starts
+    as_release_user timeout "$FETCH_TIMEOUT" bash -c 'ulimit -f "$1" && shift && exec "$@"' _ \
+        "$FETCH_FILE_BLOCKS" git "$@"
+}
+
 # One key of release.conf, read as text: the file is the operator's, and sourcing it would run
 # whatever it holds as root.
 conf_value() {
@@ -108,7 +123,7 @@ remote_tag_id() {
     case "$origin" in
         -*) refuse "the origin in $CONF starts with a dash"; return ;;
     esac
-    listing="$(release_git -C "$DM3_STATE" ls-remote --tags "$origin" 2> /dev/null)" ||
+    listing="$(release_git_timed -C "$DM3_STATE" ls-remote --tags "$origin" 2> /dev/null)" ||
         { refuse "the origin $origin cannot be reached"; return; }
     tag="$(awk -v ref="refs/tags/$name" '$2 == ref { print $1 }' <<< "$listing")"
     peeled="$(awk -v ref="refs/tags/$name^{}" '$2 == ref { print $1 }' <<< "$listing")"
@@ -124,10 +139,8 @@ scratch_fetch() {
     local name=$1 id=$2 origin dir got
     origin="$(conf_value origin)" || return
     dir="$(as_release_user mktemp -d "$SCRATCH/tag.XXXXXX")" || { refuse "no scratch repository in $SCRATCH"; return; }
-    # shellcheck disable=SC2016 # expanded by the shell bash -c starts
     if ! release_git init -q --bare "$dir" ||
-        ! as_release_user timeout "$FETCH_TIMEOUT" bash -c 'ulimit -f "$1" && shift && exec "$@"' _ \
-            "$FETCH_FILE_BLOCKS" git -C "$dir" fetch -q --no-tags --depth=1 "$origin" \
+        ! release_git_bounded -C "$dir" fetch -q --no-tags --depth=1 "$origin" \
             "+refs/tags/$name:refs/tags/$name" 2> /dev/null; then
         rm -rf "$dir"
         refuse "$name could not be fetched within ${FETCH_TIMEOUT} s and the size limit"
@@ -240,11 +253,13 @@ parse_fields() (
 )
 
 # A tag from the origin, as far as the server is concerned: listed, fetched alone into scratch
-# and verified there. Prints the fields and id=<tag object id>.
+# and verified there. Prints the fields and id=<tag object id>. A listing or a fetch that fails
+# returns WAITS: an origin that did not answer says nothing of the tag, and only a refused
+# verification may reject it for good.
 fetch_and_verify() {
     local name=$1 id dir fields status=0
-    id="$(remote_tag_id "$name")" || return
-    dir="$(scratch_fetch "$name" "$id")" || return
+    id="$(remote_tag_id "$name")" || return "$WAITS"
+    dir="$(scratch_fetch "$name" "$id")" || return "$WAITS"
     fields="$(verify_tag_object "$dir" "$name" "$id")" || status=$?
     rm -rf "$dir"
     [ "$status" -eq 0 ] || return "$status"
@@ -256,7 +271,7 @@ fetch_and_verify() {
 mirror_fetch() {
     local name=$1 id=$2 origin got
     origin="$(conf_value origin)" || return
-    release_git -C "$REPO" fetch -q --no-tags "$origin" "+refs/tags/$name:refs/tags/$name" ||
+    release_git_bounded -C "$REPO" fetch -q --no-tags "$origin" "+refs/tags/$name:refs/tags/$name" ||
         { refuse "$name could not be fetched into the mirror"; return; }
     got="$(release_git -C "$REPO" rev-parse -q --verify "refs/tags/$name" || true)"
     [ "$got" = "$id" ] || { refuse "the origin moved $name after it verified"; return; }
@@ -423,22 +438,22 @@ pull_images() {
     shift
     for ref in "$@"; do
         # 2, not 1: a registry that does not answer is a release that waits, not a refused one.
-        docker pull -q "$ref" > /dev/null || { refuse "$ref could not be pulled"; return 2; }
+        timeout "$PULL_TIMEOUT" docker pull -q "$ref" > /dev/null || { refuse "$ref could not be pulled"; return 2; }
         label="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$ref")"
         [ "$label" = "$commit" ] ||
             { refuse "$ref was built from ${label:-an unlabelled commit}, not $commit"; return; }
     done
 }
 
-# The images outside the application, by the references the compose files give, only when
-# absent: that is today's trust, taken at the moment the operator chose.
+# The images outside the application, by the references the compose files of the release (current
+# by default) give, only when absent: that is today's trust, taken at the moment the operator chose.
 pull_missing_images() {
-    local image
+    local dir=${1:-$REL/current} image
     while IFS= read -r image; do
         [ -n "$image" ] || continue
         docker image inspect "$image" > /dev/null 2>&1 && continue
-        docker pull -q "$image" > /dev/null || { refuse "$image could not be pulled"; return; }
-    done < <(compose_cmd "$REL/current" config --images | sort -u)
+        timeout "$PULL_TIMEOUT" docker pull -q "$image" > /dev/null || { refuse "$image could not be pulled"; return; }
+    done < <(compose_cmd "$dir" config --images | sort -u)
 }
 
 # The edge's links set to one pair, tested and reloaded in the container; a failed test puts the
@@ -573,6 +588,9 @@ recover_stack() {
     else
         compose_cmd "$REL/current" "${up[@]}" || { refuse "compose could not start the release"; return; }
     fi
+    # The edge starts last under a quarter of a CPU, and nginx -s reload fails until its master
+    # has written the pid file.
+    wait_healthy dm-nginx 90 || return
     edge_switch primary || return
     switch_check primary || return
     compose_cmd "$REL/current" --profile rollout rm -s -f dmapi-next dmfront-next > /dev/null ||
@@ -646,9 +664,20 @@ take_fields() {
     done <<< "$1"
 }
 
-# The marker names the run, so the tick that finds it lists the right tag as tried.
+# The marker names the run, so the tick that finds it lists the right tag as tried. A maintain
+# also names the release it replaced: its containers still read that release's files, so the
+# recovery of a run that died recreates against it.
 write_marker() {
-    printf 'tag=%s\nsigned=%s\n' "$1" "$2" > "$MARKER"
+    printf 'tag=%s\nsigned=%s\nprevious=%s\n' "$1" "$2" "${3:-}" > "$MARKER"
+}
+
+# The release the marker names as replaced, when it is kept and is not the live one.
+marker_previous() {
+    local previous
+    previous="$(sed -n 's/^previous=//p' "$MARKER" 2> /dev/null || true)"
+    if valid_release_id "$previous" && [ -d "$REL/$previous" ] && [ "$previous" != "$(live_id)" ]; then
+        printf '%s\n' "$previous"
+    fi
 }
 
 live_tag() {
@@ -919,6 +948,15 @@ health_of() {
     docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$1" 2> /dev/null || true
 }
 
+# wait_healthy <container> <seconds>
+wait_healthy() {
+    local deadline=$((SECONDS + $2))
+    until [ "$(health_of "$1")" = healthy ]; do
+        [ "$SECONDS" -lt "$deadline" ] || { refuse "$1 is not healthy within $2 s"; return; }
+        sleep 1
+    done
+}
+
 image_matches() {
     local running wanted
     running="$(docker inspect --format '{{.Image}}' "$1" 2> /dev/null || true)"
@@ -1079,6 +1117,9 @@ try_candidate() {
     descends "$live_commit" "$F_COMMIT" ||
         { refuse_release "$name" "commit $F_COMMIT does not descend from the live commit $live_commit"; return 1; }
     stand_healthy "$live" || { wait_for "$name" "the stand is not healthy"; return "$WAITS"; }
+    # Before the pull: the next tick prunes the images of a release that is not live, so a
+    # candidate waiting after its pull would fetch its four images again on every tick.
+    memory_fits || { wait_for "$name" "the memory would leave less than a tenth free"; return "$WAITS"; }
     pull_images "$F_COMMIT" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" || status=$?
     case "$status" in
         0) ;;
@@ -1089,7 +1130,6 @@ try_candidate() {
     build_release_dir "$rid" "$name" "$F_COMMIT" "$live" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" > /dev/null ||
         { refuse_release "$name" "the release directory could not be built"; return 1; }
     reason="$(classify "$live" "$rid" "$mode")" || { refuse_release "$name" "$reason"; return 1; }
-    memory_fits || { wait_for "$name" "the memory would leave less than a tenth free"; return "$WAITS"; }
 
     rm -f "$WAITING"
     write_marker "$name" "$F_SIGNED"
@@ -1104,31 +1144,33 @@ try_candidate() {
 
 # A run that died left its marker: recovery, and its tag is not taken again.
 recover_died() {
-    local tag signed
+    local tag signed previous
     tag="$(sed -n 's/^tag=//p' "$MARKER")"
     signed="$(sed -n 's/^signed=//p' "$MARKER")"
+    previous="$(marker_previous)"
     valid_tag_name "$tag" || tag="$(live_tag)"
     say "a run of $tag did not finish; recovering the release current names"
-    if recover_stack; then
+    if recover_stack "$previous"; then
         tried_add "$tag" "$signed" failed "the run did not finish"
     else
         tried_add "$tag" "$signed" failed "recovery after a run that did not finish failed"
+        return 1
     fi
 }
 
 # One tick of the timer (3.5).
 verb_poll() {
-    local origin listing line kind name id fields rejected=0 tried=0
+    local origin listing line kind name id fields rejected=0 tried=0 status
     local -a lines=()
     if [ -e "$MARKER" ]; then
-        recover_died
+        recover_died || true
         write_metric 0
         return 0
     fi
     [ -n "$(live_id)" ] || { say "no release is live; dm3-release maintain installs one"; return 0; }
     prune_app_images
     origin="$(conf_value origin)" || return
-    if ! listing="$(release_git -C "$DM3_STATE" ls-remote --tags -- "$origin" 2> /dev/null)"; then
+    if ! listing="$(release_git_timed -C "$DM3_STATE" ls-remote --tags -- "$origin" 2> /dev/null)"; then
         say "the origin $origin cannot be listed"
         write_metric 0
         return 0
@@ -1148,7 +1190,13 @@ verb_poll() {
                 rejected=$((rejected + 1))
                 ;;
             try)
-                if ! fields="$(fetch_and_verify "$name")"; then
+                status=0
+                fields="$(fetch_and_verify "$name")" || status=$?
+                if [ "$status" = "$WAITS" ]; then
+                    wait_for "$name" "it could not be listed or fetched"
+                    tried=1
+                    break
+                elif [ "$status" != 0 ]; then
                     remember_rejected "$id"
                     rejected=$((rejected + 1))
                     continue
@@ -1212,13 +1260,17 @@ verb_rollback() {
 # Maintenance (3.7): any verified tag the operator names, downtime allowed. Also the first
 # installation, on an empty layout.
 verb_maintain() {
-    local name=$1 reset=$2 fields prev rid
+    local name=$1 reset=$2 fields prev rid replaced
     fields="$(fetch_and_verify "$name")" || return
     take_fields "$fields"
     say "$name verified: commit $F_COMMIT"
 
     mirror_fetch "$name" "$F_ID" || return
     prev="$(live_id)"
+    # A rerun after a maintain that died past the move of current: the containers still read the
+    # files of the release that one replaced.
+    replaced="$(marker_previous)"
+    [ -n "$replaced" ] || replaced=$prev
     manifest_of "$F_COMMIT" > "$DM3_STATE/candidate.manifest" ||
         { refuse "the schema sources of $F_COMMIT could not be listed"; return; }
     local live_manifest="$DM3_STATE/none.manifest"
@@ -1231,19 +1283,26 @@ verb_maintain() {
     build_release_dir "$rid" "$name" "$F_COMMIT" "$prev" "$F_API" "$F_FRONT" "$F_MAIL" "$F_NOTIFICATION" > /dev/null ||
         return
 
+    # Before current moves: a registry that does not answer then leaves the live release whole.
+    if [ -n "$prev" ]; then
+        pull_missing_images "$REL/$rid" || return
+    fi
+
     # From here on the stand changes; a run that dies leaves the marker, and boot or recover
     # brings back whatever current names.
-    write_marker "$name" "$F_SIGNED"
+    write_marker "$name" "$F_SIGNED" "$replaced"
     if [ "$reset" = 1 ]; then
         reset_database || return
     fi
     [ "$prev" = "$rid" ] || commit_current "$rid"
-    pull_missing_images || return
+    if [ -z "$prev" ]; then
+        pull_missing_images || return
+    fi
     install_machinery || return
-    if [ "$prev" = "$rid" ]; then
+    if [ "$replaced" = "$rid" ]; then
         recover_stack || return
     else
-        recover_stack "$prev" || return
+        recover_stack "$replaced" || return
     fi
     prune_release_dirs
     write_metric 0
@@ -1251,18 +1310,29 @@ verb_maintain() {
 }
 
 verb_recover() {
+    local status=0
     [ -n "$(live_id)" ] || { refuse "no release is live: $REL/current does not exist"; return; }
-    if ! recover_stack; then
+    if [ -e "$MARKER" ]; then
+        recover_died || status=$?
+    elif ! recover_stack; then
         tried_add "$(live_tag)" "" failed "recovery failed"
-        write_metric 0
-        return 1
+        status=1
     fi
     write_metric 0
+    return "$status"
 }
 
+# A run the machine went down under is a failure with its letter, as when the timer finds it.
 verb_boot() {
+    local status=0
     [ -n "$(live_id)" ] || { refuse "no release is live: $REL/current does not exist"; return; }
-    recover_stack
+    if [ ! -e "$MARKER" ]; then
+        recover_stack
+        return
+    fi
+    recover_died || status=$?
+    write_metric 0
+    return "$status"
 }
 
 verb_stop() {

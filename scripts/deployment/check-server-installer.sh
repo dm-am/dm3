@@ -66,10 +66,13 @@ if grep -v '^\s*#' docker/setup-server.sh | grep -q -e 'git clone' -e 'docker co
   fail "setup-server.sh still clones a tree or starts compose itself; the layout part and dm3-release do that"
 fi
 
-echo "the layout installer refuses to start without the signer's key and the tag"
-# Before it touches anything: the same machine-wide paths a wrong call would change.
+echo "the layout installer refuses to start without the signer's key, the tag and the mail relay"
+# Before it touches anything: the same machine-wide paths a wrong call would change. Without
+# the relay init-env.sh stops after the account, the directories and the pins are in place,
+# and the guard then refuses the rerun.
 for call in "" "--tag v1.0.0" "--signers $WORK/signers" "--tag v1.0.0 --signers" \
-  "--tag v1.0.0 --signers $WORK/missing-signers" "--tag v1.0.0 --signers $WORK/signers --mail-host relay.example"; do
+  "--tag v1.0.0 --signers $WORK/missing-signers" "--tag v1.0.0 --signers $WORK/signers --mail-host relay.example" \
+  "--tag v1.0.0 --signers $WORK/signers"; do
   : > "$WORK/signers"
   printf 'release namespaces="git" ssh-ed25519 AAAA\n' > "$WORK/signers"
   # shellcheck disable=SC2086 # the call is a list of words on purpose
@@ -80,6 +83,10 @@ for call in "" "--tag v1.0.0" "--signers $WORK/signers" "--tag v1.0.0 --signers"
   grep -q -e '--signers' -e '--tag' -e '--mail-port' "$WORK/install.err" ||
     fail "install-release.sh refused \"$call\" for another reason than its arguments: $(cat "$WORK/install.err")"
   test ! -e "$WORK/layout" || fail "install-release.sh created the layout before refusing \"$call\""
+done
+for flag in --signers --tag --mail-host --mail-port; do
+  grep -q "^    \*\" $flag \"\*) ;;" docker/setup-server.sh ||
+    fail "setup-server.sh does not ask for $flag before apt"
 done
 
 echo "the installer of the environment file carries a new variable over"
@@ -246,5 +253,34 @@ if ! grep -q '^WEBROOT="$DM_EDGE_DIR/acme"' docker/scripts/init-ssl.sh ||
   ! grep -q '^TLS_DIR="$DM_EDGE_DIR/tls"' docker/scripts/init-ssl.sh; then
   fail "init-ssl.sh writes the challenge or the TLS server somewhere other than \$DM_EDGE_DIR"
 fi
+
+echo "the cron installer keeps the operator's lines and installs DM3's whatever root's table holds"
+# maintain runs it on every release: a table with nothing but DM3's lines, or no table at all,
+# must still end with the three jobs, not with an empty table and a failed maintain.
+mkdir -p "$WORK/cron/bin"
+cat > "$WORK/cron/bin/crontab" << 'STUB'
+#!/bin/bash
+# Stands in for crontab: -l prints the table or fails as crontab does without one.
+case "$1" in
+  -l) cat "$CRONTAB_FILE" 2> /dev/null || { echo "no crontab for root" >&2; exit 1; } ;;
+  # Read whole before the table is replaced, as crontab does: -l may still be reading it.
+  -) table="$(cat)" && printf '%s\n' "$table" > "$CRONTAB_FILE" ;;
+esac
+STUB
+chmod +x "$WORK/cron/bin/crontab"
+cron_install() {
+  env PATH="$WORK/cron/bin:$PATH" CRONTAB_FILE="$WORK/cron/table" TEXTFILE_DIR="$WORK/cron/textfile" \
+    DM3_BACKUP_LOG="$WORK/cron/backup.log" DM3_LOGROTATE_CONF="$WORK/cron/logrotate" \
+    bash docker/scripts/install-cron.sh "$ROOT" > /dev/null 2> "$WORK/cron/err" ||
+    fail "install-cron.sh failed on $1: $(cat "$WORK/cron/err")"
+  test "$(grep -c 'verify-backup.sh' "$WORK/cron/table")" = 1 ||
+    fail "install-cron.sh left $1 without exactly one verify job: $(cat "$WORK/cron/table" 2> /dev/null)"
+}
+rm -f "$WORK/cron/table"
+cron_install "no table"
+cron_install "a table of DM3's lines only"
+printf '15 3 * * * /usr/local/bin/operator-job\n' >> "$WORK/cron/table"
+cron_install "a table with the operator's line"
+grep -q 'operator-job' "$WORK/cron/table" || fail "install-cron.sh dropped the operator's own line"
 
 echo "OK: the server installer and the operator's tools hold what they are written around."

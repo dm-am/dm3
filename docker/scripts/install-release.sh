@@ -10,7 +10,7 @@ set -euo pipefail
 #
 # Usage, as root, from a checkout of the verified tag:
 #   install-release.sh --signers <allowed_signers> --tag <vX.Y.Z> [--origin <url>]
-#                      [--image-prefix <prefix>] [--mail-host <host> --mail-port <port>] [--no-timer]
+#                      --mail-host <host> --mail-port <port> [--image-prefix <prefix>] [--no-timer]
 #
 # --mail-host and --mail-port go into shared/env on its first run, so the installer finishes in
 # one go. --no-timer enables the release timer without starting it, for a machine where a tick
@@ -25,7 +25,7 @@ MAIL_PORT_GIVEN=""
 START_TIMER=1
 
 usage() {
-    echo "Usage: install-release.sh --signers <allowed_signers> --tag <vX.Y.Z> [--origin <url>] [--image-prefix <prefix>] [--mail-host <host> --mail-port <port>] [--no-timer]" >&2
+    echo "Usage: install-release.sh --signers <allowed_signers> --tag <vX.Y.Z> --mail-host <host> --mail-port <port> [--origin <url>] [--image-prefix <prefix>] [--no-timer]" >&2
     exit 2
 }
 
@@ -53,8 +53,9 @@ done
 [ -n "$TAG" ] || { echo "Error: --tag names the release to install" >&2; usage; }
 [ -n "$SIGNERS_FILE" ] || { echo "Error: --signers names the allowed_signers file of the release key" >&2; usage; }
 [ -s "$SIGNERS_FILE" ] || { echo "Error: --signers $SIGNERS_FILE is not a file with a key in it" >&2; exit 1; }
-if { [ -n "$MAIL_HOST_GIVEN" ] && [ -z "$MAIL_PORT_GIVEN" ]; } || { [ -z "$MAIL_HOST_GIVEN" ] && [ -n "$MAIL_PORT_GIVEN" ]; }; then
-    echo "Error: --mail-host and --mail-port come together" >&2
+# Without the relay init-env.sh server stops after the account, the directories and the pins.
+if [ -z "$MAIL_HOST_GIVEN" ] || [ -z "$MAIL_PORT_GIVEN" ]; then
+    echo "Error: --mail-host and --mail-port name the mail relay of the server" >&2
     usage
 fi
 [ "$(id -u)" -eq 0 ] || { echo "Error: install-release.sh runs as root" >&2; exit 1; }
@@ -90,12 +91,8 @@ chmod 644 "$DM3_ETC/release.conf"
 echo "=== Файл окружения $DM3_ROOT/shared/env ==="
 # The relay goes in through the environment, which init-env.sh writes into the file it creates:
 # a file written here first would count as existing, and no credentials would be generated.
-if [ -n "$MAIL_HOST_GIVEN" ]; then
-    DM_LAYOUT_ROOT="$DM3_ROOT" MAIL_HOST="$MAIL_HOST_GIVEN" MAIL_PORT="$MAIL_PORT_GIVEN" \
-        bash "$HERE/init-env.sh" server
-else
-    env -u MAIL_HOST -u MAIL_PORT DM_LAYOUT_ROOT="$DM3_ROOT" bash "$HERE/init-env.sh" server
-fi
+DM_LAYOUT_ROOT="$DM3_ROOT" MAIL_HOST="$MAIL_HOST_GIVEN" MAIL_PORT="$MAIL_PORT_GIVEN" \
+    bash "$HERE/init-env.sh" server
 
 echo "=== Пароль входа на стенд ==="
 DM_LAYOUT_ROOT="$DM3_ROOT" bash "$HERE/init-htpasswd.sh"

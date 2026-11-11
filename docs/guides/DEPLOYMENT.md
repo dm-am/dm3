@@ -26,7 +26,7 @@ git -c gpg.ssh.allowedSignersFile=<allowed_signers> verify-tag <тег>
 sudo bash docker/setup-server.sh --signers <allowed_signers> --tag <тег> --mail-host <хост> --mail-port <порт>
 ```
 
-`--signers` называет файл `allowed_signers` с ключом, которым подписываются релизы. Сервер принимает только теги, подписанные этим ключом. Без `--signers`, `--tag` и адреса почтового relay установщик останавливается до того, как что-то поставит. Хостовая часть в [`docker/setup-server.sh`](../../docker/setup-server.sh), раскладка каталогов и первый релиз в [`docker/scripts/install-release.sh`](../../docker/scripts/install-release.sh), шаги перечислены там по порядку.
+`--signers` называет файл `allowed_signers` с ключом, которым подписываются релизы. Сервер принимает только теги, подписанные этим ключом. Без `--signers`, `--tag`, `--mail-host` и `--mail-port` установщик останавливается до того, как что-то поставит. Хостовая часть в [`docker/setup-server.sh`](../../docker/setup-server.sh), раскладка каталогов и первый релиз в [`docker/scripts/install-release.sh`](../../docker/scripts/install-release.sh), шаги перечислены там по порядку.
 
 Пароль Basic Auth с логином `preview` установщик спрашивает сам. За ним стенд отвечает по `http://<IP>`, пока нет домена. Файл `.htpasswd` в репозитории не хранится, его создает [`docker/scripts/init-htpasswd.sh`](../../docker/scripts/init-htpasswd.sh). В конце установщик включает таймер выпуска, живой релиз показывает `sudo dm3-release status`.
 

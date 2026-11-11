@@ -7,14 +7,14 @@ set -euo pipefail
 # the first signed release.
 #
 # Usage, as root, from a clone checked out at the release tag after its signature verified:
-#   sudo bash docker/setup-server.sh --signers <allowed_signers> --tag <vX.Y.Z> [--mail-host h --mail-port p]
+#   sudo bash docker/setup-server.sh --signers <allowed_signers> --tag <vX.Y.Z> --mail-host <host> --mail-port <port>
 # Not from a pipe: what runs as root here is the tree whose tag the operator verified.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 [ "$(id -u)" -eq 0 ] || { echo "Error: setup-server.sh runs as root (sudo bash docker/setup-server.sh ...)" >&2; exit 1; }
 
-# The two answers the layout part refuses to start without are asked for here too, before apt
+# The answers the layout part refuses to start without are asked for here too, before apt
 # and a docker restart change the machine.
 case " $* " in
     *" --signers "*) ;;
@@ -23,6 +23,14 @@ esac
 case " $* " in
     *" --tag "*) ;;
     *) echo "Error: --tag names the release to install" >&2; exit 2 ;;
+esac
+case " $* " in
+    *" --mail-host "*) ;;
+    *) echo "Error: --mail-host names the mail relay of the server" >&2; exit 2 ;;
+esac
+case " $* " in
+    *" --mail-port "*) ;;
+    *) echo "Error: --mail-port names the port of the mail relay" >&2; exit 2 ;;
 esac
 
 # Asked before anything is installed: a repeat run used to die halfway, after apt and a docker
