@@ -14,8 +14,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// <remarks>MigrateAsync rather than EnsureCreated: the migration is the database the site starts from.</remarks>
 public class NotificationDatabaseFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("dm3_notifications")
         .WithUsername("test")
         .WithPassword("test")

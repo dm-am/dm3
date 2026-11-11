@@ -23,9 +23,9 @@
 
 - Kestrel и ASP.NET Core: API, хаб уведомлений, проверка origin изменяющего
   запроса, ограничение частоты запросов.
-- `Swashbuckle.AspNetCore.*` 10.2.3, документ API и страница Swagger.
+- `Swashbuckle.AspNetCore.*` 10.3.1, документ API и страница Swagger.
 - `AspNetCore.HealthChecks.*` 9.0.0, проверки готовности PostgreSQL.
-- `Microsoft.Extensions.*` 10.0.11: конфигурация, опции, контейнер зависимостей,
+- `Microsoft.Extensions.*` 10.0.15: конфигурация, опции, контейнер зависимостей,
   логирование, кэш в памяти, хостинг.
 - Встроенный контейнер зависимостей: явные регистрации плюс скан сборки по
   конвенции, полнота регистраций проверяется при старте.
@@ -33,7 +33,7 @@
 
 ### Доменная логика
 
-- `FluentValidation` 11.9.2, проверка бизнес-правил в доменных модулях.
+- `FluentValidation` 12.2.0, проверка бизнес-правил в доменных модулях.
 - `Riok.Mapperly` 4.3.1, генератор мапперов DTO на компиляции: несведенное поле
   ломает сборку, а не запрос.
   Альтернативы: AutoMapper. Почему не он: маппинг в рантайме, пропущенная карта
@@ -63,7 +63,7 @@
   Альтернативы: вторая, документная СУБД (часть данных жила в MongoDB). Почему
   не она: между хранилищами нет ни транзакции, ни соединения таблиц, а два
   ночных бэкапа не дают согласованного снимка.
-- `Microsoft.EntityFrameworkCore.*` 10.0.11 и `Npgsql.EntityFrameworkCore.PostgreSQL`
+- `Microsoft.EntityFrameworkCore.*` 10.0.15 и `Npgsql.EntityFrameworkCore.PostgreSQL`
   10.0.3, EF Core с провайдером Npgsql, один контекст на все модули. Провайдер в
   памяти только для тестов.
 - `Npgsql` на версии, которую приносит провайдер, драйвер PostgreSQL. Своя строка
@@ -100,8 +100,8 @@
   от 2 ГБ памяти.
 - `nginx` 1.27.5-alpine, образ закреплен по дайджесту, единственный вход в
   объектное хранилище: пропускает к нему S3 и метрики и ничего больше.
-- `AWSSDK.S3` 3.7.400.5, клиент S3 в приложении.
-- `Magick.NET-Q8-AnyCPU` 15.0.0, ImageMagick для .NET под лицензией Apache 2.0,
+- `AWSSDK.S3` 4.0.104.12, клиент S3 в приложении.
+- `Magick.NET-Q8-AnyCPU` 15.1.0, ImageMagick для .NET под лицензией Apache 2.0,
   разбор загруженной картинки: уменьшение, квадратные превью аватара, минимальный
   размер аватара, защита от бомбы распаковки. Формат определяет сигнатура файла,
   декодер получает его явно.
@@ -111,7 +111,7 @@
 ### Почта
 
 - `axllent/mailpit` v1.31.0, локальный SMTP-сервер для разработки и тестов.
-- `MailKit` 4.17.0 и `MimeKit` 4.17.0, отправка из отдельного почтового воркера
+- `MailKit` 4.18.2 и `MimeKit` 4.18.2, отправка из отдельного почтового воркера
   по очереди, а не из запроса.
 - Brevo, облачный провайдер транзакционных писем, в плане.
 
@@ -166,20 +166,20 @@
   экспорта или в его конфиге.
 - `NSubstitute.Analyzers.CSharp` 1.0.17, анализатор подстановок в тестах.
 - Закрепленные транзитивные зависимости:
-  `System.Security.Cryptography.Pkcs` 10.0.13 и `SSH.NET` 2026.0.0 выше версий с
-  уязвимостями, `System.Text.Json` 10.0.11 не ниже соседей по графу.
+  `System.Security.Cryptography.Pkcs` 10.0.15 выше версии с уязвимостью,
+  `System.Text.Json` 10.0.15 не ниже соседей по графу.
 
 ### Тесты
 
 - `xunit.v3` 3.2.2, `xunit.runner.visualstudio` 3.1.5, `Microsoft.NET.Test.Sdk`
-  17.11.0 и `coverlet.collector` 6.0.2, тесты .NET и покрытие.
+  17.14.2 и `coverlet.collector` 6.0.4, тесты .NET и покрытие.
 - `NSubstitute` 6.2.0, подстановки зависимостей.
   Альтернативы: Moq. Почему не он: инцидент SponsorLink в 4.20.0.
 - `AwesomeAssertions` 9.6.0, проверки в тестах.
-- `Testcontainers.*` 4.3.0, интеграционные тесты против настоящего
+- `Testcontainers.*` 4.16.0, интеграционные тесты против настоящего
   PostgreSQL.
-- `Microsoft.AspNetCore.Mvc.Testing` 10.0.11, хост API в интеграционных тестах.
-- `TngTech.ArchUnitNET.*` 0.13.3, архитектурные правила тестами.
+- `Microsoft.AspNetCore.Mvc.Testing` 10.0.15, хост API в интеграционных тестах.
+- `TngTech.ArchUnitNET.*` 0.13.5, архитектурные правила тестами.
 - `vitest` 4.1.11 с `@vitest/coverage-v8` 4.1.11, `@vue/test-utils` 2.4.6 и
   `jsdom` 24.1.1, тесты клиента и компонентов.
 - `fast-check` 4.10.2, тесты свойств разбора разметки.
@@ -224,14 +224,14 @@
 - `grafana/grafana` 13.2.0, просмотр метрик, логов и трасс. `grafana/loki` 3.5.12,
   хранилище логов. `jaegertracing/jaeger` 2.20.0, трассировка по OTLP.
 - `OpenTelemetry.*`, инструментирование веб-слоя, HTTP, EF Core и
-  рантайма: `OpenTelemetry.Extensions.Hosting` 1.18.0,
-  `OpenTelemetry.Instrumentation.AspNetCore` 1.18.0,
-  `OpenTelemetry.Instrumentation.Http` 1.18.0,
-  `OpenTelemetry.Instrumentation.Runtime` 1.18.0,
-  `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.18.0.
-  `OpenTelemetry.Instrumentation.EntityFrameworkCore` 1.18.0-beta.1 и
-  `OpenTelemetry.Exporter.Prometheus.AspNetCore` 1.18.0-beta.1 стабильных версий
+  рантайма: `OpenTelemetry.Extensions.Hosting` 1.20.1,
+  `OpenTelemetry.Instrumentation.AspNetCore` 1.20.2,
+  `OpenTelemetry.Instrumentation.Http` 1.20.2,
+  `OpenTelemetry.Instrumentation.Runtime` 1.20.1,
+  `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.20.1.
+  `OpenTelemetry.Instrumentation.EntityFrameworkCore` 1.20.2-beta.1 и
+  `OpenTelemetry.Exporter.Prometheus.AspNetCore` 1.20.1-beta.1 стабильных версий
   не имеют.
-- `Serilog` 4.3.1, `Serilog.AspNetCore` 10.0.0, `Serilog.Formatting.Compact` 3.0.0,
-  `Serilog.Sinks.Console` 6.1.1 и `Serilog.Sinks.Grafana.Loki` 9.0.1, логи с
+- `Serilog` 4.4.0, `Serilog.AspNetCore` 10.0.0, `Serilog.Formatting.Compact` 3.0.0,
+  `Serilog.Sinks.Console` 6.1.1 и `Serilog.Sinks.Grafana.Loki` 9.0.2, логи с
   токеном запроса и идентификатором трассы.

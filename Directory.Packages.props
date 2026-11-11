@@ -6,38 +6,38 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
-    <PackageVersion Include="AWSSDK.S3" Version="3.7.400.5" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.12" />
     <!-- The BCL has no Ed25519, which Discord fixes for its interactions signature. -->
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
-    <PackageVersion Include="FluentValidation" Version="11.9.2" />
+    <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <PackageVersion Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
     <!-- ImageSharp 3.1 has five open advisories and 4 needs a licence key. Q8 halves the
          pixel cache of Q16; AnyCPU carries every platform's native library. -->
-    <PackageVersion Include="Magick.NET-Q8-AnyCPU" Version="15.0.0" />
-    <PackageVersion Include="MailKit" Version="4.17.0" />
-    <PackageVersion Include="MimeKit" Version="4.17.0" />
+    <PackageVersion Include="Magick.NET-Q8-AnyCPU" Version="15.1.0" />
+    <PackageVersion Include="MailKit" Version="4.18.2" />
+    <PackageVersion Include="MimeKit" Version="4.18.2" />
     <!-- Same-version guards: no branch of the graph may drag these below this version. -->
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.11" />
-    <PackageVersion Include="System.Text.Json" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.FileExtensions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.15" />
+    <PackageVersion Include="System.Text.Json" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.FileExtensions" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
     <PackageVersion Include="AspNetCore.HealthChecks.Npgsql" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
-    <!-- Transitive pin: without it the graph resolves 8.0.11 instead of 10.0.11 in ten projects. -->
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.0" />
+    <!-- Transitive pin: without it the graph resolves 8.0.11 instead of the family version in ten projects. -->
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.2" />
     <!-- The version the provider resolves to: the driver moves only with it. -->
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
@@ -47,39 +47,36 @@
     <PackageVersion Include="NSubstitute.Analyzers.CSharp" Version="1.0.17" />
     <!-- Beta by the project's own choice, with breaking changes between betas, so it
          moves only with the OpenTelemetry core. -->
-    <PackageVersion Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.18.0-beta.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.20.2-beta.1" />
     <!-- RFC 6238 and Base32, which the BCL lacks. Also gives the matched time step the
          replay guard of the second factor remembers. -->
     <PackageVersion Include="Otp.NET" Version="1.4.1" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
     <!-- Still a beta upstream. Betas changed the _total suffix and the OpenMetrics format,
          which renames series that rules and panels use, so it moves only with the core. -->
-    <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.18.0-beta.1" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.20.1-beta.1" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.2" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.20.2" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
     <!-- Replaces AutoMapper (15.0 went commercial). Source generator, so every reference
          carries PrivateAssets="all". -->
     <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />
-    <PackageVersion Include="Serilog" Version="4.3.1" />
+    <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
-    <PackageVersion Include="Serilog.Sinks.Grafana.Loki" Version="9.0.1" />
+    <PackageVersion Include="Serilog.Sinks.Grafana.Loki" Version="9.0.2" />
     <!-- Transitive via MimeKit, pinned above GHSA-846f-f764-76mx. -->
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />
-    <PackageVersion Include="Swashbuckle.AspNetCore.Swagger" Version="10.2.3" />
-    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
-    <!-- Testcontainers asks for 2025.1.0, which GHSA-q939-rpr3-3284 covers; the fix is in
-         2026.0.0. Drop when Testcontainers requires 2026.0.0 itself. -->
-    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.3.0" />
-    <PackageVersion Include="TngTech.ArchUnitNET" Version="0.13.3" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.3.1" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.Swagger" Version="10.3.1" />
+    <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.3.1" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    <PackageVersion Include="TngTech.ArchUnitNET" Version="0.13.5" />
     <!-- One adapter package per xUnit major; the .xUnit one stops resolving on v3. -->
-    <PackageVersion Include="TngTech.ArchUnitNET.xUnitV3" Version="0.13.3" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
+    <PackageVersion Include="TngTech.ArchUnitNET.xUnitV3" Version="0.13.5" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <!-- xunit.v3 renamed the package. Held on 3.2.x: CI collects coverage through the VSTest
          collector, which 4.0.0 (Microsoft.Testing.Platform v2) drops. -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
