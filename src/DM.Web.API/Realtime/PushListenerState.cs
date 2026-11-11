@@ -21,9 +21,6 @@ internal sealed class PushListenerState : IHealthCheck
 
     public PushListenerState() => MessagingMetrics.PushListening.Record(0);
 
-    /// <summary>Whether the listener is listening now.</summary>
-    internal bool Listening => _listening;
-
     /// <summary>Records that the listener holds its connection and listens.</summary>
     internal void MarkListening() => Set(true);
 

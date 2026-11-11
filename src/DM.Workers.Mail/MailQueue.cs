@@ -1,15 +1,12 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Mail;
 using DM.Infrastructure.Core.Queues;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.Queues;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Npgsql;
 
 namespace DM.Workers.Mail;
 
@@ -24,18 +21,12 @@ namespace DM.Workers.Mail;
 internal static class MailQueue
 {
     /// <summary>Builds the loop from the services of the process.</summary>
-    public static QueueWorker Worker(IServiceProvider services) => new(
-        QueueNames.Mail,
-        null,
-        Handle,
-        services.GetRequiredService<NpgsqlDataSource>(),
-        services.GetRequiredService<IServiceScopeFactory>(),
-        services.GetRequiredService<IDateTimeProvider>(),
-        services.GetRequiredService<ILogger<QueueWorker>>());
+    public static QueueWorker Worker(IServiceProvider services) =>
+        QueueWorker.FromServices(services, QueueNames.Mail, null, Handle);
 
     /// <summary>
-    /// Hands the letter of a row to the unchanged letter processor, under the queue's name where
-    /// the routing key used to be.
+    /// Hands the letter of a row to the unchanged letter processor, under the queue's name, which
+    /// the processor takes as its source.
     /// </summary>
     /// <remarks>
     /// Text that is not a letter stays so on every pass: the answer is that it cannot be processed,

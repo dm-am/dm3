@@ -45,6 +45,7 @@ public class NotificationQueueShould(NotificationDatabaseFixture fixture)
     private static readonly DateTimeOffset Now = new(2026, 11, 10, 12, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Within = TimeSpan.FromSeconds(5);
 
+    /// <remarks>Mutation it must fail on: a loop that marks the row without calling the handler.</remarks>
     [Fact]
     public async Task HandAStoredEventToTheHandlerWithinFiveSecondsAndMarkIt()
     {
@@ -72,6 +73,7 @@ public class NotificationQueueShould(NotificationDatabaseFixture fixture)
         (await fixture.OutboxRow(row.Id)).ProcessedUtc.Should().Be(Now, "the mark reads the application's clock");
     }
 
+    /// <remarks>Mutation it must fail on: a pass that ends after one row and waits a poll before the next.</remarks>
     [Fact]
     public async Task DrainEveryReadyRowOfTheQueue()
     {
@@ -158,6 +160,7 @@ public class NotificationQueueShould(NotificationDatabaseFixture fixture)
         handled.Should().Equal(row.Id);
     }
 
+    /// <remarks>Mutation it must fail on: an event no generator handles left unmarked, which is claimed on every pass.</remarks>
     [Fact]
     public async Task ClaimAnEventNoGeneratorHandlesOnceAndMarkIt()
     {
@@ -185,6 +188,7 @@ public class NotificationQueueShould(NotificationDatabaseFixture fixture)
         (await fixture.OutboxRow(row.Id)).ProcessedUtc.Should().Be(Now, "and is marked processed");
     }
 
+    /// <remarks>Mutation it must fail on: one scope for the whole loop, which shares a context between rows.</remarks>
     [Fact]
     public async Task RunTheHandlerInAScopeOfItsOwnForEachRow()
     {
@@ -207,6 +211,7 @@ public class NotificationQueueShould(NotificationDatabaseFixture fixture)
             .And.NotContain(services, "the root scope would keep a DbContext for the life of the process");
     }
 
+    /// <remarks>Mutation it must fail on: a span started without the parent stored on the row.</remarks>
     [Fact]
     public async Task ContinueTheTraceTheRowCarries()
     {
@@ -235,6 +240,7 @@ public class NotificationQueueShould(NotificationDatabaseFixture fixture)
         span.ParentSpanId.Should().Be(stored.SpanId);
     }
 
+    /// <remarks>Mutation it must fail on: the counters recorded without the queue attribute.</remarks>
     [Fact]
     public async Task CountTheRowAndItsDurationUnderTheQueue()
     {

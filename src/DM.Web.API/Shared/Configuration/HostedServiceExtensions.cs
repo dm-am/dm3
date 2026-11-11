@@ -24,6 +24,8 @@ internal static class HostedServiceExtensions
     /// <param name="services">Service collection.</param>
     public static IServiceCollection AddDmHostedServices(this IServiceCollection services)
     {
+        // The listener resolves the push handler in a scope of its own per push.
+        services.AddScoped<RealtimeNotificationProcessor>();
         services.AddHostedService<PushListener>();
         services.AddHostedService<WarmupService>();
 

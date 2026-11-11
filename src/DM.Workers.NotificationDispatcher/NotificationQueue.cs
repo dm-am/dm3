@@ -2,15 +2,12 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Queues;
 using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Infrastructure.Messaging.Queues;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Npgsql;
 
 namespace DM.Workers.NotificationDispatcher;
 
@@ -28,18 +25,12 @@ internal static class NotificationQueue
     public static int[] KnownEventTypes() => Enum.GetValues<EventType>().Select(type => (int)type).ToArray();
 
     /// <summary>Builds the loop from the services of the process.</summary>
-    public static QueueWorker Worker(IServiceProvider services) => new(
-        QueueNames.Notifications,
-        KnownEventTypes(),
-        Handle,
-        services.GetRequiredService<NpgsqlDataSource>(),
-        services.GetRequiredService<IServiceScopeFactory>(),
-        services.GetRequiredService<IDateTimeProvider>(),
-        services.GetRequiredService<ILogger<QueueWorker>>());
+    public static QueueWorker Worker(IServiceProvider services) =>
+        QueueWorker.FromServices(services, QueueNames.Notifications, KnownEventTypes(), Handle);
 
     /// <summary>
-    /// Hands the event of a row to the unchanged event handler, under the queue's name where
-    /// the routing key used to be.
+    /// Hands the event of a row to the unchanged event handler, under the queue's name, which
+    /// the processor takes as its source.
     /// </summary>
     /// <remarks>
     /// A row without its event type or entity holds no event, and no retry would give it one:

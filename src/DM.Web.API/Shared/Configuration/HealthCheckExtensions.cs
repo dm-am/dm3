@@ -1,7 +1,7 @@
 using DM.Web.API.Realtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Npgsql;
+using DM.Infrastructure.Core.Configuration;
 
 namespace DM.Web.API.Shared.Configuration;
 
@@ -23,11 +23,7 @@ internal static class HealthCheckExtensions
     {
         services.AddSingleton<PushListenerState>();
         services.AddHealthChecks()
-            // The process's own source, so the check probes the pool the data layer draws from.
-            .AddNpgSql(
-                provider => provider.GetRequiredService<NpgsqlDataSource>(),
-                name: "postgresql",
-                tags: ["db", ReadyTag])
+            .AddDmDatabaseCheck()
             // Whether the listener listens now. Degraded and not
             // ready: an instance without push serves every request.
             .AddCheck<PushListenerState>("realtime-push", HealthStatus.Degraded, [MessagingTag]);

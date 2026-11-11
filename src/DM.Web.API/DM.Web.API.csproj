@@ -5,7 +5,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="AspNetCore.HealthChecks.Npgsql" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
         <PackageReference Include="BouncyCastle.Cryptography" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design">

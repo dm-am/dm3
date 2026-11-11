@@ -57,12 +57,7 @@ public class Startup
                 .UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>()))
             .AddHttpClient();
 
-        // The process's own source, so the check probes the pool the claim and the data layer draw from.
-        services.AddHealthChecks()
-            .AddNpgSql(
-                provider => provider.GetRequiredService<NpgsqlDataSource>(),
-                name: "postgresql",
-                tags: ["db", "ready"]);
+        services.AddHealthChecks().AddDmDatabaseCheck();
 
         // NotificationService declares IIdentityProvider for methods this host never calls.
         services.AddScoped<IIdentityProvider, NoIdentityProvider>();

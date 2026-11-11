@@ -132,7 +132,8 @@ public class CatchAllRegisterShould
 
         new("src/DM.Infrastructure.Persistence/RelationalStorage/QueueMetrics.cs", "Read",
             "A scrape callback: whatever the reading throws, every queue reads not-a-number, so an " +
-            "outage shows as unknown and not as an empty queue, and the scrape still answers."),
+            "outage shows as unknown and not as an empty queue, and the scrape still answers. The " +
+            "failure is logged at Warning when it starts and the recovery at Information."),
 
         new("src/DM.Infrastructure.Persistence/Shared/UnreadCounters/UnreadCountersRepository.cs", "CountedAsync",
             "The counter write follows work that is already committed, so throwing would fail a request " +

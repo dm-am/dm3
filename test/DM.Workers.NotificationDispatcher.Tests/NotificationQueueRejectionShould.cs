@@ -3,14 +3,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Infrastructure.Messaging.Queues;
-using DM.Workers.NotificationDispatcher;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
 
-namespace DM.Infrastructure.Messaging.Tests;
+namespace DM.Workers.NotificationDispatcher.Tests;
 
 /// <summary>
 /// A row of the notification queue that holds no event cannot be handled by any retry, so the

@@ -60,13 +60,13 @@ public delegate Task<ProcessResult> OutboxRowHandler(
 public sealed class QueueWorker : BackgroundService
 {
     /// <summary>How long an idle loop waits before it looks for a ready row again.</summary>
-    public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
 
     /// <summary>The failure that makes a row dead, about 64 minutes after the first one.</summary>
-    public const int MaxAttempts = 20;
+    private const int MaxAttempts = 20;
 
     /// <summary>How much of the exception a row keeps as its last error.</summary>
-    public const int LastErrorLength = 500;
+    private const int LastErrorLength = 500;
 
     /// <summary>The longest pause of the retry ladder.</summary>
     private static readonly TimeSpan MaxRetryPause = TimeSpan.FromSeconds(300);
@@ -89,11 +89,8 @@ public sealed class QueueWorker : BackgroundService
     /// <param name="knownEventTypes">The event types this build can decode, or null on a
     /// queue of letters. A row of any other type is never claimed and waits for a build
     /// that knows it.</param>
-    /// <param name="handler">What handles a claimed row.</param>
     /// <param name="dataSource">The process's one source of connections.</param>
-    /// <param name="scopeFactory">Opens the scope of each row.</param>
     /// <param name="clock">The application's clock, read by the claim and the marks.</param>
-    /// <param name="logger">Logger.</param>
     /// <param name="wait">How the loop waits between passes. A seam for tests, which drive the
     /// loop without spending its pauses in real time; the host leaves it out.</param>
     public QueueWorker(
@@ -132,6 +129,17 @@ public sealed class QueueWorker : BackgroundService
     /// <summary>The queue this loop drains.</summary>
     public string Queue { get; }
 
+    /// <summary>Builds the loop of a queue from the services of the process.</summary>
+    public static QueueWorker FromServices(
+        IServiceProvider services, string queue, IEnumerable<int>? knownEventTypes, OutboxRowHandler handler) =>
+        new(queue,
+            knownEventTypes,
+            handler,
+            services.GetRequiredService<NpgsqlDataSource>(),
+            services.GetRequiredService<IServiceScopeFactory>(),
+            services.GetRequiredService<IDateTimeProvider>(),
+            services.GetRequiredService<ILogger<QueueWorker>>());
+
     /// <summary>
     /// Claims the oldest ready row, hands it to the handler and writes what came of it.
     /// </summary>
@@ -156,27 +164,48 @@ public sealed class QueueWorker : BackgroundService
 
         // Without the stopping token: a stop right after the handler returned keeps the mark.
         var now = _clock.Now.ToUniversalTime();
-        if (handling.Succeeded)
+        var queue = MessagingMetrics.Queue(Queue);
+        Action count;
+        if (handling.Error is { } error)
         {
-            await MarkProcessed(connection, transaction, row.Id, now);
-        }
-        else if (handling.Error is null)
-        {
-            await MarkDead(connection, transaction, row.Id, attempts, RejectedError, now);
-            MessagingMetrics.Failed.Add(1, MessagingMetrics.Queue(Queue), new("reason", "Rejected"));
+            var dead = await MarkFailed(connection, transaction, row.Id, attempts + 1, error, now);
+            count = dead
+                ? () => MessagingMetrics.Failed.Add(1, queue, new("reason", error.GetType().Name))
+                : () => MessagingMetrics.Retried.Add(1, queue);
         }
         else
         {
-            await MarkFailed(connection, transaction, row.Id, attempts + 1, handling.Error, now);
+            var result = handling.Result;
+            if (result == ProcessResult.Success)
+            {
+                await MarkProcessed(connection, transaction, row.Id, now);
+            }
+            else
+            {
+                await MarkDead(connection, transaction, row.Id, attempts, RejectedError, now);
+            }
+
+            count = () =>
+            {
+                MessagingMetrics.Consumed.Add(1, queue, new KeyValuePair<string, object?>("result", result.ToString()));
+                if (result != ProcessResult.Success)
+                {
+                    MessagingMetrics.Failed.Add(1, queue, new("reason", "Rejected"));
+                }
+            };
         }
 
         await transaction.CommitAsync(CancellationToken.None);
+
+        // Only a committed mark is counted: a lost commit is a loop error, and the row is
+        // claimed again as if nothing had happened.
+        count();
         return true;
     }
 
     /// <summary>The pause after the failure of the given number: two to its power in seconds, capped.</summary>
     /// <param name="attempt">Attempts spent, from one.</param>
-    public static TimeSpan RetryPause(int attempt) =>
+    private static TimeSpan RetryPause(int attempt) =>
         TimeSpan.FromSeconds(Math.Min(MaxRetryPause.TotalSeconds, Math.Pow(2, attempt)));
 
     /// <summary>
@@ -290,15 +319,12 @@ public sealed class QueueWorker : BackgroundService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var result = await _handler(row, scope.ServiceProvider, cancellationToken);
-            MessagingMetrics.Consumed.Add(1,
-                MessagingMetrics.Queue(Queue),
-                new KeyValuePair<string, object?>("result", result.ToString()));
             if (result != ProcessResult.Success)
             {
                 activity?.SetStatus(ActivityStatusCode.Error, "Rejected");
             }
 
-            return new Handling(result == ProcessResult.Success, null);
+            return new Handling(result, null);
         }
         catch (Exception exception) when (cancellationToken.IsCancellationRequested)
         {
@@ -311,7 +337,7 @@ public sealed class QueueWorker : BackgroundService
             // A failure, a cancellation from anything but the host's stop included.
             activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             _logger.LogWarning(exception, "Handling row {RowId} of the queue {Queue} failed", row.Id, Queue);
-            return new Handling(false, exception);
+            return new Handling(ProcessResult.Failure, exception);
         }
         finally
         {
@@ -335,15 +361,15 @@ public sealed class QueueWorker : BackgroundService
         await command.ExecuteNonQueryAsync(CancellationToken.None);
     }
 
-    private async Task MarkFailed(
+    /// <returns>Whether the row became dead: the last attempt of the ladder.</returns>
+    private static async Task<bool> MarkFailed(
         NpgsqlConnection connection, NpgsqlTransaction transaction, long id, int attempts, Exception error,
         DateTimeOffset now)
     {
         if (attempts >= MaxAttempts)
         {
             await MarkDead(connection, transaction, id, attempts, LastError(error), now);
-            MessagingMetrics.Failed.Add(1, MessagingMetrics.Queue(Queue), new("reason", error.GetType().Name));
-            return;
+            return true;
         }
 
         await using var command = new NpgsqlCommand(
@@ -358,7 +384,7 @@ public sealed class QueueWorker : BackgroundService
         command.Parameters.Add(new NpgsqlParameter { Value = now + RetryPause(attempts) });
         command.Parameters.Add(new NpgsqlParameter { Value = id });
         await command.ExecuteNonQueryAsync(CancellationToken.None);
-        MessagingMetrics.Retried.Add(1, MessagingMetrics.Queue(Queue));
+        return false;
     }
 
     private static async Task MarkDead(
@@ -379,7 +405,7 @@ public sealed class QueueWorker : BackgroundService
         await command.ExecuteNonQueryAsync(CancellationToken.None);
     }
 
-    /// <param name="Succeeded">The handler answered success.</param>
-    /// <param name="Error">What the handler threw: a failure. Null with no success: a rejection.</param>
-    private readonly record struct Handling(bool Succeeded, Exception? Error);
+    /// <param name="Result">What the handler answered.</param>
+    /// <param name="Error">What the handler threw: a failure, whatever the result says.</param>
+    private readonly record struct Handling(ProcessResult Result, Exception? Error);
 }

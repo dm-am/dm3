@@ -4,7 +4,7 @@ using DM.Domain.Core.Enums;
 namespace DM.Infrastructure.Messaging.GeneralBus;
 
 /// <summary>
-/// The message a stored event becomes for its handler
+/// What an outbox row of an event becomes for its handler
 /// </summary>
 public class InvokedEvent
 {

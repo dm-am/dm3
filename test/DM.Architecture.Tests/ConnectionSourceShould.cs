@@ -109,7 +109,7 @@ public class ConnectionSourceShould
     }
 
     /// <remarks>
-    /// Mutations it must fail on: the broker check left in place, a check on a pool of its own.
+    /// Mutations it must fail on: a check of anything but the database, a check on a pool of its own.
     /// </remarks>
     [Fact]
     public async Task FeedTheDatabaseCheckOfTheMailWorker()
@@ -143,7 +143,7 @@ public class ConnectionSourceShould
             "the check has to probe the source the claim and the data layer draw from");
     }
 
-    /// <remarks>Mutation it must fail on: the broker subscription of the mail worker left in place.</remarks>
+    /// <remarks>Mutation it must fail on: a second hosted loop in the mail worker beside its queue.</remarks>
     [Fact]
     public async Task RunNothingButTheMailQueueInTheMailWorker()
     {
@@ -154,13 +154,13 @@ public class ConnectionSourceShould
                               service.GetType().Namespace?.StartsWith("DM.Infrastructure.Messaging", StringComparison.Ordinal) == true)
             .Select(service => service.GetType().Name)
             .Should().Equal([nameof(QueueWorker)],
-                "no letter passes through the broker, so the worker subscribes to nothing there");
+                "the mail worker drains its one queue and runs nothing else");
     }
 
     /// <remarks>
     /// The notification worker's letters take the same road as the API's: the one mail sender,
     /// whose insert draws from the process's source. Mutation it must fail on: a sender that
-    /// publishes to the broker or opens a pool of its own.
+    /// opens a pool of its own.
     /// </remarks>
     [Theory]
     [InlineData("DM.Web.API")]
@@ -182,6 +182,20 @@ public class ConnectionSourceShould
         await sending.Should().ThrowAsync<ObjectDisposedException>(
             "a letter is a row of the mail queue, stored through the process's one source");
     }
+
+    /// <remarks>
+    /// The mail worker takes its connection source from the core, so it never reaches the data
+    /// layer or the domain modules behind it (SYSTEM.md, the layers). Mutation it must fail on:
+    /// the source registered by the data layer again.
+    /// </remarks>
+    [Fact]
+    public void LeaveTheDataLayerOutOfTheMailWorker() =>
+        typeof(DM.Workers.Mail.Startup).Assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name ?? string.Empty)
+            .Should().NotContain(name => name == "DM.Infrastructure.Persistence" ||
+                                         (name.StartsWith("DM.Domain.", StringComparison.Ordinal) &&
+                                          name != "DM.Domain.Core"),
+                "the mail worker drains letters from one table on the core's connection source");
 
     private static ServiceProvider Compose(string host)
     {

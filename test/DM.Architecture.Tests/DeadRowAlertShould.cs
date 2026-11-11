@@ -18,7 +18,7 @@ public class DeadRowAlertShould
 
     private static readonly string Rule = RuleText();
 
-    /// <remarks>Mutations it must fail on: the broker's dead-letter rule left in place, a stale command.</remarks>
+    /// <remarks>Mutations it must fail on: a rule without the return command, a stale command.</remarks>
     [Fact]
     public void CarryTheCommandThatReturnsADeadRow() =>
         Rule.Should().Contain(
