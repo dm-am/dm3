@@ -59,7 +59,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
       "targets": [
         {
-          "expr": "dotnet_gc_last_collection_heap_size_bytes{job=~\"dm-(notification|mail)-worker\"}",
+          "expr": "sum by (job) (dotnet_gc_last_collection_heap_size_bytes{job=~\"dm-(notification|mail)-worker\"})",
           "legendFormat": "{{job}}",
           "refId": "A"
         }

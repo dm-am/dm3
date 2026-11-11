@@ -241,7 +241,10 @@
 - `prometheuscommunity/postgres-exporter` v0.20.1 и `prom/node-exporter` v1.12.1,
   метрики базы и сервера.
 - `grafana/grafana` 13.3.1, просмотр метрик, логов и трасс. `grafana/loki` 3.5.12,
-  хранилище логов. `jaegertracing/jaeger` 2.23.0, трассировка по OTLP.
+  хранилище логов. `jaegertracing/jaeger` 2.20.0, трассировка по OTLP. Выше 2.20 не
+  поднимаем: с 2.21 Jaeger снял поиск API v1, а источник данных Jaeger в Grafana 13 ищет
+  трассы им, и поиск в Grafana отвечает 404. Свой интерфейс Jaeger и переход к трассе по
+  номеру из лога работают и на 2.23.
 - `OpenTelemetry.*`, инструментирование веб-слоя, HTTP, EF Core и
   рантайма: `OpenTelemetry.Extensions.Hosting` 1.20.1,
   `OpenTelemetry.Instrumentation.AspNetCore` 1.20.2,

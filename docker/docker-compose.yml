@@ -261,7 +261,7 @@ services:
   # are gone in favour of the collector config, and the admin probe moved to 13133.
   jaeger:
     container_name: 'dm-jaeger'
-    image: jaegertracing/jaeger:2.23.0
+    image: jaegertracing/jaeger:2.20.0
     ports:
       - '127.0.0.1:16686:16686'
       - '127.0.0.1:4317:4317'
@@ -272,10 +272,8 @@ services:
       # Memory storage is unbounded and the service is limited to 256M: the cap avoids an
       # OOM kill that silently drops every held trace.
       - '--set=extensions.jaeger_storage.backends.some_storage.memory.max_traces=10000'
-      # The built-in config has an ai block with "mcp: {}", which serves an MCP endpoint on the
-      # UI port without authentication. "enabled: false" turns the whole optional ai block off,
-      # so neither the MCP endpoint nor the AI chat is mounted. Since 2.21 there is no enable_mcp.
-      - '--set=extensions.jaeger_query.ai.enabled=false'
+      # The built-in v2 config opens an MCP endpoint on the UI port without authentication.
+      - '--set=extensions.jaeger_query.ai.enable_mcp=false'
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:13133/status || exit 1"]
       interval: 10s

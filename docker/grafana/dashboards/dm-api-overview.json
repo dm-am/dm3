@@ -88,7 +88,7 @@
       "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
       "targets": [
         {
-          "expr": "dotnet_gc_last_collection_heap_size_bytes{job=\"dm-api\"}",
+          "expr": "sum(dotnet_gc_last_collection_heap_size_bytes{job=\"dm-api\"})",
           "legendFormat": "GC Heap",
           "refId": "A"
         }
@@ -124,12 +124,12 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "targets": [
         {
-          "expr": "dotnet_thread_pool_thread_count{job=\"dm-api\"}",
+          "expr": "dotnet_thread_pool_thread_count_total{job=\"dm-api\"}",
           "legendFormat": "Threads",
           "refId": "A"
         },
         {
-          "expr": "dotnet_thread_pool_queue_length{job=\"dm-api\"}",
+          "expr": "dotnet_thread_pool_queue_length_total{job=\"dm-api\"}",
           "legendFormat": "Queue Length",
           "refId": "B"
         }
