@@ -33,7 +33,7 @@ ENV VITE_API_HOST=$VITE_API_HOST
 RUN npm run build-only
 
 # Production stage
-FROM nginx:1.27-alpine
+FROM nginx:1.30-alpine
 
 # Copy built files
 COPY --from=build /app/dist /usr/share/nginx/html
