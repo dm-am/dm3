@@ -91,8 +91,10 @@ internal static class DeploymentFiles
 
     // Shell is the third place an image reference lives, and dependabot does not read it.
     /// <remarks>
-    /// An image held in a variable is read from the script's own literal assignment, as in
-    /// IMAGE="nginx:1.30-alpine"; one the script computes stays the variable it is.
+    /// An image held in a variable is read from the script's own assignment, as in
+    /// IMAGE="nginx:1.30-alpine" or IMAGE="${IMAGE:-nginx:1.30-alpine}"; one the script computes
+    /// with a command substitution stays the variable it is. Anything else fails, since a
+    /// skipped image is neither pinned nor named.
     /// </remarks>
     internal static List<(string Script, string Image)> ImagesRunByShellScripts(string directory)
     {
@@ -102,28 +104,29 @@ internal static class DeploymentFiles
             .EnumerateFiles(directory, "*.sh", SearchOption.AllDirectories)
             .OrderBy(path => path, StringComparer.Ordinal))
         {
-            // Comments go first, since they quote commands; then continuations are folded, and a
-            // command substitution, which may hold spaces, becomes one word. The second
-            // alternative is the installer's "${DOCKER[@]}" array.
+            // Comments go first, since they quote commands; then continuations are folded. A
+            // substitution is collapsed only inside the arguments, so a run it holds is still
+            // found. The second alternative is the installer's "${DOCKER[@]}" array.
             var text = File.ReadAllText(script);
             var code = Regex.Replace(text, @"^\s*#.*$", string.Empty, RegexOptions.Multiline);
-            var folded = Regex.Replace(Regex.Replace(code, @"\\\r?\n\s*", " "), @"\$\([^()]*\)", "X");
+            var folded = Regex.Replace(code, @"\\\r?\n\s*", " ");
 
             foreach (Match invocation in Regex.Matches(
                 folded, @"(?:docker|DOCKER\[@\]\}""?)\s+run\s+(?<arguments>[^\r\n]*)"))
             {
-                var image = ImageOperandOf(invocation.Groups["arguments"].Value);
-                if (image != null)
-                {
-                    found.Add((script, Assigned(text, image)));
-                }
+                // A substitution, which may hold spaces, becomes one word.
+                var arguments = Regex.Replace(invocation.Groups["arguments"].Value, @"\$\([^()]*\)", "X");
+                var image = ImageOperandOf(arguments)
+                    ?? throw new InvalidOperationException(
+                        $"{script}: no image in \"{invocation.Value.Trim()}\", so nothing pins or names what it runs");
+                found.Add((script, Assigned(script, text, image)));
             }
         }
 
         return found;
     }
 
-    private static string Assigned(string script, string operand)
+    private static string Assigned(string path, string script, string operand)
     {
         var variable = Regex.Match(operand, @"^\$\{?(?<name>\w+)\}?$");
         if (!variable.Success)
@@ -131,14 +134,31 @@ internal static class DeploymentFiles
             return operand;
         }
 
+        var name = variable.Groups["name"].Value;
         var assignment = Regex.Match(script,
-            $@"^\s*{variable.Groups["name"].Value}=['""]?(?<value>[^'""\s$]+)['""]?\s*$", RegexOptions.Multiline);
-        return assignment.Success ? assignment.Groups["value"].Value : operand;
+            $@"^\s*(?:(?:local|export|readonly|declare)\s+)?{name}=(?<value>.*?)\s*$", RegexOptions.Multiline);
+        var value = assignment.Groups["value"].Value.Trim('\'', '"');
+
+        if (Regex.Match(value, @"^\$\{\w+:?-(?<default>[^'""\s${}]+)\}$") is { Success: true } fallback)
+        {
+            return fallback.Groups["default"].Value;
+        }
+
+        if (value.StartsWith("$(", StringComparison.Ordinal))
+        {
+            return operand;
+        }
+
+        return assignment.Success && Regex.IsMatch(value, @"^[^'""\s$]+$")
+            ? value
+            : throw new InvalidOperationException(
+                $"{path}: {operand} is assigned neither a literal image nor a command substitution");
     }
 
     private static string? ImageOperandOf(string arguments)
     {
-        var tokens = arguments
+        // The command ends at a separator; "f() { docker run "$@"; }" hands its image in from outside.
+        var tokens = Regex.Split(arguments, @"[;|&]")[0]
             .Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(token => token.Trim('\'', '"'))
             .Where(token => token.Length > 0)

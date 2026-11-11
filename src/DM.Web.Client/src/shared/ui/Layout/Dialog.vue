@@ -246,6 +246,8 @@ function holdLinks(e: MouseEvent) {
   align-items: center
   // The tier of ConfirmDialog.
   z-index: $z-dialog
+  // vue-final-modal 5 lets clicks through a closing window for its whole fade, onto the page and into a reopened instance.
+  pointer-events: auto
 
 // The one thing that scrolls; nothing in the card is sticky: a sticky row covers the field with the caret.
 .dialog-frame

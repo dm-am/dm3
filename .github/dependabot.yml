@@ -30,6 +30,10 @@ updates:
     directory: /src/DM.Web.Client
     schedule:
       interval: weekly
+    # The floor of min-release-age in .npmrc: npm ci does not apply it, so the
+    # update channel that resolves the lock has to.
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 5
     groups:
       vue:
