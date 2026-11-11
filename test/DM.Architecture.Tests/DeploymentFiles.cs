@@ -82,6 +82,87 @@ internal static class DeploymentFiles
 
     internal static string ActiveDirectives(string configuration) => string.Join('\n', Uncommented(configuration));
 
+    private static readonly HashSet<string> OptionsTakingAValue = new(StringComparer.Ordinal)
+    {
+        "--add-host", "--entrypoint", "--env", "--env-file", "--label", "--name",
+        "--network", "--platform", "--publish", "--pull", "--user", "--volume",
+        "--workdir", "-e", "-l", "-p", "-u", "-v", "-w",
+    };
+
+    // Shell is the third place an image reference lives, and dependabot does not read it.
+    /// <remarks>
+    /// An image held in a variable is read from the script's own literal assignment, as in
+    /// IMAGE="nginx:1.30-alpine"; one the script computes stays the variable it is.
+    /// </remarks>
+    internal static List<(string Script, string Image)> ImagesRunByShellScripts(string directory)
+    {
+        var found = new List<(string Script, string Image)>();
+
+        foreach (var script in Directory
+            .EnumerateFiles(directory, "*.sh", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            // Comments go first, since they quote commands; then continuations are folded, and a
+            // command substitution, which may hold spaces, becomes one word. The second
+            // alternative is the installer's "${DOCKER[@]}" array.
+            var text = File.ReadAllText(script);
+            var code = Regex.Replace(text, @"^\s*#.*$", string.Empty, RegexOptions.Multiline);
+            var folded = Regex.Replace(Regex.Replace(code, @"\\\r?\n\s*", " "), @"\$\([^()]*\)", "X");
+
+            foreach (Match invocation in Regex.Matches(
+                folded, @"(?:docker|DOCKER\[@\]\}""?)\s+run\s+(?<arguments>[^\r\n]*)"))
+            {
+                var image = ImageOperandOf(invocation.Groups["arguments"].Value);
+                if (image != null)
+                {
+                    found.Add((script, Assigned(text, image)));
+                }
+            }
+        }
+
+        return found;
+    }
+
+    private static string Assigned(string script, string operand)
+    {
+        var variable = Regex.Match(operand, @"^\$\{?(?<name>\w+)\}?$");
+        if (!variable.Success)
+        {
+            return operand;
+        }
+
+        var assignment = Regex.Match(script,
+            $@"^\s*{variable.Groups["name"].Value}=['""]?(?<value>[^'""\s$]+)['""]?\s*$", RegexOptions.Multiline);
+        return assignment.Success ? assignment.Groups["value"].Value : operand;
+    }
+
+    private static string? ImageOperandOf(string arguments)
+    {
+        var tokens = arguments
+            .Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Trim('\'', '"'))
+            .Where(token => token.Length > 0)
+            .ToList();
+
+        for (var index = 0; index < tokens.Count; index++)
+        {
+            // "$@" hands a function's arguments on as more options.
+            if (tokens[index][0] != '-' && tokens[index] != "$@")
+            {
+                return tokens[index];
+            }
+
+            // Without the skip an "--entrypoint sh" hands back sh as the image. The
+            // --option=value spelling is one token and needs none.
+            if (OptionsTakingAValue.Contains(tokens[index]))
+            {
+                index++;
+            }
+        }
+
+        return null;
+    }
+
     private static IEnumerable<string> Uncommented(string text) => text
         .Split('\n')
         .Select(line => line.Trim())
