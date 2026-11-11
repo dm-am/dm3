@@ -9,12 +9,16 @@
  * keep passing. The controls matter as much: if the import resolver stops
  * resolving `@/...`, every "must be refused" assertion passes by seeing nothing.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { existsSync, readFileSync } from "fs";
 import { createRequire } from "module";
 import { join, relative, resolve } from "path";
 import { pathToFileURL } from "url";
 import { CLIENT_SRC, collect } from "@/shared/lib/testing/sourceTree";
+
+// The cases read the whole tree, some through ESLint's Linter: alone the file takes half a
+// minute, and the suite that saturates every core pushed one case past the 15 s default.
+vi.setConfig({ testTimeout: 60_000 });
 
 /** Every .ts/.vue under a directory, node_modules and build output aside. */
 const isSource = (name: string): boolean =>
