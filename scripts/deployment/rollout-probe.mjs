@@ -100,35 +100,39 @@ function run(opts) {
   });
 }
 
-function verdict(opts) {
-  if (!opts.log) throw new Error("verdict needs --log");
-  const floor = Number(opts.floor ?? 10);
-  const maxDisconnects = Number(opts["max-disconnects"] ?? 2);
-  const entries = fs.readFileSync(opts.log, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
-  const reasons = [];
-
-  const answers = entries.filter((entry) => entry.path !== undefined);
-  const failures = answers.filter((entry) => entry.status !== 200);
-  for (const failure of failures.slice(0, 20)) {
-    reasons.push(`${new Date(failure.t).toISOString()} ${failure.path}: ${failure.status ?? failure.error}`);
-  }
+// Every answer that is not a 200, the first twenty by name, and an empty log as a failure of its own.
+function answerReasons(answers, failures) {
+  const reasons = failures.slice(0, 20).map((failure) => `${new Date(failure.t).toISOString()} ${failure.path}: ${failure.status ?? failure.error}`);
   if (failures.length > 20) reasons.push(`and ${failures.length - 20} more failures`);
   if (answers.length === 0) reasons.push("the probe got no answer at all");
+  return reasons;
+}
 
-  const windows = opts.windows && fs.existsSync(opts.windows)
-    ? fs.readFileSync(opts.windows, "utf8").split("\n").filter(Boolean).map((line) => line.split(/\s+/).map(Number))
-    : [];
+// One "<start ms> <end ms>" per line; no file means no windows.
+function readWindows(file) {
+  if (!file || !fs.existsSync(file)) return [];
+  return fs.readFileSync(file, "utf8").split("\n").filter(Boolean).map((line) => line.split(/\s+/).map(Number));
+}
+
+// A switch of the edge the probe went quiet through: fewer than floor answers inside it.
+function windowReasons(answers, windows, floor) {
+  const reasons = [];
   for (const [start, end] of windows) {
     const inside = answers.filter((entry) => entry.t >= start && entry.t <= end).length;
     if (inside < floor) {
       reasons.push(`only ${inside} answers between ${new Date(start).toISOString()} and ${new Date(end).toISOString()}, fewer than ${floor}`);
     }
   }
+  return reasons;
+}
 
+// The hub connected at all, closed no more than allowed, and opened again within 10 s of each
+// close, or the log went on for 10 s without it.
+function hubReasons(entries, closes, maxDisconnects) {
+  const reasons = [];
   const hub = entries.filter((entry) => entry.hub !== undefined);
   const last = entries.reduce((latest, entry) => Math.max(latest, entry.t), 0);
   if (!hub.some((entry) => entry.hub === "open")) reasons.push("the hub never connected");
-  const closes = hub.filter((entry) => entry.hub === "close");
   if (closes.length > maxDisconnects) reasons.push(`the hub disconnected ${closes.length} times, more than ${maxDisconnects}`);
   for (const close of closes) {
     const reopened = hub.find((entry) => entry.hub === "open" && entry.t > close.t);
@@ -136,6 +140,24 @@ function verdict(opts) {
       reasons.push(`the hub did not reconnect within 10 s of ${new Date(close.t).toISOString()}`);
     }
   }
+  return reasons;
+}
+
+function verdict(opts) {
+  if (!opts.log) throw new Error("verdict needs --log");
+  const floor = Number(opts.floor ?? 10);
+  const maxDisconnects = Number(opts["max-disconnects"] ?? 2);
+  const entries = fs.readFileSync(opts.log, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+
+  const answers = entries.filter((entry) => entry.path !== undefined);
+  const failures = answers.filter((entry) => entry.status !== 200);
+  const windows = readWindows(opts.windows);
+  const closes = entries.filter((entry) => entry.hub === "close");
+  const reasons = [
+    ...answerReasons(answers, failures),
+    ...windowReasons(answers, windows, floor),
+    ...hubReasons(entries, closes, maxDisconnects),
+  ];
 
   console.log(`probe: ${answers.length} answers, ${failures.length} failures, ${closes.length} hub disconnects, ${windows.length} windows`);
   if (reasons.length > 0) {
