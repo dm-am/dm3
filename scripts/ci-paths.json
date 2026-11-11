@@ -2,8 +2,8 @@
   "groups": [
     {
       "name": "infrastructure",
-      "paths": ["docker/**", "scripts/**", ".github/**", "src/DM.Web.Client/nginx.conf"],
-      "why": "the stack, the gates and the pipeline themselves: whatever runs the checks has changed, so every check runs. The nginx.conf of the SPA is here because scripts/deployment/check-nginx-configuration.sh, a step of compose-topology, parses it"
+      "paths": ["docker/**", "scripts/**", ".github/**", "src/DM.Web.Client/nginx.conf", "src/DM.Web.Client/publish-assets.sh"],
+      "why": "the stack, the gates and the pipeline themselves: whatever runs the checks has changed, so every check runs. The nginx.conf of the SPA and its asset hook are here because scripts/deployment/check-nginx-configuration.sh, a step of compose-topology, parses the one and runs the other"
     },
     {
       "name": "client-read-by-server",
