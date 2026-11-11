@@ -47,7 +47,7 @@ cp "$ROOT/scripts/lib/attestation.sh" "$SEED/scripts/lib/"
 git -C "$SEED" add -A
 git -C "$SEED" commit -q -m A
 A=$(git -C "$SEED" rev-parse HEAD)
-git -C "$SEED" tag -a -m "DM3 release v1.2.0" v1.2.0
+git -C "$SEED" -c gpg.format=ssh -c user.signingkey="$WORK/key" tag -s -m "DM3 release v1.2.0" v1.2.0
 echo b > "$SEED/b.txt"
 git -C "$SEED" add -A
 git -C "$SEED" commit -q -m B
@@ -237,6 +237,25 @@ tg tag -d v1.3.0 > /dev/null
 git -C "$ORIGIN" tag v1.4.0 "$A"
 refuses "is already a tag" v1.4.0
 git -C "$ORIGIN" tag -d v1.4.0 > /dev/null
+
+# A writer can push any tag; only the signer's key makes a release, so only it sets the bar.
+# The run listing that answers none is the first refusal after the checks of the version.
+echo "the highest release tag is the highest one the signer's key signed under its own name"
+scenario "$B"
+echo none > "$WORK/scenario/run-list"
+git -C "$SEED" tag -a -m "DM3 release v9.9.9" v9.9.9 "$B"
+git -C "$SEED" push -q "$ORIGIN" v9.9.9
+refuses "no run of dotnet.yml on dev" v1.3.0
+git -C "$ORIGIN" tag -d v9.9.9 > /dev/null
+git -C "$SEED" tag -d v9.9.9 > /dev/null
+git -C "$ORIGIN" update-ref refs/tags/v9.9.9 "$(git -C "$ORIGIN" rev-parse refs/tags/v1.2.0)"
+refuses "no run of dotnet.yml on dev" v1.3.0
+git -C "$ORIGIN" tag -d v9.9.9 > /dev/null
+git -C "$SEED" -c gpg.format=ssh -c user.signingkey="$WORK/key" tag -s -m "DM3 release v9.9.9" v9.9.9 "$B"
+git -C "$SEED" push -q "$ORIGIN" v9.9.9
+refuses "HEAD is not at v9.9.9" v1.3.0
+git -C "$ORIGIN" tag -d v9.9.9 > /dev/null
+git -C "$SEED" tag -d v9.9.9 > /dev/null
 
 echo "the commit must be on origin/dev"
 scenario "$X"
