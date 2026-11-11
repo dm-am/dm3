@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# Fails when a server configuration of the deployment does not parse, when the asset hook of
-# the frontend image rewrites a file it should only touch, or when the SPA server drops a
-# header it promises.
+# Fails when a server configuration of the deployment does not parse, when the edge cannot
+# switch between the primaries and the twins of a rollout or does not return to the
+# primaries on a restart, when the asset hook of the frontend image rewrites a file it should
+# only touch, or when the SPA server drops a header it promises.
 #
 # Nothing compiled the edge: a typo in either nginx.conf was a crash-looping container,
-# which is the whole site. Each configuration is read by the image the deployment runs, so
-# the answer is the one nginx gives there.
+# which is the whole site. Each configuration is read by the image the edge runs, so the
+# answer is the one nginx gives there; ImageDeliveryShould holds the two references equal.
 set -euo pipefail
 
-IMAGE="nginx:1.30-alpine"
+IMAGE="nginx:1.30.6-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
 . "$ROOT/scripts/lib/common.sh"
+# shellcheck source=/dev/null
+. "$ROOT/scripts/lib/compose-placeholders.sh"
 cd "$ROOT"
 
 # MSYS_NO_PATHCONV: Git Bash would otherwise rewrite the container side of -v and -subj into
@@ -20,7 +23,8 @@ cd "$ROOT"
 export MSYS_NO_PATHCONV=1
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+EDGE_CONTAINER="dm-edge-check-$$"
+trap 'docker rm -f "$EDGE_CONTAINER" > /dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
 
 # Issued here rather than carried in the repository: a certificate committed to
 # a tree expires in it, and this one has to be valid only for the seconds nginx
@@ -40,19 +44,48 @@ certificate() {
 # an expansion somebody forgot to write in double quotes.
 printf "preview:\$apr1\$syntax\$0123456789abcdefghijk\n" > "$WORK/htpasswd"
 
-edge() {
+# The configuration files of the edge, mounted where the compose file mounts them.
+EDGE_FILES=(
+  -v "$(host "$ROOT/docker/nginx/nginx.conf"):/etc/nginx/nginx.conf:ro"
+  -v "$(host "$ROOT/docker/nginx/edge-locations.conf"):/etc/nginx/edge-locations.conf:ro"
+  -v "$(host "$ROOT/docker/nginx/upstreams"):/etc/nginx/upstreams:ro"
+  -v "$(host "$WORK/htpasswd"):/etc/nginx/.htpasswd:ro"
+)
+
+# nginx -t with the live links set to the two upstream files named, "none" leaving one unset.
+edge_linked() {
+  local api=$1 frontend=$2; shift 2
+  # shellcheck disable=SC2016 # expanded by the container's shell
   docker run --rm \
-    --add-host dmapi:127.0.0.1 --add-host dmfront:127.0.0.1 \
+    --add-host dmapi:127.0.0.1 --add-host dmapi-next:127.0.0.1 \
+    --add-host dmfront:127.0.0.1 --add-host dmfront-next:127.0.0.1 \
     --add-host storage:127.0.0.1 \
-    -v "$(host "$ROOT/docker/nginx/nginx.conf"):/etc/nginx/nginx.conf:ro" \
-    -v "$(host "$ROOT/docker/nginx/edge-locations.conf"):/etc/nginx/edge-locations.conf:ro" \
-    -v "$(host "$WORK/htpasswd"):/etc/nginx/.htpasswd:ro" \
+    "${EDGE_FILES[@]}" \
     "$@" \
-    "$IMAGE" nginx -t
+    "$IMAGE" sh -c '
+      mkdir -p /etc/nginx/upstreams-live
+      [ "$0" = none ] || ln -s "/etc/nginx/upstreams/$0.conf" /etc/nginx/upstreams-live/api.conf
+      [ "$1" = none ] || ln -s "/etc/nginx/upstreams/$1.conf" /etc/nginx/upstreams-live/frontend.conf
+      nginx -t' "$api" "$frontend"
 }
+
+edge() { edge_linked api-primary front-primary "$@"; }
 
 echo "the edge parses as it is served today"
 edge
+
+echo "the edge parses with the links a rollout sets to the twins"
+edge_linked api-next front-next
+
+echo "the edge refuses to start with an upstream unlinked"
+# Without a link the glob matches nothing and nginx resolves the name api as a host; were
+# that to start, an edge whose command failed would serve 502 for the whole site.
+for links in "none front-primary" "api-primary none"; do
+  # shellcheck disable=SC2086 # two words on purpose
+  if edge_linked $links > /dev/null 2>&1; then
+    fail "the edge parses with the links \"$links\""
+  fi
+done
 
 echo "the edge parses with the TLS server the issuing script writes"
 # This is the half that used to be a commented-out copy: nothing parsed it, and
@@ -70,6 +103,71 @@ test -s "$WORK/edge-tls/tls.conf" || {
 edge \
   -v "$(host "$WORK/edge-tls"):/etc/nginx/tls:ro" \
   -v "$(host "$WORK/edge-ssl"):/etc/nginx/ssl:ro"
+
+echo "the edge switches to the twins and back, a restart returns it to the primaries"
+# The edge starts with the command the compose file gives it, read back from the resolved
+# model, so this is the start a server runs. Four stub servers stand in for the instances,
+# each on a loopback address of its own that --add-host gives the instance's name, and answer
+# with their own name; they come in through the TLS include, which is the one directory of
+# extra servers the configuration reads. The questions go through the rollout's listener, so
+# its answers are the upstreams the edge has loaded.
+mapfile -d '' -t EDGE_COMMAND < <(
+  cd "$ROOT/docker" && env -u MSYS_NO_PATHCONV docker compose --env-file /dev/null \
+    -f docker-compose.yml -f docker-compose.preview.yml config --format json \
+  | node -e 'let s = ""; process.stdin.on("data", d => s += d).on("end", () =>
+      process.stdout.write((JSON.parse(s).services.nginx.command ?? []).map(a => a + "\0").join("")))')
+[ "${#EDGE_COMMAND[@]}" -gt 0 ] || fail "the edge has no command in the resolved compose model"
+
+mkdir -p "$WORK/edge-stubs"
+cat > "$WORK/edge-stubs/stubs.conf" << 'EOF'
+server { listen 127.0.0.2:5000; location / { return 200 "api-primary"; } }
+server { listen 127.0.0.3:5000; location / { return 200 "api-next"; } }
+server { listen 127.0.0.4:80; location / { return 200 "front-primary"; } }
+server { listen 127.0.0.5:80; location / { return 200 "front-next"; } }
+EOF
+docker run -d --name "$EDGE_CONTAINER" \
+  --add-host dmapi:127.0.0.2 --add-host dmapi-next:127.0.0.3 \
+  --add-host dmfront:127.0.0.4 --add-host dmfront-next:127.0.0.5 \
+  --add-host storage:127.0.0.1 \
+  "${EDGE_FILES[@]}" \
+  -v "$(host "$WORK/edge-stubs"):/etc/nginx/tls:ro" \
+  "$IMAGE" "${EDGE_COMMAND[@]}" > /dev/null
+
+# What the listener answers for the API and the frontend, as one line.
+served() {
+  # shellcheck disable=SC2016 # expanded by the container's shell
+  docker exec "$EDGE_CONTAINER" sh -c \
+    'echo "$(wget -qO- http://127.0.0.1:8081/_ready) $(wget -qO- http://127.0.0.1:8081/_instance)"' \
+    2> /dev/null || true
+}
+# A start or a reload takes effect within a few seconds, or it has not taken effect.
+serves() {
+  local tries=0
+  until [ "$(served)" = "$1" ]; do
+    tries=$((tries + 1))
+    [ "$tries" -lt 20 ] || fail "the edge serves \"$(served)\" after $2, not \"$1\""
+    sleep 0.5
+  done
+}
+
+serves "api-primary front-primary" "its own start"
+docker exec "$EDGE_CONTAINER" sh -c '
+  ln -sfn /etc/nginx/upstreams/api-next.conf /etc/nginx/upstreams-live/api.conf &&
+  ln -sfn /etc/nginx/upstreams/front-next.conf /etc/nginx/upstreams-live/frontend.conf &&
+  nginx -t -q && nginx -s reload' || fail "the switch to the twins does not parse"
+serves "api-next front-next" "a switch to the twins"
+docker restart "$EDGE_CONTAINER" > /dev/null
+serves "api-primary front-primary" "a restart"
+
+# The positive control first: an address that does not answer at all proves nothing.
+address=$(docker exec "$EDGE_CONTAINER" hostname -i | awk '{print $1}')
+case "$address" in ''|127.*) fail "the container has no address of its own to ask: \"$address\"" ;; esac
+[ "$(docker exec "$EDGE_CONTAINER" wget -qO- "http://$address/nginx-health" 2> /dev/null)" = ok ] ||
+  fail "the edge does not answer on its own address $address"
+if docker exec "$EDGE_CONTAINER" wget -qO- -T 2 "http://$address:8081/_ready" > /dev/null 2>&1; then
+  fail "the rollout's listener answers on $address, past the door"
+fi
+docker rm -f "$EDGE_CONTAINER" > /dev/null
 
 echo "the SPA server block parses"
 # A server block, not a whole configuration: it is mounted where the image

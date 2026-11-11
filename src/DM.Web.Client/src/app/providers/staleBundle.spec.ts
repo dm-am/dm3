@@ -16,7 +16,7 @@ describe("a failed import of a renamed chunk", () => {
     [
       "Chromium",
       new TypeError(
-        "Failed to fetch dynamically imported module: https://dm.am/assets/AboutPage-1a2b3c.js",
+        "Failed to fetch dynamically imported module: http://localhost:5173/assets/AboutPage-1a2b3c.js",
       ),
     ],
     ["Safari", new TypeError("Importing a module script failed.")],
@@ -27,7 +27,7 @@ describe("a failed import of a renamed chunk", () => {
     [
       "Firefox",
       new TypeError(
-        "error loading dynamically imported module: https://dm.am/assets/AboutPage-1a2b3c.js",
+        "error loading dynamically imported module: http://localhost:5173/assets/AboutPage-1a2b3c.js",
       ),
     ],
     [

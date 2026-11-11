@@ -154,12 +154,13 @@ public class EnvironmentFileShould
     /// <remarks>
     /// A secret nothing reads is one more value to generate, copy, rotate and leak, and the first
     /// reader to look for its service finds none. Mutation it must fail on: the password of a
-    /// service that left the stack kept in the generator, the template or the topology check.
+    /// service that left the stack kept in the generator, the template or the placeholders of the
+    /// compose checks.
     /// </remarks>
     [Theory]
     [InlineData("scripts/init-env.sh", @"(?<=SECRETS=\([^)]*)\b[A-Z][A-Z0-9_]+\b(?=[^)]*\))")]
     [InlineData(EnvironmentTemplate, @"(?m)^[A-Za-z][A-Za-z0-9_]*(?==)")]
-    [InlineData("../scripts/deployment/check-compose-topology.sh", @"(?m)(?<=^export )[A-Za-z][A-Za-z0-9_]*(?==)")]
+    [InlineData("../scripts/lib/compose-placeholders.sh", @"(?m)(?<=^export )[A-Za-z][A-Za-z0-9_]*(?==)")]
     public void CarryOnlyVariablesTheStackReads(string file, string names)
     {
         var compose = string.Concat(Directory

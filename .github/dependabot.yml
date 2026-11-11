@@ -60,10 +60,19 @@ updates:
     schedule:
       interval: monthly
 
-  # Base images: the compose files and both Dockerfiles. A pinned tag stops
+  # Base images of both Dockerfiles. A pinned tag stops
   # resolving to whatever the registry holds that day, and moving it becomes a
   # reviewed pull request instead of a silent change at the next "up -d".
   - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+
+  # The images of the compose files, for the same reason: the docker entry reads
+  # Dockerfiles only, so without this one nobody moves the pins of the edge and the
+  # object store.
+  - package-ecosystem: docker-compose
     directory: /docker
     schedule:
       interval: monthly

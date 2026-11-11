@@ -55,6 +55,9 @@ services:
       NGINX_ENVSUBST_FILTER: '^POP_'
     healthcheck:
       test: ['CMD-SHELL', 'curl -f http://localhost:80/pop-health || exit 1']
+    # Шаблон выше разворачивает штатный старт образа, а команда края основного сервера
+    # ставит ссылки на апстримы, которых здесь нет, поэтому она снимается.
+    command: !reset null
 
   dmfront:
     depends_on: !reset null

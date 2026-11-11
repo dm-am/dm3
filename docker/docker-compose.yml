@@ -38,7 +38,16 @@ x-workload-env: &workload-env
   # The application role, not the superuser: a leaked superuser password is the whole
   # server. postgres-init.sh creates it, and it owns the database because Postgres 15
   # allows CREATE in schema public to the owner only.
-  DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=${DB_USER:-dm_app};Password=${DM_APP_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
+  #
+  # The pools are a budget against max_connections of the postgres service. The peak is a
+  # rollout, with the API, its twin and both workers open at once: 50 + 50 + 20 + 20 = 140.
+  # The migration's pool and the twin's are never open together, since migrations run before
+  # the twin starts, so the peak is 140 either way. The 20 left of 160 hold what opens single
+  # connections: PostgreSQL's superuser_reserved_connections, which count inside
+  # max_connections, the exporter, a backup's pg_dump, an operator's psql and the check
+  # scripts. check-compose-topology.sh asserts the sum. The API's 50 is the figure the load
+  # test of part 8 of the plan revisits.
+  DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=${DB_USER:-dm_app};Password=${DM_APP_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=50;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
   DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-loki}:3100
   DM_ConnectionStrings__TracingEndpoint: http://${TRACING_HOST:-dm-jaeger}:4317
 
@@ -93,7 +102,12 @@ x-workload-env: &workload-env
   DM_SiteAddressConfiguration__PublicUrl: ${WEB_URL:-http://localhost:5173}
 
 # One image tag per CI run for all four images, since they come from one commit. A
-# rollback is IMAGE_TAG in .env set to the short sha of an earlier run.
+# rollback is IMAGE_TAG in .env set to the short sha of an earlier run. A release on a
+# server names each image by digest instead, through DM_IMAGE_API, DM_IMAGE_FRONT,
+# DM_IMAGE_WORKER_MAIL and DM_IMAGE_WORKER_NOTIFICATION from its release.env; unset, the
+# IMAGE_TAG form stays, so the stand and the point of presence run as before.
+# SOURCE_REVISION in the build arguments becomes the image's revision label, which the
+# release reads; unset it is empty.
 x-docker-context: &docker-context
   context: ./..
   dockerfile: ./docker/app.Dockerfile
@@ -104,6 +118,9 @@ services:
   postgres:
     container_name: 'dm-pg'
     image: 'postgres:18'
+    # The ceiling the pools of x-workload-env are budgeted against; the image's own default
+    # of 100 is below the peak of a rollout.
+    command: ["postgres", "-c", "max_connections=160"]
     ports:
       - '127.0.0.1:5432:5432'
     environment:
@@ -230,7 +247,7 @@ services:
   # storage-internal. Its health says only that S3 answers through the proxy.
   storage:
     container_name: 'dm-storage'
-    # The same digest as the nginx:1.30-alpine of the preview edge, so both share one cached image.
+    # The same reference as the preview edge, so both share one cached image.
     image: 'nginx:1.30.6-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311'
     volumes:
       - ./storage/nginx-stream.conf:/etc/nginx/nginx.conf:ro
@@ -422,14 +439,18 @@ services:
 
   migration:
     container_name: 'dm-migration'
-    image: ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}
+    image: ${DM_IMAGE_API:-ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}}
     build:
       <<: *docker-context
       args:
         PROJECT_NAME: DM.Web.API
+        SOURCE_REVISION: ${SOURCE_REVISION:-}
     environment:
       <<: *workload-env
       DM_MigrateOnStart: true
+      # A lock the running API holds makes a migration step wait behind it while every request
+      # queues behind the step; five seconds fail the step instead, and the release stops there.
+      DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=${DB_USER:-dm_app};Password=${DM_APP_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=50;Connection Idle Lifetime=60;Options=-c lock_timeout=5s;${DB_SSL_MODE:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -439,14 +460,20 @@ services:
 
   dm-mail-worker:
     container_name: 'dm-mail-worker'
-    image: ghcr.io/dm-am/dm-worker-mail:${IMAGE_TAG:-latest}
+    image: ${DM_IMAGE_WORKER_MAIL:-ghcr.io/dm-am/dm-worker-mail:${IMAGE_TAG:-latest}}
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
         PROJECT_NAME: DM.Workers.Mail
-    environment: *workload-env
+        SOURCE_REVISION: ${SOURCE_REVISION:-}
+    environment:
+      <<: *workload-env
+      # A pool of its own: one loop claims one row at a time (the budget is at x-workload-env).
+      DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=${DB_USER:-dm_app};Password=${DM_APP_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=20;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
+    # Longer than the host's 30 seconds of shutdown, so a letter being sent finishes.
+    stop_grace_period: 35s
     # Letters wait in the outbox table, so the worker starts once the schema is there.
     depends_on:
       migration:
@@ -468,14 +495,20 @@ services:
 
   dm-notification-worker:
     container_name: 'dm-notification-worker'
-    image: ghcr.io/dm-am/dm-worker-notification:${IMAGE_TAG:-latest}
+    image: ${DM_IMAGE_WORKER_NOTIFICATION:-ghcr.io/dm-am/dm-worker-notification:${IMAGE_TAG:-latest}}
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
         PROJECT_NAME: DM.Workers.NotificationDispatcher
-    environment: *workload-env
+        SOURCE_REVISION: ${SOURCE_REVISION:-}
+    environment:
+      <<: *workload-env
+      # A pool of its own: one loop claims one row at a time (the budget is at x-workload-env).
+      DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=${DB_USER:-dm_app};Password=${DM_APP_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=20;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
+    # Longer than the host's 30 seconds of shutdown, so an event being dispatched finishes.
+    stop_grace_period: 35s
     # Events wait in the outbox table, so the worker starts once the schema is there.
     depends_on:
       migration:
@@ -495,15 +528,19 @@ services:
 
   # --- Application: API ---
 
-  dmapi:
+  dmapi: &api-service
     container_name: 'dm-api'
-    image: ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}
+    image: ${DM_IMAGE_API:-ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}}
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     build:
       <<: *docker-context
       args:
         PROJECT_NAME: DM.Web.API
+        SOURCE_REVISION: ${SOURCE_REVISION:-}
+    # Longer than the host's 30 seconds of shutdown, so a request in flight when a rollout
+    # stops the old instance completes.
+    stop_grace_period: 35s
     ports:
       # Loopback, like every other publication here: a docker-published port bypasses
       # iptables through nat/DOCKER and would expose /v1, /metrics and /_health/detail past basic auth.
@@ -530,6 +567,23 @@ services:
           cpus: '1.0'
         reservations:
           memory: 256M
+
+  # The API's twin: it serves alone for the minute a rollout replaces dmapi, so it is dmapi
+  # with four differences, which check-compose-topology.sh holds to. No published port, which
+  # would collide with the primary's; a profile, so no plain "up" starts it; its own container
+  # name; and no periodic job, since one started on both instances runs twice. The restart
+  # policy stays, because while it serves alone it is the site. No updater label: the twin
+  # runs only inside a rollout, which brings its own image.
+  dmapi-next:
+    <<: *api-service
+    container_name: 'dm-api-next'
+    labels: []
+    ports: []
+    environment:
+      <<: *workload-env
+      DM_PeriodicServices__Enabled: 'false'
+    profiles:
+      - rollout
 
   # --- Application: Tools ---
 
