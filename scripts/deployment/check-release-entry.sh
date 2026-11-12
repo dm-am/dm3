@@ -304,6 +304,13 @@ offline() {
     test "$(classified added)" = "the service grafana" || fail "an added service classified as: $(classified added)"
     sed 's/"pgdata":{}/"pgdata":{"name":"x"}/' "$c/live.json" > "$c/volumes.json"
     test "$(classified volumes)" = "the top-level volumes" || fail "a changed volume classified as: $(classified volumes)"
+    # compose config prints the x- anchors too; a new setting changes x-workload-env and the
+    # application services that merge it, and nothing else.
+    sed 's/"volumes":{"pgdata":{}}}$/"volumes":{"pgdata":{}},"x-workload-env":{"A":"1"}}/' "$c/live.json" > "$c/anchor-live.json"
+    sed 's/"image":"a"/"image":"a","environment":{"A":"2"}/; s/"volumes":{"pgdata":{}}}$/"volumes":{"pgdata":{}},"x-workload-env":{"A":"2"}}/' \
+      "$c/live.json" > "$c/anchor.json"
+    test -z "$(classify_configs "$c/anchor-live.json" "$c/anchor.json")" ||
+      fail "a new application setting needs maintenance: $(classify_configs "$c/anchor-live.json" "$c/anchor.json")"
 
     files() { classify_files "$c/live" "$c/cand" "$base" "$c/live.json" "$c/live.json"; }
     test -z "$(files)" || fail "two equal trees classified as: $(files)"
@@ -406,7 +413,10 @@ STUB
     done
     grep -qxF "$(printf 'dmapi\trunning')" "$WORK/status" || fail "status does not list the containers"
     touch "$DM3_STATE/in-flight"
-    verb_status | grep -q "^in-flight: yes" || fail "status does not report the marker of a run that died"
+    # Into a file, as above: grep -q leaves at the first match, and the rest of status then
+    # writes into a closed pipe, which pipefail counts as a failure.
+    verb_status > "$WORK/status" || fail "status failed on a run that died"
+    grep -q "^in-flight: yes" "$WORK/status" || fail "status does not report the marker of a run that died"
     rm "$DM3_STATE/in-flight"
   fi
   test "$(find "$WORK/opt" "$WORK/etc" "$WORK/state" | sort)" = "$listing" || fail "status changed the layout"

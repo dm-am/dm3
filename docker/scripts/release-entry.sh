@@ -920,13 +920,16 @@ resolved_config() {
 }
 
 # classify_configs <live.json> <candidate.json>: one line per difference outside the application
-# services. jq compares objects whatever the order of their keys.
+# services. jq compares objects whatever the order of their keys. Top-level x- fields are left
+# out: they are the anchors the services merge, so a change to one shows in the services that
+# use it, and the settings list of the application is one of them.
 classify_configs() {
     jq -n -r --argjson app "$APP_SERVICES" --slurpfile live "$1" --slurpfile candidate "$2" '
         def outside: (.services // {}) | with_entries(select(.key as $k | $app | index($k) | not));
         ($live[0] | outside) as $l | ($candidate[0] | outside) as $c
         | ([$l, $c] | map(keys) | add | unique | .[] | select($l[.] != $c[.]) | "the service \(.)"),
           ([$live[0], $candidate[0]] | map(del(.services) | keys) | add | unique | .[]
+           | select(startswith("x-") | not)
            | select($live[0][.] != $candidate[0][.]) | "the top-level \(.)")'
 }
 

@@ -323,7 +323,7 @@ layout() {
   probe_start
   poll
   zero_failure "run 1"
-  [[ $(live) == v1.1.0-* ]] || fail "run 1: current names $(live), not B"
+  [[ $(live) == v1.1.0-* ]] || fail "run 1: current names $(live), not B: $(cat "$PROOF/poll.log")"
   test "$(docker exec dm-front stat -c %i "/var/lib/dm-front/assets/${ASSET##*/}")" = "$inode" ||
     fail "run 1: A's asset was deleted and published again instead of touched"
   docker exec dm-front test ! -e /var/lib/dm-front/assets/proof-stray.txt || fail "run 1: the stray file outlived its 30 days"
