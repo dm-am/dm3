@@ -930,6 +930,13 @@ classify_configs() {
            | select($live[0][.] != $candidate[0][.]) | "the top-level \(.)")'
 }
 
+# Whether a path under docker/ differs between two release directories. A path neither holds is
+# the same in both; a path only one holds differs.
+tree_differs() {
+    [ -e "$1/docker/$3" ] || [ -e "$2/docker/$3" ] || return 1
+    ! diff -r -q "$1/docker/$3" "$2/docker/$3" > /dev/null 2>&1
+}
+
 # classify_files <live dir> <candidate dir> <project dir/> <config.json>...: the mounted files and
 # the release machinery, which a container or root's cron reads by path.
 classify_files() {
@@ -937,16 +944,18 @@ classify_files() {
     shift 3
     while IFS= read -r relative; do
         [ -n "$relative" ] || continue
-        if [ -e "$live/docker/$relative" ] || [ -e "$candidate/docker/$relative" ]; then
-            diff -r -q "$live/docker/$relative" "$candidate/docker/$relative" > /dev/null 2>&1 ||
-                printf 'the mounted file docker/%s\n' "$relative"
+        if tree_differs "$live" "$candidate" "$relative"; then
+            printf 'the mounted file docker/%s\n' "$relative"
         fi
     done < <(jq -r --arg base "$base" '.services[] | (.volumes // [])[]
         | select(.type == "bind" and (.source | startswith($base))) | .source | ltrimstr($base)' "$@" | sort -u)
-    diff -r -q "$live/docker/scripts" "$candidate/docker/scripts" > /dev/null 2>&1 ||
+    if tree_differs "$live" "$candidate" scripts; then
         echo "the release machinery under docker/scripts"
+    fi
     for unit in dm3.service dm3-release.service dm3-release.timer; do
-        cmp -s "$live/docker/$unit" "$candidate/docker/$unit" 2> /dev/null || echo "the unit docker/$unit"
+        if tree_differs "$live" "$candidate" "$unit"; then
+            echo "the unit docker/$unit"
+        fi
     done
 }
 

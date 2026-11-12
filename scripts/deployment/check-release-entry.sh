@@ -739,7 +739,7 @@ layout() {
   echo "two directories exported from one commit classify as equal"
   local again_id reason
   again_id="$(release_id "$name" "$commit" "$(printf '0%.0s' {1..64})")"
-  build_release_dir "$again_id" "$name" "$commit""${refs[dm-api]}" "${refs[dm-front]}" \
+  build_release_dir "$again_id" "$name" "$commit" "${refs[dm-api]}" "${refs[dm-front]}" \
     "${refs[dm-worker-mail]}" "${refs[dm-worker-notification]}" > /dev/null || fail "a second export of $commit failed"
   reason="$(classify "$rid" "$again_id" timer)" || fail "two exports of one commit differ: $reason"
   test -z "$reason" || fail "two exports of one commit classify with a reason: $reason"

@@ -51,9 +51,12 @@ test.describe("a chunk of the old deploy that is gone", () => {
   test("reloads once into the page whose script is gone", async ({ page }) => {
     const loads = countDocumentLoads(page);
     await openHome(page);
-    await page.route("**/assets/AboutPage-*.js", (route) => route.abort(), {
-      times: 1,
-    });
+    // Gone for the old document only: Vite's preload helper asks for a script
+    // twice, a modulepreload link and then the import, so failing one request
+    // would leave the import to load it. The reloaded document is the new deploy.
+    await page.route("**/assets/AboutPage-*.js", (route) =>
+      loads() === 1 ? route.abort() : route.continue(),
+    );
 
     await clickAbout(page);
 
@@ -82,10 +85,11 @@ test.describe("a chunk of the old deploy that is gone", () => {
     page,
   }) => {
     const loads = countDocumentLoads(page);
-    // The realtime transport, which every page loads as it mounts.
+    // The realtime transport, which the global chat loads as it mounts, for a
+    // guest too; elsewhere a guest never asks for it.
     await page.route("**/assets/signalr-*.js", (route) => route.abort());
 
-    await openHome(page);
+    await page.goto("/global-chat");
 
     await expect.poll(loads).toBe(2);
     await page.waitForTimeout(LOOP_WINDOW_MS);
