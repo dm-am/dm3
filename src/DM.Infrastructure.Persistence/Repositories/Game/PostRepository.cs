@@ -90,7 +90,7 @@ internal partial class PostRepository : IPostRepository
     /// itself rather than through ProjectToPost, so it lifts the account filter
     /// on its own.
     /// </remarks>
-    private IQueryable<PostWithRating> RoomPosts(
+    internal IQueryable<PostWithRating> RoomPosts(
         Guid roomId, RoomPostsQuery query, Guid userId, IReadOnlyCollection<Guid>? authorIds)
     {
         var posts = _dbContext.Rooms
@@ -119,7 +119,9 @@ internal partial class PostRepository : IPostRepository
             posts = posts.Where(p => p.CharacterId == null);
         }
 
-        return PostFilters.WhereRated(posts.Select(PostFilters.WithRating), query.HasReviews, query.MinRating, query.MaxRating);
+        posts = PostFilters.WhereHasReviews(posts, query.HasReviews);
+
+        return PostFilters.WhereRated(posts.Select(PostFilters.WithRating), query.MinRating, query.MaxRating);
     }
 
     /// <summary>

@@ -109,18 +109,30 @@ internal static class PostFilters
     }
 
     /// <summary>
-    /// The filters on how a post was received. Rating can be negative.
+    /// Whether a post has a live review, asked of the post before
+    /// <see cref="WithRating" />: the three aggregates are then computed only for
+    /// the posts that stay, and a feed of reviewed posts keeps a few hundred out
+    /// of every post on the site.
     /// </summary>
-    internal static IQueryable<PostWithRating> WhereRated(
-        IQueryable<PostWithRating> posts, bool? hasReviews, int? minRating, int? maxRating)
-    {
-        posts = hasReviews switch
+    /// <remarks>
+    /// The same navigation and condition as the review count, so the query
+    /// filters on reviews are the ones the count sees and "has a review" means
+    /// "the count is above zero".
+    /// </remarks>
+    internal static IQueryable<DbPost> WhereHasReviews(IQueryable<DbPost> posts, bool? hasReviews) =>
+        hasReviews switch
         {
-            true => posts.Where(x => x.ReviewCount > 0),
-            false => posts.Where(x => x.ReviewCount == 0),
+            true => posts.Where(p => p.Reviews.Any(r => !r.IsRemoved)),
+            false => posts.Where(p => !p.Reviews.Any(r => !r.IsRemoved)),
             null => posts
         };
 
+    /// <summary>
+    /// The filters on how a post was received. Rating can be negative.
+    /// </summary>
+    internal static IQueryable<PostWithRating> WhereRated(
+        IQueryable<PostWithRating> posts, int? minRating, int? maxRating)
+    {
         if (minRating.HasValue)
         {
             var min = minRating.Value;
