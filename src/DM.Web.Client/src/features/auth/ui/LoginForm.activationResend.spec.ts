@@ -13,7 +13,7 @@ import {
   resetLoginForm,
   submitCredentials,
 } from "./LoginForm.fixtures";
-import { problem } from "./authForms.fixtures";
+import { expectWindowLockedWhile, problem } from "./authForms.fixtures";
 
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
@@ -110,6 +110,17 @@ describe("LoginForm", () => {
 
       expect(wrapper.text()).not.toContain("Проверьте почту");
       expect(wrapper.find("#password").exists()).toBe(true);
+    });
+
+    it("locks the window until the letter is answered", async () => {
+      signInPending();
+      const wrapper = await submitCredentials();
+
+      await expectWindowLockedWhile(
+        recover,
+        () => wrapper.findComponent(AuthDialog).props("busy"),
+        () => askForTheLetter(wrapper),
+      );
     });
 
     it("does not send a second letter while the first is on the wire", async () => {

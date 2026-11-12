@@ -74,6 +74,8 @@ const passwordField = useValidatedField({
 
 const { honeypot, sitOut } = useBotTrap({ minFillMs: 3000 });
 const loading = ref(false);
+/** The code of the second step is with the server: the window is locked for it too. */
+const secondFactorBusy = ref(false);
 const rememberMe = ref(true);
 
 const emailInput = ref<HTMLInputElement | null>(null);
@@ -174,7 +176,11 @@ const refuseCredentials = (failure: GeneralError) => {
   }
 };
 
-const { resend, hours: resentHours } = useActivationResend(rateLimit);
+const {
+  resend,
+  resending,
+  hours: resentHours,
+} = useActivationResend(rateLimit);
 
 const handleResendActivation = async () => {
   const outcome = await resend(emailField.value.value.trim());
@@ -182,7 +188,7 @@ const handleResendActivation = async () => {
   else if (outcome !== "waiting") passwordField.setError(outcome.refusal);
 };
 
-// The modal stays mounted: stop the wait and drop the receipt, but keep the login step.
+// At the start of the close, not at the unmount after the fade: the wait stops and the receipt goes.
 const onBeforeClose = () => {
   rateLimit.clear();
   if (step.value === "activationResent") step.value = "credentials";
@@ -211,6 +217,7 @@ const onPasswordInput = () => {
   <AuthDialog
     :compact="step === 'activationResent'"
     :center="step === 'activationResent'"
+    :busy="loading || secondFactorBusy || resending"
     @close="emit('cancel')"
     @before-close="onBeforeClose"
   >
@@ -225,6 +232,7 @@ const onPasswordInput = () => {
     <LoginSecondFactor
       v-else-if="step === 'secondFactor'"
       :rate-limit="rateLimit"
+      @busy="(busy: boolean) => (secondFactorBusy = busy)"
       @success="emit('success')"
       @restore="goToRestoration"
       @cant-pass-second-factor="emit('cantPassSecondFactor')"

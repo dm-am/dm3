@@ -121,6 +121,7 @@ const clearForm = () => {
   <AuthDialog
     :compact="result !== null"
     :center="result !== null"
+    :busy="loading"
     @close="emit('cancel')"
     @before-close="clearForm"
   >

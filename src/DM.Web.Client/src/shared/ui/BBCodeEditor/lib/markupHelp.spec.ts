@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { nextTick } from "vue";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import type { Editor } from "@tiptap/vue-3";
@@ -200,6 +200,20 @@ describe("what the help says a reader gets", () => {
       const src = fragment(shown).querySelector("img")!.getAttribute("src")!;
       expect(src).not.toContain("favicon");
       expect(existsSync(join(PUBLIC, src))).toBe(true);
+    },
+  );
+
+  // The PNG header's own pair: a picture without one takes no room until it
+  // arrives, and the rows below it move down.
+  it.each(examples.filter((one) => one.tag === "img"))(
+    "$typed declares the size of the file it shows",
+    ({ shown }) => {
+      const img = fragment(shown).querySelector("img")!;
+      const header = readFileSync(join(PUBLIC, img.getAttribute("src")!));
+      expect([img.getAttribute("width"), img.getAttribute("height")]).toEqual([
+        String(header.readUInt32BE(16)),
+        String(header.readUInt32BE(20)),
+      ]);
     },
   );
 

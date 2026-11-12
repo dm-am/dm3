@@ -2,7 +2,7 @@
   <SidebarBlock token="OwnedGames" title="Мои игры">
     <SidebarSkeleton
       v-if="store.participatingGamesLoading && !store.participatingGames"
-      :lines="5"
+      :lines="skeletonLines"
     />
     <li v-else-if="store.participatingGamesError">
       <SecondaryText class="error">Не удалось загрузить</SecondaryText>
@@ -29,7 +29,7 @@
         />
       </template>
     </template>
-    <li aria-hidden="true">
+    <li ref="rowsEnd" aria-hidden="true">
       <DashSeparator spacing="none" width="75%" />
     </li>
     <SidebarForwardLink :to="{ name: 'games', query: { status: 'Active' } }"
@@ -50,15 +50,30 @@ import SidebarGameLink from "./SidebarGameLink.vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { useAuthStore } from "@/entities/user";
 import { useGamesStore } from "@/entities/game";
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
 import { useLeftSidebarGames } from "./leftSidebarRows";
+import { useRememberedLines } from "./rememberedLines";
 
 const userStore = useAuthStore();
 const store = useGamesStore();
 
 /** The curated, the led, the played and the read games, a separator between two groups. */
 const { own: groups } = useLeftSidebarGames();
+
+const rowsEnd = ref<HTMLElement | null>(null);
+
+// Every game a row, and a separator row between two groups, until the rows are measured.
+const skeletonLines = useRememberedLines(
+  "OwnedGames",
+  5,
+  () => {
+    if (!store.participatingGames) return null;
+    const games = groups.value.reduce((n, group) => n + group.games.length, 0);
+    return games + Math.max(groups.value.length - 1, 0);
+  },
+  rowsEnd,
+);
 
 // onMounted, not an immediate watch: that fired before the user store was hydrated.
 onMounted(() => {

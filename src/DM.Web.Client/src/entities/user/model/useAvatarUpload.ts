@@ -14,6 +14,24 @@ export interface UploadedAvatar {
   uploadId: string;
   /** The file as it went up, drawn in place of the saved picture meanwhile. */
   file: File;
+  /** The file's own pixels, so its preview stands in its proportions from the first frame. */
+  size?: { width: number; height: number };
+}
+
+/**
+ * The upload with the pixels of its file, or without them where the browser
+ * cannot say: the preview then holds the square it held before.
+ */
+async function measured(avatar: UploadedAvatar): Promise<UploadedAvatar> {
+  if (typeof createImageBitmap !== "function") return avatar;
+  try {
+    const bitmap = await createImageBitmap(avatar.file);
+    const size = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return size.width > 0 && size.height > 0 ? { ...avatar, size } : avatar;
+  } catch {
+    return avatar;
+  }
 }
 
 /**
@@ -69,13 +87,13 @@ export function useAvatarUpload(
         return;
       }
       // A successful upload is a 201 carrying the record it created.
-      const uploadId = data!.id;
+      const avatar = await measured({ uploadId: data!.id, file });
       if (disposed) {
         // Linked to nothing, it would wait in the owner's uploads for nobody.
-        void uploadApi.deleteUpload(uploadId, OWNS_REFUSAL);
+        void uploadApi.deleteUpload(avatar.uploadId, OWNS_REFUSAL);
         return;
       }
-      onUploaded({ uploadId, file });
+      onUploaded(avatar);
     } catch {
       // A picture the browser cannot decode or shrink.
       refusal.value = "Не удалось загрузить аватар";

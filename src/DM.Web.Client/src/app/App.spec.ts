@@ -87,6 +87,9 @@ vi.mock("@/widgets/footer", () => ({ Footer: stubs.footer }));
 vi.mock("@/shared/ui/Toast", () => ({ ToastContainer: stubs.blank }));
 vi.mock("@/shared/ui/ScrollNav", () => ({ ScrollNav: stubs.blank }));
 
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import App from "./App.vue";
 
 let shell: VueWrapper | null = null;
@@ -230,5 +233,25 @@ describe("the side columns of the shell", () => {
     const wrapper = await at({ letter: true });
 
     expect(wrapper.find("aside").exists()).toBe(false);
+  });
+
+  // A page with columns grows past the window as its blocks come; a footer standing at the window's foot meanwhile is pushed off.
+  it("holds the footer below the window from the first frame where the columns stand", async () => {
+    const wrapper = await at({ right: false });
+    expect(wrapper.get(".content-wrapper").classes()).toContain("with-columns");
+    const css = ruleMap(
+      componentCss(resolve(dirname(fileURLToPath(import.meta.url)), "App.vue")),
+    );
+    expect(css.get(".content-wrapper.with-columns")?.["min-height"]).toBe(
+      "100vh",
+    );
+  });
+
+  it("leaves the footer at the window's foot on a page without columns", async () => {
+    const wrapper = await at({ letter: true });
+
+    expect(wrapper.get(".content-wrapper").classes()).not.toContain(
+      "with-columns",
+    );
   });
 });

@@ -3,7 +3,11 @@ import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/shared/stores";
 import { unwrapResource, uploadApi } from "@/shared/api";
 import { OWNS_REFUSAL } from "@/shared/api/interceptor";
-import type { User, Username } from "@/shared/api/models/community";
+import type {
+  User,
+  UserPicture,
+  Username,
+} from "@/shared/api/models/community";
 import { personalApi, userApi, type UpdateProfilePayload } from "../api";
 import type { UploadedAvatar } from "../model/useAvatarUpload";
 import { useCommunityStore } from "../model/communityStore";
@@ -100,10 +104,11 @@ export function useProfileEdit(targetUsername: Ref<string>) {
 /** The picture of the edit: an upload the save links, or a reset, and the picture drawn meanwhile. */
 function usePendingAvatar(pendingChanges: Ref<UpdateProfilePayload>) {
   /** The picked picture, drawn in place of the saved one until the edit ends. */
-  const avatarPreview = ref<string | null>(null);
+  const avatarPreview = ref<UserPicture | null>(null);
 
   function forgetPreview() {
-    if (avatarPreview.value) URL.revokeObjectURL(avatarPreview.value);
+    const url = avatarPreview.value?.originalUrl;
+    if (url) URL.revokeObjectURL(url);
     avatarPreview.value = null;
   }
 
@@ -117,7 +122,12 @@ function usePendingAvatar(pendingChanges: Ref<UpdateProfilePayload>) {
   /** A picture that went up: the save links it, and it shows at once. */
   function setAvatar(uploaded: UploadedAvatar) {
     dropPendingUpload();
-    avatarPreview.value = URL.createObjectURL(uploaded.file);
+    // The size goes with the file, so the box is the picture's own before it decodes.
+    const { size } = uploaded;
+    avatarPreview.value = {
+      originalUrl: URL.createObjectURL(uploaded.file),
+      ...(size && { originalWidth: size.width, originalHeight: size.height }),
+    };
     pendingChanges.value = {
       ...pendingChanges.value,
       avatarUploadId: uploaded.uploadId,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { completeSecondFactor } from "@/entities/user";
 import { Button } from "@/shared/ui/Button";
 import { useCodeInput } from "@/shared/lib/composables/useCodeInput";
@@ -19,6 +19,8 @@ const emit = defineEmits<{
   (e: "success"): void;
   (e: "restore"): void;
   (e: "cantPassSecondFactor"): void;
+  /** The code went to the server, or its answer came: the dialog locks for the wait. */
+  (e: "busy", busy: boolean): void;
 }>();
 
 // One value goes to the server either way; the server tells the kinds apart by shape.
@@ -36,6 +38,7 @@ const code = useCodeInput({
 const codeError = ref("");
 
 const loading = ref(false);
+watch(loading, (busy) => emit("busy", busy), { flush: "sync" });
 
 // Ban or removal met between the factors, said as the password step says it.
 const accountRefusal = ref<string | null>(null);

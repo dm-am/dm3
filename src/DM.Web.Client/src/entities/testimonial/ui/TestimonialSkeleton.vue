@@ -1,5 +1,7 @@
 <script setup lang="ts">
-// The height of one collapsed bubble, so the content does not jump when it arrives.
+// The bubble itself with shimmer in place of the text: its box is the real one, so nothing jumps when a testimonial arrives.
+import { SpeechBubble } from "@/shared/ui/SpeechBubble";
+
 withDefaults(
   defineProps<{
     count?: number;
@@ -10,17 +12,18 @@ withDefaults(
 
 <template>
   <div class="testimonial-skeleton-list" aria-hidden="true">
-    <div v-for="n in count" :key="n" class="skeleton-item">
-      <div class="skeleton-bubble">
-        <div class="skeleton-text-line wide" />
-        <div class="skeleton-text-line" />
-        <div class="skeleton-text-line short" />
-      </div>
-      <div class="skeleton-footer">
-        <div class="skeleton-author" />
-        <div class="skeleton-date" />
-      </div>
-    </div>
+    <SpeechBubble v-for="n in count" :key="n">
+      <!-- Three lines: the height of a collapsed bubble. -->
+      <span class="skeleton-text-row"
+        ><span class="skeleton-text-line wide"
+      /></span>
+      <span class="skeleton-text-row"><span class="skeleton-text-line" /></span>
+      <span class="skeleton-text-row"
+        ><span class="skeleton-text-line short"
+      /></span>
+      <template #left><span class="skeleton-author" /></template>
+      <template #right><span class="skeleton-date" /></template>
+    </SpeechBubble>
   </div>
 </template>
 
@@ -32,17 +35,11 @@ withDefaults(
   flex-direction: column
   gap: $medium
 
-// The collapsed bubble of shared/ui/SpeechBubble.
-.skeleton-bubble
+// One line of the bubble's text, at the bubble's own line height.
+.skeleton-text-row
   display: flex
-  flex-direction: column
-  justify-content: center
-  gap: $small
-  padding: $medium + $tiny $medium + $small
-  margin-bottom: $small
-  border-radius: $bubble-radius
-  background-color: $bg-highlight-green
-  min-height: calc(1.5 * 3 * 1em + ($medium + $tiny) + 26px)
+  align-items: center
+  height: calc(var(--line-height, 1.5) * 1em)
 
 // Derived from the bubble's text colour, so the lines show in both themes.
 .skeleton-text-line
@@ -59,21 +56,17 @@ withDefaults(
   &.short
     width: 60%
 
-.skeleton-footer
-  display: flex
-  align-items: center
-  justify-content: space-between
-  gap: $small
-  // Clears the tail of the real bubble.
-  margin-top: 18px
+// Inline in the footer's line, shorter than it, so the line keeps the height of the author's name.
+.skeleton-author,
+.skeleton-date
+  display: inline-block
+  vertical-align: middle
+  height: 12px
+  +skeleton-shimmer
 
 .skeleton-author
   width: 120px
-  height: 14px
-  +skeleton-shimmer
 
 .skeleton-date
   width: 70px
-  height: 12px
-  +skeleton-shimmer
 </style>

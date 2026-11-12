@@ -122,7 +122,11 @@ const goToSupport = () => toSupport(supportFor("AccessRecovery"));
 
 const activationResent = ref(false);
 
-const { resend, hours: resentHours } = useActivationResend(rateLimit);
+const {
+  resend,
+  resending,
+  hours: resentHours,
+} = useActivationResend(rateLimit);
 
 const resendActivation = async () => {
   const outcome = await resend(address.value);
@@ -233,7 +237,6 @@ const clearForm = () => {
   rulesViewed.value = false;
   acceptedRules.value = false;
   step.value = "email";
-  // The modal keeps this component mounted: a receipt left here would greet the next visit.
   activationResent.value = false;
 };
 
@@ -261,6 +264,7 @@ const handleRecovery = () => {
   <AuthDialog
     :compact="activationResent"
     :center="activationResent"
+    :busy="loading || resending"
     @close="cancel"
     @before-close="clearForm"
   >

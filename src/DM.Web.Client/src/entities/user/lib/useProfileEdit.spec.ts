@@ -150,7 +150,7 @@ describe("the avatar in the edit mode of a profile", () => {
 
     edit.setAvatar({ uploadId: "upload-1", file: aPicture() });
 
-    expect(edit.avatarPreview.value).toBe("blob:picked");
+    expect(edit.avatarPreview.value).toEqual({ originalUrl: "blob:picked" });
     expect(edit.hasChanges.value).toBe(true);
     expect(update).not.toHaveBeenCalled();
 

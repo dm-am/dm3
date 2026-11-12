@@ -12,7 +12,11 @@ import {
   type Wrapper,
 } from "./RegistrationForm.fixtures";
 import RegistrationForm from "./RegistrationForm.vue";
-import { AuthDialogStub, problem } from "./authForms.fixtures";
+import {
+  AuthDialogStub,
+  expectWindowLockedWhile,
+  problem,
+} from "./authForms.fixtures";
 
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
@@ -96,6 +100,17 @@ describe("RegistrationForm", () => {
 
       expect(wrapper.text()).not.toContain("Проверьте почту");
       expect(wrapper.find("#registration-email").exists()).toBe(true);
+    });
+
+    it("locks the window until the letter is answered", async () => {
+      pending();
+      const wrapper = await askAbout();
+
+      await expectWindowLockedWhile(
+        vi.mocked(accountApi.recover),
+        () => wrapper.findComponent(AuthDialogStub).props("busy"),
+        () => askForTheLetter(wrapper),
+      );
     });
 
     it("does not send a second letter while the first is on the wire", async () => {

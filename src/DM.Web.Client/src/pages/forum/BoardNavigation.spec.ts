@@ -103,9 +103,44 @@ describe("the strip of boards", () => {
     expect(nav.textContent).not.toContain("\u00a0");
   });
 
-  it("is not drawn before the boards are there", async () => {
+  it("holds the place of the strip, a line and its margin, before the boards are there", async () => {
     const wrapper = await stripAt("/forum/general", null);
 
     expect(wrapper.find("nav").exists()).toBe(false);
+    // The same box as the strip: its class, so its margin, and one line of a board link.
+    const place = wrapper.get(".board-navigation-placeholder");
+    expect(place.classes()).toContain("board-navigation");
+    expect(place.attributes("aria-hidden")).toBe("true");
+    expect(place.findAll(".board-link")).toHaveLength(1);
+    expect(place.find("a").exists()).toBe(false);
+  });
+
+  it("fills the held place with the names when the boards come", async () => {
+    const wrapper = await stripAt("/forum/general", null);
+
+    useBoardsStore().boards = BOARDS;
+    await flushPromises();
+
+    expect(wrapper.find(".board-navigation-placeholder").exists()).toBe(false);
+    expect(wrapper.get("nav.board-navigation").text()).toBe(
+      "Общий | Игровые системы | Котел идей",
+    );
+  });
+
+  it("leaves no place when the boards could not be read", async () => {
+    useBoardsStore().boardsError = {
+      status: 500,
+      title: "Ошибка сервера",
+    } as never;
+
+    const wrapper = await stripAt("/forum/general", null);
+
+    expect(wrapper.find(".board-navigation").exists()).toBe(false);
+  });
+
+  it("leaves no place when the forum has no boards", async () => {
+    const wrapper = await stripAt("/forum/general", []);
+
+    expect(wrapper.find(".board-navigation").exists()).toBe(false);
   });
 });
