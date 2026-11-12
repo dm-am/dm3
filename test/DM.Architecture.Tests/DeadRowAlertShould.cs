@@ -27,8 +27,9 @@ public class DeadRowAlertShould
 
     [Fact]
     public void FireOnDeadRowsOfEitherQueue() =>
-        Rule.Should().Contain("expr: dm_messaging_outbox_dead > 0",
-                "the gauge carries one series per queue, so a dead letter and a dead event each fire")
+        Rule.Should().Contain("expr: max by (queue) (dm_messaging_outbox_dead) > 0",
+                "the gauge carries one series per queue, so a dead letter and a dead event each fire, " +
+                "and one alert per queue however many API instances are scraped")
             .And.Contain("for: 5m");
 
     [Fact]

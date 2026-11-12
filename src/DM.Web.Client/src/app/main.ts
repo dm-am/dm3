@@ -11,6 +11,7 @@ import { registerGlobalComponents } from "./providers/components";
 import router from "./providers/router";
 import { installRoutePrefetch } from "./providers/routePrefetch";
 import { installSessionExpiredHandler } from "./providers/sessionExpiry";
+import { installPreloadErrorReload } from "./providers/staleBundle";
 
 import "@/assets/styles/ThemeVariables.css";
 import "@/assets/styles/Reset.sass";
@@ -32,5 +33,8 @@ application.use(createPinia()).use(router).use(createVfm());
 
 // Starts loading a page's chunk when the reader aims at its link.
 installRoutePrefetch();
+
+// A tab open across a deploy asks for chunks that are gone; it reloads once.
+installPreloadErrorReload();
 
 application.mount("#application");

@@ -10,6 +10,7 @@ import { loadRouteLocation, type RouteLocationResolved } from "vue-router";
 import { onSlowConnection, savingData } from "@/shared/lib/utils/connection";
 import { toInternalPath } from "@/shared/lib/utils/internalUrl";
 import router from "./router";
+import { cancelPendingReload } from "./staleBundle";
 
 /** A pointer crossing a column of links spends a few ms on each; a stop is longer. */
 const HOVER_DWELL_MS = 65;
@@ -112,7 +113,9 @@ function createPrefetcher(inFlight: () => boolean) {
     requested.add(key);
 
     void loadRouteLocation(route).catch(() => {
-      // Free to fail: the navigation asks again and reports its own failure.
+      // Free to fail: the navigation asks again and reports its own failure,
+      // and a guess is no reason to reload the page the reader is reading.
+      cancelPendingReload();
       requested.delete(key);
     });
   };

@@ -210,10 +210,10 @@
 - Собственные образы `ghcr.io/dm-am/dm-api`, `ghcr.io/dm-am/dm-worker-mail`,
   `ghcr.io/dm-am/dm-worker-notification`, `ghcr.io/dm-am/dm-front` и локальный
   `dm-seeder` для тестовых данных.
-- `nickfedor/watchtower` 1.21.0, обновление контейнеров из реестра.
-- `git`, `iptables-persistent` и `openssl` из пакетов сервера: установщик ими
-  клонирует дерево, сохраняет открытые порты 80 и 443 и создает секреты
-  окружения.
+- `git`, `jq`, `openssh-client`, `iptables-persistent` и `openssl` из пакетов
+  сервера: скрипт релиза ими держит зеркало репозитория, читает разрешенную
+  конфигурацию compose и проверяет подпись тега через ssh-keygen, установщик
+  сохраняет открытые порты 80 и 443 и создает секреты окружения.
 - `httpd` 2.4.69, из образа берется только htpasswd: скрипт хеширует пароль
   входа на стенд через bcrypt, его спрашивает край сайта в оверлее стенда,
   контейнер живет одну команду.
@@ -229,11 +229,16 @@
 - `ubuntu` 24.04, раннер всех заданий, версия закреплена, чтобы набор
   инструментов не менялся вместе с ubuntu-latest.
 - `actions/checkout` v7, `actions/setup-dotnet` v6, `actions/setup-node` v7,
-  `actions/upload-artifact` v7.
+  `actions/upload-artifact` v7, `actions/download-artifact` v8.
+- `actions/attest-build-provenance` v4, подписанная аттестация происхождения
+  каждого публикуемого образа.
 - `docker/setup-buildx-action` v4, `docker/login-action` v4,
   `docker/metadata-action` v6, `docker/build-push-action` v7.
 - `github/codeql-action/*` v4, статический анализ.
 - `zaproxy/action-baseline` v0.15.0, базовое сканирование безопасности.
+- `registry` 2.8.3, реестр образов на раннере deployment-smoke: проверка
+  раскладки сервера выкладывает в него четыре образа приложения, и релиз тянет
+  их оттуда по дайджесту, как сервер из ghcr.io.
 - Dependabot настроен в .github/dependabot.yml и включается с концом разработки,
   тем же рубежом, что и обычные миграции базы. До него версии двигают руками и
   часть прижата намеренно, его заявки спорили бы с работой.

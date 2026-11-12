@@ -104,7 +104,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         services.AddMemoryCache();
         AddResponseCompressionPolicy(services);
         services.AddResponseCaching();
-        AddDatabase(services);
+        AddDatabase(services, _migrateOnStart);
 
         // BFF Pattern: Cookie-based authentication via HttpOnly cookies
         // No Bearer tokens - sessions managed server-side
@@ -171,12 +171,20 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         .Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest)
         .Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
 
-    private static void AddDatabase(IServiceCollection services) =>
+    internal static void AddDatabase(IServiceCollection services, bool migrationMode) =>
         services.AddDmConnectionSource().AddDbContextPool<DmDbContext>((provider, options) =>
         {
             options.UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>(),
                 npgsqlOptions =>
                 {
+                    if (migrationMode)
+                    {
+                        // A migration step cut off or replayed is left half applied. Zero is
+                        // set outright: left unset, Npgsql falls back to its own 30 seconds.
+                        npgsqlOptions.CommandTimeout(0);
+                        return;
+                    }
+
                     npgsqlOptions.EnableRetryOnFailure(
                         maxRetryCount: 3,
                         maxRetryDelay: TimeSpan.FromSeconds(5),
@@ -198,7 +206,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     {
         if (!_migrateOnStart)
         {
-            services.AddDmHostedServices();
+            services.AddDmHostedServices(HostedServiceExtensions.PeriodicServicesEnabled(configuration));
         }
     }
 

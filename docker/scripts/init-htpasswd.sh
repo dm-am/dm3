@@ -7,8 +7,9 @@ set -euo pipefail
 # password. nginx re-reads the file only on restart.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOCKER_DIR="$(dirname "$SCRIPT_DIR")"
-HTPASSWD_FILE="$DOCKER_DIR/nginx/.htpasswd"
+# shellcheck source=docker/scripts/_paths.sh
+. "$SCRIPT_DIR/_paths.sh"
+HTPASSWD_FILE="$DM_EDGE_DIR/.htpasswd"
 PREVIEW_USER="preview"
 
 if [ -z "${DM_PREVIEW_PASSWORD:-}" ]; then

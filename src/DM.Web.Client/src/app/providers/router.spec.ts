@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import type { RouteLocationNormalized, RouteLocationRaw } from "vue-router";
 /** Who the session cookie belongs to: a guest unless a test says otherwise. */
@@ -288,5 +288,53 @@ describe("pages a letter leads to", () => {
       .sort();
 
     expect(marked).toEqual([...FROM_LETTER].sort());
+  });
+});
+
+// The reload net of staleBundle.ts: the page that reloaded proves nothing until
+// a later navigation succeeds, or a chunk that is missing for good, loaded as
+// the page mounts, would reload the tab over and over.
+describe("the flag of the reload after a failed import", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it("stands through the first navigation and falls on the next", async () => {
+    sessionStorage.setItem("dm_chunk_reload", "1");
+
+    await router.push("/about");
+    expect(sessionStorage.getItem("dm_chunk_reload")).not.toBeNull();
+
+    await router.push("/testimonials");
+    expect(sessionStorage.getItem("dm_chunk_reload")).toBeNull();
+  });
+});
+
+describe("a navigation whose chunk is gone", () => {
+  const reload = vi.fn();
+  const assign = vi.fn();
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    sessionStorage.clear();
+    vi.stubGlobal("location", { ...window.location, reload, assign });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reloads into the page the reader clicked, not the one he left", async () => {
+    const removeRoute = router.addRoute({
+      path: "/page-of-the-old-deploy",
+      component: () =>
+        Promise.reject(new TypeError("Importing a module script failed.")),
+    });
+
+    await router.push("/page-of-the-old-deploy").catch(() => undefined);
+    removeRoute();
+
+    expect(assign).toHaveBeenCalledExactlyOnceWith("/page-of-the-old-deploy");
+    expect(reload).not.toHaveBeenCalled();
   });
 });

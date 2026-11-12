@@ -3,7 +3,8 @@ set -euo pipefail
 
 # What the edge has to answer, in one place. The same assertions run in the pipeline,
 # against the pair it builds before publishing an image, and by an operator against the
-# public address after watchtower replaced the containers; written twice they would drift.
+# public address after a release or maintenance replaced the containers; written twice they
+# would drift.
 #
 # Usage:
 #   smoke-edge.sh [BASE_URL] [USER] [PASSWORD]

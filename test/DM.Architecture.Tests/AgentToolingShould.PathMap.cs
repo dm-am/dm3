@@ -34,7 +34,7 @@ public partial class AgentToolingShould
         ["security"] = "a call into security.yml, whose two jobs are gated there by the inputs this passes",
         ["publish"] = "publishes on its own conditions, and lets a check the map skipped through",
         ["publish-frontend"] = "the same",
-        ["promote-images"] = "moves the names after the publishers, and checks nothing",
+        ["promote-images"] = "moves the names after the publishers, and checks only what they attested",
     };
 
     private static readonly Regex NeedsOfJob = new(@"^    needs:\s*\[([^\]]*)\]", RegexOptions.Compiled | RegexOptions.Multiline);
@@ -352,6 +352,8 @@ public partial class AgentToolingShould
     [InlineData("src/DM.Web.Client/src/assets/styles/ThemeVariables.css",
         "build codeql dependency-scan deployment-smoke e2e frontend")]
     [InlineData("src/DM.Web.Client/nginx.conf",
+        "build codeql compose-topology dependency-scan deployment-smoke e2e frontend zap-scan")]
+    [InlineData("src/DM.Web.Client/publish-assets.sh",
         "build codeql compose-topology dependency-scan deployment-smoke e2e frontend zap-scan")]
     [InlineData("docker/docker-compose.yml", "build codeql compose-topology dependency-scan deployment-smoke e2e frontend zap-scan")]
     [InlineData("scripts/hooks/pre-push", "build codeql compose-topology dependency-scan deployment-smoke e2e frontend zap-scan")]

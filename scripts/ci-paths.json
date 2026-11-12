@@ -2,8 +2,8 @@
   "groups": [
     {
       "name": "infrastructure",
-      "paths": ["docker/**", "scripts/**", ".github/**", "src/DM.Web.Client/nginx.conf"],
-      "why": "the stack, the gates and the pipeline themselves: whatever runs the checks has changed, so every check runs. The nginx.conf of the SPA is here because scripts/deployment/check-nginx-configuration.sh, a step of compose-topology, parses it"
+      "paths": ["docker/**", "scripts/**", ".github/**", "src/DM.Web.Client/nginx.conf", "src/DM.Web.Client/publish-assets.sh"],
+      "why": "the stack, the gates and the pipeline themselves: whatever runs the checks has changed, so every check runs. The nginx.conf of the SPA and its asset hook are here because scripts/deployment/check-nginx-configuration.sh, a step of compose-topology, parses the one and runs the other"
     },
     {
       "name": "client-read-by-server",
@@ -63,7 +63,7 @@
     },
     "deployment-smoke": {
       "groups": ["client", "client-read-by-server", "server"],
-      "why": "builds the API and the SPA images and serves them through the edge"
+      "why": "builds the four application images, serves them through the edge, and installs the server layout from a signed tag of the commit"
     },
     "dependency-scan": {
       "groups": ["client", "client-read-by-server", "server"],

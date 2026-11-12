@@ -167,9 +167,9 @@ public class DeploymentCredentialsShould
             "bcrypt rather than the apr1 default, and the password over stdin rather " +
             "than in an argument every process listing shows");
 
-        File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"))
+        File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "install-release.sh"))
             .Should().Contain("init-htpasswd.sh",
-                "a clone carries no credentials, so the installer has to create them");
+                "a release carries no credentials, so the installer has to create them");
 
         File.ReadAllText(Path.Combine(RepositoryLayout.Root, ".gitignore"))
             .Should().Contain("docker/nginx/.htpasswd",
@@ -207,6 +207,7 @@ public class DeploymentCredentialsShould
     public void PrintNoCredentialFromTheInstaller()
     {
         var lines = File.ReadAllLines(Path.Combine(DockerDirectory, "setup-server.sh"))
+            .Concat(File.ReadAllLines(Path.Combine(DockerDirectory, "scripts", "install-release.sh")))
             .Where(line => line.TrimStart().StartsWith("echo", StringComparison.Ordinal))
             .ToList();
 

@@ -1,28 +1,52 @@
 #!/bin/bash
 set -euo pipefail
 
-# DM3 server setup script for clean Ubuntu
-# Usage: DM_REF=<tag>
-#   curl -sSL https://raw.githubusercontent.com/dm-am/dm3/$DM_REF/docker/setup-server.sh | DM_REF=$DM_REF bash
-# The ref is written once and used twice: the script that is downloaded and the
-# tree that is cloned are then the same thing by construction.
+# DM3 server setup for a clean Ubuntu: the host part. It installs the packages, caps the
+# container logs, opens the ports and checks the tool versions the release script relies on,
+# then hands over to docker/scripts/install-release.sh, which lays out the server and installs
+# the first signed release.
+#
+# Usage, as root, from a clone checked out at the release tag after its signature verified:
+#   sudo bash docker/setup-server.sh --signers <allowed_signers> --tag <vX.Y.Z> --mail-host <host> --mail-port <port>
+# Not from a pipe: what runs as root here is the tree whose tag the operator verified.
 
-INSTALL_DIR="/opt/dm3"
-# What to install from, and with it the tag of the images this stand runs: latest is
-# published only from main, so a stand cloned from dev has to ask for the dev images. A
-# tag is the intended value, since a branch moves and two runs a day apart give two stands.
-DM_REF="${DM_REF:-dev}"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Asked before anything is installed: a repeat run used to die at the clone, after apt and
-# a docker restart on a live stand.
-bash "$(dirname "$0")/scripts/require-empty-install-dir.sh" "$INSTALL_DIR"
+[ "$(id -u)" -eq 0 ] || { echo "Error: setup-server.sh runs as root (sudo bash docker/setup-server.sh ...)" >&2; exit 1; }
 
-echo "=== Установка Docker ==="
-sudo apt update
-sudo apt install -y docker.io docker-compose-v2 git iptables-persistent openssl certbot
+# The answers the layout part refuses to start without are asked for here too, before apt
+# and a docker restart change the machine.
+case " $* " in
+    *" --signers "*) ;;
+    *) echo "Error: --signers names the allowed_signers file of the release key" >&2; exit 2 ;;
+esac
+case " $* " in
+    *" --tag "*) ;;
+    *) echo "Error: --tag names the release to install" >&2; exit 2 ;;
+esac
+case " $* " in
+    *" --mail-host "*) ;;
+    *) echo "Error: --mail-host names the mail relay of the server" >&2; exit 2 ;;
+esac
+case " $* " in
+    *" --mail-port "*) ;;
+    *) echo "Error: --mail-port names the port of the mail relay" >&2; exit 2 ;;
+esac
 
-echo "=== Настройка Docker для текущего пользователя ==="
-sudo usermod -aG docker "$USER"
+# Asked before anything is installed: a repeat run used to die halfway, after apt and a docker
+# restart on a live stand.
+bash "$HERE/scripts/require-empty-install-dir.sh" /opt/dm3 /etc/dm3 /var/lib/dm3
+
+echo "=== Установка пакетов ==="
+apt update
+# git keeps the mirror, jq reads the resolved compose configuration, openssh-client brings the
+# ssh-keygen that verifies the tag signatures.
+apt install -y docker.io docker-compose-v2 git jq openssh-client iptables-persistent openssl certbot
+
+if [ -n "${SUDO_USER:-}" ]; then
+    echo "=== Docker для пользователя $SUDO_USER ==="
+    usermod -aG docker "$SUDO_USER"
+fi
 
 echo "=== Ротация журналов Docker ==="
 # The default json-file driver keeps every line forever and Serilog also writes to the
@@ -33,8 +57,8 @@ if [ -f "$DOCKER_DAEMON_CONFIG" ]; then
     echo "$DOCKER_DAEMON_CONFIG уже существует, ротацию журналов проверить вручную:"
     echo "  log-driver json-file, log-opts max-size 10m, max-file 3"
 else
-    sudo mkdir -p "$(dirname "$DOCKER_DAEMON_CONFIG")"
-    sudo tee "$DOCKER_DAEMON_CONFIG" > /dev/null <<'JSON'
+    mkdir -p "$(dirname "$DOCKER_DAEMON_CONFIG")"
+    tee "$DOCKER_DAEMON_CONFIG" > /dev/null << 'JSON'
 {
   "log-driver": "json-file",
   "log-opts": {
@@ -43,73 +67,28 @@ else
   }
 }
 JSON
-    sudo systemctl restart docker
+    systemctl restart docker
 fi
-
-echo "=== Клонирование репозитория ==="
-sudo mkdir -p "$INSTALL_DIR"
-sudo chown "$USER:$USER" "$INSTALL_DIR"
-git clone --branch "$DM_REF" https://github.com/dm-am/dm3.git "$INSTALL_DIR"
-
-# Which commit this stand is; a ref that turns out to be a branch is said out loud.
-INSTALLED_COMMIT="$(git -C "$INSTALL_DIR" rev-parse --short HEAD)"
-if git -C "$INSTALL_DIR" show-ref --verify --quiet "refs/tags/$DM_REF"; then
-    echo "Установлено из тега $DM_REF ($INSTALLED_COMMIT)."
-else
-    echo "ВНИМАНИЕ: $DM_REF это ветка, а не тег. Установлен коммит $INSTALLED_COMMIT," >&2
-    echo "и завтра та же команда даст другой. Для воспроизводимой установки:" >&2
-    echo "  DM_REF=<тег> curl -sSL .../setup-server.sh | bash" >&2
-fi
-
-echo "=== Подготовка docker/.env ==="
-# Everything below needs this file: the backup scripts source it and compose stops at
-# ${...:?} without it.
-bash "$INSTALL_DIR/docker/scripts/init-env.sh" server "$DM_REF"
 
 echo "=== Открытие портов (firewall) ==="
-sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
-sudo netfilter-persistent save
+iptables -I INPUT -p tcp --dport 80 -j ACCEPT
+iptables -I INPUT -p tcp --dport 443 -j ACCEPT
+netfilter-persistent save
 
-echo "=== Настройка preview-пароля ==="
-# A clone carries no credentials: the file is generated here, and the generator holds the
-# unset-password check so a later change of the password gets the same one.
-bash "$INSTALL_DIR/docker/scripts/init-htpasswd.sh"
+echo "=== Версии инструментов ==="
+# What the release script needs: compose v2 for --pull never and --wait, git 2.34 for tags signed
+# with SSH keys, OpenSSH 8.2 for ssh-keygen -Y find-principals.
+at_least() {
+    local have=$1 want=$2
+    [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | head -n 1)" = "$want" ]
+}
+compose_version="$(docker compose version --short 2> /dev/null | sed 's/^v//' || true)"
+git_version="$(git --version | sed -n 's/^git version \([0-9.]*\).*/\1/p')"
+ssh_version="$(ssh -V 2>&1 | sed -n 's/^OpenSSH_\([0-9.]*\).*/\1/p')"
+at_least "${compose_version:-0}" 2.0 || { echo "Error: docker compose ${compose_version:-is missing}, v2 is needed" >&2; exit 1; }
+at_least "${git_version:-0}" 2.34 || { echo "Error: git ${git_version:-is missing}, 2.34 or newer is needed" >&2; exit 1; }
+at_least "${ssh_version:-0}" 8.2 || { echo "Error: OpenSSH ${ssh_version:-is missing}, 8.2 or newer is needed" >&2; exit 1; }
+echo "docker compose $compose_version, git $git_version, OpenSSH $ssh_version"
 
-echo "=== Установка systemd-сервиса ==="
-sudo cp "$INSTALL_DIR/docker/dm3.service" /etc/systemd/system/dm3.service
-sudo systemctl daemon-reload
-sudo systemctl enable dm3.service
-
-echo "=== Установка cron-задач для бэкапов ==="
-sudo bash "$INSTALL_DIR/docker/scripts/install-cron.sh" "$INSTALL_DIR"
-
-echo "=== Запуск приложения ==="
-cd "$INSTALL_DIR/docker"
-# The object store first and with --wait: the site starts without it, so this is the one
-# step a failed bucket creation stops, instead of every upload answering 500.
-sudo docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d --wait storage seaweedfs
-# No --build: CI builds the four images and the server pulls them; building here costs
-# gigabytes of disk and memory on a small VPS. The production profile adds watchtower.
-sudo docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d
-
-echo ""
-echo "=== Готово! ==="
-echo "Приложение доступно по адресу: http://$(curl -s ifconfig.me)"
-echo "Логин: preview"
-# The password is not printed: it would stay in the terminal, the session history and the
-# install log, and under set -u it crashed this step when typed at the init-htpasswd.sh prompt.
-echo ""
-echo "Стенд отвечает по http: сертификата пока нет, самоподписанного не будет —"
-echo "предупреждение браузера учит кликать сквозь предупреждения."
-echo "Когда появится домен:"
-echo "  bash $INSTALL_DIR/docker/scripts/init-ssl.sh <домен>"
-echo "  sudo systemctl restart dm3"
-echo "  sudo certbot renew --dry-run"
-echo ""
-echo "Для смены пароля:"
-echo "  bash $INSTALL_DIR/docker/scripts/init-htpasswd.sh"
-echo "  cd $INSTALL_DIR/docker && sudo docker compose restart nginx"
-echo ""
-echo "Сервис автозапуска: systemctl status dm3"
-echo "Бэкапы: ежедневно в 02:00-04:00, лог /var/log/dm3-backup.log"
+echo "=== Раскладка сервера и первый релиз ==="
+exec bash "$HERE/scripts/install-release.sh" "$@"

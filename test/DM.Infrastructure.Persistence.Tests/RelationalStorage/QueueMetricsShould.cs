@@ -53,7 +53,9 @@ public class QueueMetricsShould
         var watch = Stopwatch.StartNew();
         var observed = Scrape();
 
-        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(8),
+        // The bound is the scrape timeout itself: under the coverage run the suite's other
+        // projects share the cores, and the same five-second reading took nine seconds.
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10),
             "the reading has five seconds in all, inside the ten seconds Prometheus waits for a scrape");
         AssertNotANumberForEveryQueue(observed);
     }

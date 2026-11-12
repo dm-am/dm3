@@ -256,9 +256,18 @@ public class StackDocumentShould
     }
 
     /// <summary>An image reference at its tag; a tag set by a variable is no version.</summary>
-    /// <remarks>A digest after the tag pins it and is not the version a reader writes down.</remarks>
+    /// <remarks>
+    /// A digest after the tag pins it and is not the version a reader writes down. A reference a
+    /// release may replace, as in ${DM_IMAGE_API:-ghcr.io/dm-am/dm-api:${IMAGE_TAG:-latest}}, is
+    /// read by its default.
+    /// </remarks>
     private static Entry Split(string reference, string source)
     {
+        if (Regex.Match(reference, @"^\$\{\w+:-(?<fallback>.+)\}$") is { Success: true } replaceable)
+        {
+            reference = replaceable.Groups["fallback"].Value;
+        }
+
         var digest = reference.IndexOf('@');
         if (digest >= 0)
         {

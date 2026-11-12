@@ -39,8 +39,10 @@ groups:
 
   - name: dm-api
     rules:
+      # The site is down only when no instance answers: between releases the twin
+      # target is down by design and must not page anyone.
       - alert: ApiDown
-        expr: up{job="dm-api"} == 0
+        expr: max(up{job="dm-api"}) == 0
         for: 1m
         labels:
           severity: critical
@@ -77,8 +79,10 @@ groups:
   # told they may not do something they in fact may.
   - name: dm-authorization
     rules:
+      # Summed over instances so one missing resolver is one alert, whichever
+      # instances happened to be asked.
       - alert: AuthorizationResolverMissing
-        expr: increase(dm_authorization_resolver_missing_total[15m]) > 0
+        expr: sum by (intention, target) (increase(dm_authorization_resolver_missing_total[15m])) > 0
         for: 0m
         labels:
           severity: warning
@@ -206,12 +210,15 @@ groups:
 
       # A dead row spent its ladder or was rejected, and no worker takes it again
       # until a human returns it. The gauge is read from the table on every scrape,
-      # one series per queue, so a dead letter and a dead event each fire. NaN, the
-      # value of an unreachable database, compares false and leaves this to the
+      # one series per queue, so a dead letter and a dead event each fire. Every API
+      # instance reads the same table, so the max over instances is one alert per
+      # queue that survives an instance being replaced. NaN, which QueueMetrics gives
+      # every queue when its reading fails, is skipped by max while another instance
+      # has a number, and when all are NaN it compares false and leaves this to the
       # database rules. The command is DeadRows.ReturnCommand, which a gate holds
       # this text to.
       - alert: DeadOutboxRows
-        expr: dm_messaging_outbox_dead > 0
+        expr: max by (queue) (dm_messaging_outbox_dead) > 0
         for: 5m
         labels:
           severity: warning
@@ -261,9 +268,11 @@ groups:
       # minutes is longer than any deploy's restart, so this firing means a
       # worker is down or stuck on a row - either way a human call.
       # The gauge is read from the table on every scrape, one series per queue,
-      # so each queue fires on its own and a hung loop cannot freeze it.
+      # so each queue fires on its own and a hung loop cannot freeze it. The max
+      # over instances keeps the alert from resolving and firing again when the
+      # instance it was keyed to restarts.
       - alert: OutboxBacklogAging
-        expr: dm_messaging_outbox_lag_seconds > 300
+        expr: max by (queue) (dm_messaging_outbox_lag_seconds) > 300
         for: 5m
         labels:
           severity: warning
@@ -360,3 +369,67 @@ groups:
         annotations:
           summary: 'Проверка бэкапов не отчитывалась более двух суток'
           description: 'Последний отчет: {{ $value | humanizeDuration }} назад.'
+
+  # The release script writes one family for the textfile collector on every tick and after every
+  # verb that changes something (docker/scripts/release-entry.sh); field names the fact.
+  - name: dm-release
+    rules:
+      # A letter for every release, rollback and maintenance: current was renamed. The tag label
+      # makes each release its own alert, so a rollback to an earlier tag writes again.
+      - alert: ReleaseChanged
+        expr: time() - dm_release{field="changed"} < 900
+        labels:
+          severity: warning
+        annotations:
+          summary: "На сервере живет выпуск {{ $labels.tag }}"
+          description: "Каталог выпуска сменился меньше 15 минут назад: выпуск, откат или обслуживание. Что живет и что пробовалось: sudo dm3-release status."
+
+      # A refused or failed release is newer than the last change of current; any rename clears it.
+      # Before the first release there is no change to compare with, scalar() is NaN and it stays
+      # silent: the first installation is the operator's, at the terminal.
+      - alert: ReleaseFailed
+        expr: dm_release{field="failed"} > scalar(max(dm_release{field="changed"}))
+        labels:
+          severity: warning
+        annotations:
+          summary: "Выпуск {{ $labels.tag }} не встал"
+          description: "Выпуск отклонен или упал, сайт остался на прежнем выпуске или восстановлен. Таймер этот тег больше не берет. Причина в sudo dm3-release status и в journalctl -u dm3-release. Исправление выходит новой версией, а выпуск, которому нужно обслуживание, ставит sudo dm3-release maintain с его тегом."
+
+      # A candidate that waits, or an origin the server has not listed, for an hour.
+      - alert: ReleaseWaiting
+        expr: |
+          (dm_release{field="waiting_since"} > 0 and time() - dm_release{field="waiting_since"} > 3600)
+          or time() - dm_release{field="fetched"} > 3600
+        labels:
+          severity: warning
+        annotations:
+          summary: "Выпуск не доходит до сервера больше часа"
+          description: "Либо подписанный тег ждет: стенд нездоров, образ не скачивается или не хватает памяти, либо сервер час не может прочесть список тегов репозитория. Причина в sudo dm3-release status и в journalctl -u dm3-release."
+
+      # Somebody pushed a release-shaped tag without the key, or the signer's setup is wrong.
+      - alert: ReleaseTagRejected
+        expr: dm_release{field="rejected"} > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Сервер отверг теги выпуска"
+          description: "Тег с именем выпуска не прошел проверку подписи или полей, сайт не тронут. Если тег ставил подписывающий, проверить его ключ и сообщение тега, иначе тег поставил кто-то без ключа. Причина каждого в journalctl -u dm3-release."
+
+      # Base images get their patches only with a new build (release design 3.14).
+      - alert: ReleaseStale
+        expr: time() - dm_release{field="built"} > 2592000
+        labels:
+          severity: warning
+        annotations:
+          summary: "Живые образы собраны больше 30 дней назад"
+          description: "Исправления базовых образов приходят только с новой сборкой. Нужен новый коммит в dev, хватит пустого, затем выпуск из его сборки."
+
+      # Between releases the twin's target is down; up for a quarter of an hour, it outlived one.
+      - alert: ApiRolloutUnfinished
+        expr: up{job="dm-api",instance="dm-api-next:5000"} == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Близнец API пережил выпуск"
+          description: "dm-api-next работает 15 минут, а выпуск длится минуты. Команда sudo dm3-release recover возвращает край на основные контейнеры и убирает близнецов."
