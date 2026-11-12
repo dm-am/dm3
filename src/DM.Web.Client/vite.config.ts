@@ -22,6 +22,8 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Here and not as --root on the command line: vitest looks for this file in
+    // the root it is given, so `--root src/` runs without the config at all.
     root: "src/",
     globals: true,
     // The convention gates walk the whole source tree and run past the 5s
@@ -42,7 +44,9 @@ export default defineConfig({
         "**/*.fixtures.ts",
         "**/node_modules/**",
         "**/dist/**",
-        "main.ts",
+        // A pattern without a wildcard names a directory, so "main.ts" alone
+        // no longer matches the file.
+        "**/main.ts",
       ],
       thresholds: {
         // A ratchet, not a floor to duck under: raise after a gain, never lower

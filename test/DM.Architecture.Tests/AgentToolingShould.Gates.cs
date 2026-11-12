@@ -332,8 +332,8 @@ public partial class AgentToolingShould
 
         if (command.StartsWith("dotnet test", StringComparison.Ordinal))
         {
-            return command.Contains("--collect", StringComparison.Ordinal)
-                ? "dotnet test --collect"
+            return command.Contains("--coverage", StringComparison.Ordinal)
+                ? "dotnet test --coverage"
                 : "dotnet test";
         }
 

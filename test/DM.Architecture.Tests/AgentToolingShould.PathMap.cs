@@ -171,7 +171,7 @@ public partial class AgentToolingShould
         var docs = JobBodies("dotnet.yml").GetValueOrDefault("docs");
 
         docs.Should().NotBeNull("the map calls a docs job for a change to the documents");
-        docs.Should().Contain("dotnet test test/DM.Architecture.Tests",
+        docs.Should().Contain("dotnet test --project test/DM.Architecture.Tests",
             "the architecture tests are the rules about the documents");
         docs.Should().Contain("npm run test:coverage",
             "the client unit specs read the documents too");
@@ -239,7 +239,7 @@ public partial class AgentToolingShould
         "node_modules/.bin/eslint",
         "dotnet format",
         "dotnet build",
-        "dotnet test test/DM.Architecture.Tests",
+        "dotnet test --project test/DM.Architecture.Tests",
     ];
 
     /// <summary>
