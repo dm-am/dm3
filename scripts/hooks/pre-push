@@ -177,7 +177,7 @@ fi
 # and build runs the same tests in its own block below.
 if wants docs; then
   say "Документы: архитектурные тесты Release"
-  dotnet test "$ROOT/test/DM.Architecture.Tests" -c Release --nologo
+  dotnet test --project "$ROOT/test/DM.Architecture.Tests" -c Release
 fi
 
 if wants build; then
@@ -190,7 +190,7 @@ if wants build; then
   # --no-build: the solution was built on the line above, and without it the test would check
   # a build the build gate never saw.
   say "Бэкенд: архитектурные тесты Release"
-  dotnet test "$ROOT/test/DM.Architecture.Tests" --no-build -c Release --nologo
+  dotnet test --project "$ROOT/test/DM.Architecture.Tests" --no-build -c Release
 fi
 
 # The full set follows, every gate behind full_requested. It runs the src/gates gates and the
@@ -265,7 +265,7 @@ if full_requested && wants build; then
   # describes none of them.
   say "Бэкенд: тесты Release"
   rm -rf "$ROOT/TestResults"
-  dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo --results-directory "$ROOT/TestResults" --collect:"XPlat Code Coverage"
+  dotnet test --solution "$ROOT/DM.sln" --no-build -c Release --results-directory "$ROOT/TestResults" --coverage --coverage-output-format cobertura
 
   say "Бэкенд: покрытие"
   bash "$ROOT/scripts/check-coverage.sh"

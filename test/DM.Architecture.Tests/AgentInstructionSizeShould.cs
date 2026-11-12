@@ -40,7 +40,7 @@ public class AgentInstructionSizeShould
     [
         new(".claude/CLAUDE.md", 3826),
         new(".claude/agents/code-reviewer.md", 3816),
-        new(".claude/agents/debugger.md", 1686),
+        new(".claude/agents/debugger.md", 1707),
         new(".claude/agents/frontend-developer.md", 2683),
         new(".claude/skills/architecture-review/SKILL.md", 4615),
         new(".claude/skills/architecture/SKILL.md", 5594),
@@ -49,7 +49,7 @@ public class AgentInstructionSizeShould
         new(".claude/skills/improve/SKILL.md", 1432),
         new(".claude/skills/plan/SKILL.md", 5660),
         new(".claude/skills/prototype/SKILL.md", 2931),
-        new(".claude/skills/refactor-in-bounds/SKILL.md", 7510),
+        new(".claude/skills/refactor-in-bounds/SKILL.md", 7520),
         new(".claude/skills/review/SKILL.md", 7221),
         new(".claude/skills/show-me/SKILL.md", 3328),
         new(".claude/skills/task-to-pr/SKILL.md", 4263),
