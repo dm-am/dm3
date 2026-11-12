@@ -142,43 +142,88 @@ describe("useRatedPostsStore", () => {
       expect(store.latestRated?.id).toBe("p-1");
     });
 
-    it("changes the block once on a refresh, whichever answer lands first", async () => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(new Date("2026-11-12T10:00:00Z"));
-      const pending = new Map<string, (ids: string[]) => void>();
-      mockGetRatedPosts.mockImplementation(
-        (params: { sortBy: string }) =>
-          new Promise((resolve) =>
-            pending.set(params.sortBy, (ids) =>
-              resolve({ data: { resources: ids.map(post) }, error: null }),
-            ),
-          ),
-      );
+    describe("on a refresh", () => {
+      // Each request waits until the test answers it: ids, or null for a refusal.
+      let pending: Map<string, (ids: string[] | null) => void>;
       const settle = () => new Promise((r) => setTimeout(r, 0));
-      const store = useRatedPostsStore();
 
-      store.fetchBestOfWeek();
-      store.fetchLatestRated();
-      pending.get("rating")!(["A"]);
-      pending.get("lastreview")!(["A", "B"]);
-      await settle();
-      const seen = [store.latestRated?.id];
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(new Date("2026-11-12T10:00:00Z"));
+        pending = new Map();
+        mockGetRatedPosts.mockImplementation(
+          (params: { sortBy: string }) =>
+            new Promise((resolve) =>
+              pending.set(params.sortBy, (ids) =>
+                resolve(
+                  ids
+                    ? { data: { resources: ids.map(post) }, error: null }
+                    : { data: null, error: { status: 500 } },
+                ),
+              ),
+            ),
+        );
+      });
+
+      async function load(best: string[] | null, latest: string[] | null) {
+        const store = useRatedPostsStore();
+        store.fetchBestOfWeek();
+        store.fetchLatestRated();
+        pending.get("rating")!(best);
+        pending.get("lastreview")!(latest);
+        await settle();
+        return store;
+      }
 
       // Back on the home page after both entries aged out.
-      vi.setSystemTime(new Date("2026-11-12T10:05:01Z"));
-      store.fetchBestOfWeek();
-      store.fetchLatestRated();
-      await settle();
-      seen.push(store.latestRated?.id);
-      pending.get("lastreview")!(["C", "A"]);
-      await settle();
-      // Picked now against the stale best it would be "C", then "A".
-      seen.push(store.latestRated?.id);
-      pending.get("rating")!(["C"]);
-      await settle();
-      seen.push(store.latestRated?.id);
+      function refresh(store: ReturnType<typeof useRatedPostsStore>) {
+        vi.setSystemTime(new Date("2026-11-12T10:05:01Z"));
+        store.fetchBestOfWeek();
+        store.fetchLatestRated();
+      }
 
-      expect(seen).toEqual(["B", "B", "B", "A"]);
+      it.each([
+        // Picked against the new best and the old candidates it would be "A".
+        ["best first", "rating", ["C"], "lastreview", ["C", "D"]],
+        // Picked against the old best and the new candidates it would be "C".
+        ["latest first", "lastreview", ["C", "D"], "rating", ["C"]],
+      ])(
+        "changes the block once, %s",
+        async (_order, firstSort, firstIds, secondSort, secondIds) => {
+          const store = await load(["A"], ["A", "B"]);
+          const seen = [store.latestRated?.id];
+
+          refresh(store);
+          await settle();
+          seen.push(store.latestRated?.id);
+          pending.get(firstSort)!(firstIds);
+          await settle();
+          seen.push(store.latestRated?.id);
+          pending.get(secondSort)!(secondIds);
+          await settle();
+          seen.push(store.latestRated?.id);
+
+          expect(seen).toEqual(["B", "B", "B", "D"]);
+        },
+      );
+
+      it("picks nothing while a request is out, with no post on screen", async () => {
+        const store = await load(["A"], null);
+        const seen = [store.latestRated?.id ?? null];
+
+        refresh(store);
+        await settle();
+        seen.push(store.latestRated?.id ?? null);
+        pending.get("lastreview")!(["C", "A"]);
+        await settle();
+        // Picked now against the stale best it would be "C", then "A".
+        seen.push(store.latestRated?.id ?? null);
+        pending.get("rating")!(["C"]);
+        await settle();
+        seen.push(store.latestRated?.id ?? null);
+
+        expect(seen).toEqual([null, null, null, "A"]);
+      });
     });
   });
 

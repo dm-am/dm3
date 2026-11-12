@@ -118,11 +118,12 @@ function createLatestRated(
     () => candidatesLoaded.value && bestLoaded.value,
   );
 
-  // Picked once per pair of answers: while either request is out the post on
-  // screen stays, or a refresh picks against the stale best and then again.
+  // Picked once per pair of answers: while either request is out the block
+  // keeps what it shows, a post or nothing, or a refresh picks against the
+  // stale best and then again.
   const latestRated = computed<Post | null>((previous) => {
     if (!latestLoaded.value) return null;
-    if (previous && (loadingLatest.value || loadingBest.value)) return previous;
+    if (loadingLatest.value || loadingBest.value) return previous ?? null;
     const bestId = bestOfWeek.value?.id;
     return (
       candidates.value.find((p) => p.id !== bestId) ??

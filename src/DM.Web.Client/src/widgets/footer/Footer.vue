@@ -30,7 +30,7 @@
       <div>
         Дизайн логотипа —
         <router-link
-          v-slot="{ href, navigate, isActive, isExactActive }"
+          v-slot="{ href, isActive, isExactActive }"
           :to="{ name: 'profile', params: { username: 'Azur' } }"
           custom
         >
@@ -41,7 +41,7 @@
               'router-link-exact-active': isExactActive,
             }"
             :aria-current="isExactActive ? 'page' : undefined"
-            @click="rickroll($event, navigate)"
+            @click="rickroll"
             >Azur</a
           >
         </router-link>
@@ -69,14 +69,13 @@ import { siteTime } from "@/shared/lib/utils/datetime";
 
 const currentYear = siteTime().year();
 
-// A ctrl, shift or meta click, or a button other than the left one, is handed
-// to the router link and opens the real profile; any other click, Alt among
-// them, goes to the video. One handler
-// decides, so a plain click never starts the router's navigation to the profile
-// (its route chunk and requests) on the way out to the video.
-function rickroll(event: MouseEvent, navigate: (event: MouseEvent) => unknown) {
+// The custom slot keeps RouterLink's own click handler off the anchor, so a
+// plain click never starts the router's navigation to the profile (its route
+// chunk and requests) on the way out to the video. A ctrl, shift or meta click,
+// or a button other than the left one, is left to the browser, which opens the
+// href; any other click, Alt among them, goes to the video.
+function rickroll(event: MouseEvent) {
   if (event.ctrlKey || event.shiftKey || event.metaKey || event.button !== 0) {
-    navigate(event);
     return;
   }
   event.preventDefault();
