@@ -83,8 +83,6 @@ export async function expectWaitDropsOnClose(
   wrapper: Pick<VueWrapper, "find" | "findComponent">,
   stripSelector: string,
 ) {
-  // A real frame of jsdom runs out before the close, the order a loaded runner met.
-  await new Promise((resolve) => setTimeout(resolve, 50));
   expect(vi.getTimerCount()).toBe(1);
 
   wrapper.findComponent({ name: "AuthDialog" }).vm.$emit("beforeClose");

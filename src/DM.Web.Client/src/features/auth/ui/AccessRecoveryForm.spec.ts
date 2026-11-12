@@ -190,6 +190,8 @@ describe("the recovery request", () => {
       it("drops the wait when the dialog closes", async () => {
         refused(429, "Слишком много запросов", 30);
         const wrapper = await submit(await mountOffDocument());
+        // A real frame of jsdom runs out before the close, the order a loaded runner met.
+        await new Promise((resolve) => setTimeout(resolve, 50));
         await expectWaitDropsOnClose(wrapper, ".auth-message");
       });
 

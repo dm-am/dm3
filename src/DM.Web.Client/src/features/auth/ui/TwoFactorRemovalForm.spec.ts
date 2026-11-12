@@ -229,6 +229,8 @@ describe("the mailed removal request", () => {
     it("drops the wait when the dialog closes", async () => {
       limited(30);
       const wrapper = await submit(undefined, mountOffDocument);
+      // A real frame of jsdom runs out before the close, the order a loaded runner met.
+      await new Promise((resolve) => setTimeout(resolve, 50));
       await expectWaitDropsOnClose(wrapper, ".auth-message");
     });
 
