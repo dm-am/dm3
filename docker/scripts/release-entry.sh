@@ -480,11 +480,24 @@ pull_images() {
 
 # The images outside the application, by the references the compose files of the release (current
 # by default) give, only when absent: that is today's trust, taken at the moment the operator chose.
+# An image built from a Dockerfile of the release under a bare name, which no registry answers to
+# (Grafana with its log plugin), is built from that release's own docker/ instead: the project
+# directory is current, which before a maintain moves it is still the live release. The application
+# images carry a registry, so they are never built here.
 pull_missing_images() {
-    local dir=${1:-$REL/current} image
+    local dir=${1:-$REL/current} image built dockerfile
+    built="$(compose_cmd "$dir" config --format json | jq -r '.services[]
+        | select(.build and (.image | contains("/") | not)) | "\(.image)\t\(.build.dockerfile)"')" ||
+        { refuse "the configuration of the release could not be resolved"; return; }
     while IFS= read -r image; do
         [ -n "$image" ] || continue
         docker image inspect "$image" > /dev/null 2>&1 && continue
+        dockerfile="$(awk -F '\t' -v image="$image" '$1 == image { print $2; exit }' <<< "$built")"
+        if [ -n "$dockerfile" ]; then
+            timeout "$PULL_TIMEOUT" docker build -q -t "$image" -f "$dir/docker/$(basename "$dockerfile")" "$dir/docker" > /dev/null ||
+                { refuse "$image could not be built"; return; }
+            continue
+        fi
         timeout "$PULL_TIMEOUT" docker pull -q "$image" > /dev/null || { refuse "$image could not be pulled"; return; }
     done < <(compose_cmd "$dir" config --images | sort -u)
 }

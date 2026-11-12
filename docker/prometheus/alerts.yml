@@ -141,15 +141,16 @@ groups:
       # and retries for ten minutes before dropping them, and Grafana showing
       # nothing looks exactly like a site with nothing to say. The absent()
       # branch covers the other way this goes quiet: a job renamed out of
-      # prometheus.yml produces no `up` series for `== 0` to compare.
+      # prometheus.yml produces no `up` series for `== 0` to compare. The store
+      # has no container health check, so this rule is all that watches it.
       - alert: LogStorageDown
-        expr: up{job="loki"} == 0 or absent(up{job="loki"})
+        expr: up{job="victorialogs"} == 0 or absent(up{job="victorialogs"})
         for: 10m
         labels:
           severity: warning
         annotations:
           summary: "Хранилище логов недоступно"
-          description: "Loki не принимает записи, поэтому поиск логов в Grafana ничего не показывает. Приложения продолжают писать в консоль, и docker logs хранит все. Смотреть docker logs dm-loki."
+          description: "VictoriaLogs не принимает записи, поэтому поиск логов в Grafana ничего не показывает. Приложения продолжают писать в консоль, и docker logs хранит все. Смотреть docker logs dm-victorialogs."
 
       - alert: DiskSpaceLow
         expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.85
