@@ -1,12 +1,15 @@
 #!/bin/bash
-# Loads docker/.env for a script started by cron.
+# Loads the environment file for a script started by cron: docker/.env from a checkout,
+# shared/env from a release (_paths.sh).
 #
 # Cron starts a job with almost no environment, and every backup script needs credentials
 # (STORAGE_BACKUP_PASSWORD, the AWS variables of the offsite replication). Sourced rather
 # than written into the crontab line, so it holds however the script is started. Values
 # already in the environment win.
 
-_ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.env"
+# shellcheck source=docker/scripts/_paths.sh
+. "$(dirname "${BASH_SOURCE[0]}")/_paths.sh"
+_ENV_FILE="$DM_ENV_FILE"
 
 if [ -f "$_ENV_FILE" ]; then
     while IFS= read -r _line || [ -n "$_line" ]; do

@@ -12,9 +12,10 @@ set -euo pipefail
 # Usage: init-ssl.sh <domain> [<domain>...]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOCKER_DIR="$(dirname "$SCRIPT_DIR")"
-WEBROOT="$DOCKER_DIR/nginx/acme"
-TLS_DIR="$DOCKER_DIR/nginx/tls"
+# shellcheck source=docker/scripts/_paths.sh
+. "$SCRIPT_DIR/_paths.sh"
+WEBROOT="$DM_EDGE_DIR/acme"
+TLS_DIR="$DM_EDGE_DIR/tls"
 SSL_ROOT="${SSL_ROOT:-/etc/letsencrypt}"
 EDGE_CONTAINER="dm-nginx"
 

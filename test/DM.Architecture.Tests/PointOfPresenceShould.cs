@@ -115,6 +115,30 @@ public class PointOfPresenceShould
         }
     }
 
+    /// <summary>
+    /// The door's edge starts on its own template and waits for the frontend beside it alone.
+    /// </summary>
+    /// <remarks>
+    /// The main edge's command links upstreams the door does not have. No release reaches the door:
+    /// its frontend follows IMAGE_TAG by hand and may lag one release (POINT_OF_PRESENCE.md).
+    /// </remarks>
+    [Fact]
+    public void StartTheDoorsEdgeOnItsOwnTemplate()
+    {
+        var edge = ServiceBlock(Read(PopCompose), "nginx");
+        var api = Regex.Match(Read(BaseCompose), @"^  dmapi:.*\n(?:.*\n)*?\s*container_name:\s*'([\w-]+)'",
+            RegexOptions.Multiline);
+        api.Success.Should().BeTrue("the base stack names the API container");
+
+        edge.Should().Contain("command: !reset null",
+            "the main edge's command links the upstream files of the primaries, which the door does not mount");
+        edge.Should().Contain("depends_on: !override")
+            .And.Contain("dmfront:")
+            .And.NotContain("dmapi",
+                "the API does not run at the door, and compose would start it as a dependency")
+            .And.NotContain(api.Groups[1].Value);
+    }
+
     // On the door the compose service names resolve to nothing, so the upstream arrives as
     // configuration.
     [Fact]

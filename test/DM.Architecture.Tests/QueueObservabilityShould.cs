@@ -24,6 +24,10 @@ public class QueueObservabilityShould
             "a running worker that claims nothing looks identical to an idle one from every " +
             "metric the worker publishes about itself, and only the age of the oldest ready " +
             "row tells them apart");
+        alerts.Should().ContainAll(
+            ["max by (queue) (dm_messaging_outbox_dead)", "max by (queue) (dm_messaging_outbox_lag_seconds)"],
+            "every API instance reads the same table, so a rule on the raw gauge raises one alert " +
+            "per instance and resolves when the instance it was keyed to restarts");
     }
 
     [Fact]

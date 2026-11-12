@@ -10,40 +10,55 @@ networks:
 
 volumes:
   geodata:
+  # The hashed bundle both frontends of a rollout publish into and serve from, so a document
+  # of either one finds its chunks (publish-assets.sh in the frontend image).
+  frontassets:
 
 services:
   nginx:
     container_name: 'dm-nginx'
-    image: 'nginx:1.30-alpine'
-    # The edge resolves the name of every container behind it once, at parse time, so a
-    # replaced container returns on a new address and every request is a 502 until the edge
-    # is recreated. The first label makes the updater see the container at all
-    # (WATCHTOWER_LABEL_ENABLE); the second names container_name values, which the updater
-    # sorts and restarts by and skips in silence when it does not know them. The edge
-    # follows the nginx:1.30-alpine tag: a pinned digest would never receive a patch, and a
-    # few seconds of downtime per deployment beat a permanent 502. Anything the updater does
-    # not watch is recreated by hand (DEPLOYMENT.md).
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
-      - "com.centurylinklabs.watchtower.depends-on=dm-api,dm-front"
+    # Tag and digest: the edge changes only by maintenance, and a rewritten tag would change
+    # it under a release. Dependabot's docker-compose entry moves the pin.
+    image: 'nginx:1.30.6-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311'
+    # The edge resolves the name of every container behind it at parse time, so a container
+    # replaced outside a rollout returns on a new address and every request is a 502 until
+    # the edge is reloaded or recreated (DEPLOYMENT.md, "Край держит адреса с момента старта").
     ports:
       - '80:80'
       - '443:443'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/edge-locations.conf:/etc/nginx/edge-locations.conf:ro
-      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      # One file per instance behind the edge; the command below links the live pair.
+      - ./nginx/upstreams:/etc/nginx/upstreams:ro
+      # The machine files: docker/nginx from a checkout, shared/edge beside the releases on a
+      # server, where the release's compose command line exports DM_EDGE_DIR after sourcing
+      # docker/scripts/_paths.sh. A release directory is read-only and replaced by the next
+      # one, and shared/env stays without it, since the path follows from the layout.
+      - ${DM_EDGE_DIR:-./nginx}/.htpasswd:/etc/nginx/.htpasswd:ro
       # Empty until the first certificate, which is a working state: the edge serves http
       # until it has https to serve. docker/scripts/init-ssl.sh puts the TLS server and the
       # redirect here.
-      - ./nginx/tls:/etc/nginx/tls:ro
-      - ./nginx/acme:/var/www/certbot:ro
+      - ${DM_EDGE_DIR:-./nginx}/tls:/etc/nginx/tls:ro
+      - ${DM_EDGE_DIR:-./nginx}/acme:/var/www/certbot:ro
       - ${SSL_ROOT:-/etc/letsencrypt}:/etc/nginx/ssl:ro
     depends_on:
       dmapi:
         condition: service_healthy
       dmfront:
         condition: service_started
+    # Links the primaries, then hands over to the image's own start. Written here rather than
+    # in a hook file, so there is no file mode to lose on a Windows checkout. It runs again on
+    # every restart, so an edge that restarts in the middle of a rollout serves the primaries.
+    # A switch sets both links in the container, runs nginx -t and reloads.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /etc/nginx/upstreams-live
+        ln -sfn /etc/nginx/upstreams/api-primary.conf /etc/nginx/upstreams-live/api.conf
+        ln -sfn /etc/nginx/upstreams/front-primary.conf /etc/nginx/upstreams-live/frontend.conf
+        exec /docker-entrypoint.sh nginx -g 'daemon off;'
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:80/nginx-health || exit 1"]
       interval: 10s
@@ -56,7 +71,8 @@ services:
           memory: 128M
           cpus: '0.25'
 
-  dmapi:
+  # The twin of a rollout stands behind the same edge, so it takes the same keys.
+  dmapi: &edge-api
     environment:
       DM_CdnConfiguration__PublicUrl: ""
 
@@ -76,12 +92,13 @@ services:
     volumes:
       - geodata:/data/geo
 
-  dmfront:
+  dmapi-next: *edge-api
+
+  dmfront: &front-service
     container_name: 'dm-front'
-    # Same shape as dmapi: the image CI published, under the tag IMAGE_TAG names.
-    image: ghcr.io/dm-am/dm-front:${IMAGE_TAG:-latest}
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+    # Same shape as dmapi: the image CI published, under the tag IMAGE_TAG names, or the
+    # digest a release names.
+    image: ${DM_IMAGE_FRONT:-ghcr.io/dm-am/dm-front:${IMAGE_TAG:-latest}}
     build:
       context: ../src/DM.Web.Client
       dockerfile: Dockerfile
@@ -89,6 +106,25 @@ services:
         # Empty on purpose: the SPA calls relative URLs and nginx routes them. Must match
         # the ARG the Dockerfile declares.
         VITE_API_HOST: ""
+        SOURCE_REVISION: ${SOURCE_REVISION:-}
+    volumes:
+      - frontassets:/var/lib/dm-front/assets
     depends_on:
       dmapi:
         condition: service_healthy
+    # The document, which the image always carries: the gates of a rollout wait for it.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # The frontend's twin, the same as dmfront but for its name and a profile, so no plain
+  # "up" starts it.
+  dmfront-next:
+    <<: *front-service
+    container_name: 'dm-front-next'
+    profiles:
+      - rollout

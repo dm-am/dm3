@@ -2,6 +2,7 @@ import {
   createRouter,
   createWebHistory,
   RouterView,
+  START_LOCATION,
   type RouteLocationNormalized,
   type RouteLocationRaw,
 } from "vue-router";
@@ -15,6 +16,7 @@ import { formatDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { scrollContentToTop } from "@/shared/lib/scroll";
 import { loginLocation } from "@/shared/lib/auth";
 import { useAuthStore } from "@/shared/stores";
+import { clearReloadFlag, isStaleBundleError, reloadOnce } from "./staleBundle";
 import { accountRoutes } from "./routes/account";
 import { blogRoutes } from "./routes/blog";
 import { forumRoutes } from "./routes/forum";
@@ -271,10 +273,6 @@ export async function guardAuthenticated(
 
 router.beforeEach(guardAuthenticated);
 
-// A new deploy renames the chunks, so an open tab reloads once; the flag stops
-// a reload loop and is cleared by any navigation that succeeds.
-const CHUNK_RELOAD_FLAG = "dm_chunk_reload";
-
 router.afterEach((to, from) => {
   // Query-only changes keep the components mounted, and their handles valid.
   if (to.name !== from.name) {
@@ -300,25 +298,19 @@ router.afterEach((to, from) => {
   if (to.name !== from.name) {
     document.title = formatDocumentTitle(to.meta.title);
   }
-  sessionStorage.removeItem(CHUNK_RELOAD_FLAG);
+  // The navigation the reloaded page opens with proves nothing: a chunk it loads
+  // as it mounts can still be missing, and clearing here would reload in a loop.
+  if (from !== START_LOCATION) clearReloadFlag();
 });
 
-router.onError((error) => {
-  const message = error?.message ?? "";
-  const isChunkLoadError =
-    /loading (chunk|css chunk|dynamically imported module)/i.test(message) ||
-    /import\(\)/i.test(message) ||
-    error?.name === "ChunkLoadError";
-
-  if (!isChunkLoadError) {
+router.onError((error, to) => {
+  if (!isStaleBundleError(error)) {
     // vue-router stops logging errors itself once a listener is registered.
     console.error("Navigation error:", error);
     return;
   }
-  if (sessionStorage.getItem(CHUNK_RELOAD_FLAG)) return;
-
-  sessionStorage.setItem(CHUNK_RELOAD_FLAG, "1");
-  window.location.reload();
+  // The navigation never happened, so the reload opens its target.
+  reloadOnce(router.resolve(to).href);
 });
 
 export default router;

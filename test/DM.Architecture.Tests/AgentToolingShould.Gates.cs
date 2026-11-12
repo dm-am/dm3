@@ -25,7 +25,7 @@ public partial class AgentToolingShould
     /// and eslint, called by path, check the frame stand in scripts/visual, out of reach of the npm scripts.
     /// </remarks>
     private static readonly Regex GateSyntax = new(
-        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-monitoring\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js|block-in-subagents\.test\.js|lint-agent-files\.test\.js|lint-size-hint\.test\.js|compare-code\.test\.mjs|ci-paths\.mjs|node_modules/\.bin/(?:vue-tsc|eslint) [^\r\n)]+)",
+        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-release-entry\.sh|check-rollout\.sh|check-monitoring\.sh|check-release\.sh|check-attestation\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js|block-in-subagents\.test\.js|lint-agent-files\.test\.js|lint-size-hint\.test\.js|compare-code\.test\.mjs|ci-paths\.mjs|node_modules/\.bin/(?:vue-tsc|eslint) [^\r\n)]+)",
         RegexOptions.Compiled);
 
     /// <summary>The gate commands of a shell script, in the order it runs them.</summary>
@@ -102,6 +102,10 @@ public partial class AgentToolingShould
             ["actions/upload-artifact"] =
                 "carries a file onto the run page because the machine that wrote it is about " +
                 "to be destroyed; here the file stays on disk",
+            ["actions/download-artifact"] =
+                "fetches what another job of the same run uploaded; a run exists only in CI",
+            ["actions/attest-build-provenance"] =
+                "signs with the identity of a workflow run, which this machine does not have",
             ["docker/setup-buildx-action"] =
                 "prepares the builder the publishing jobs push from",
             ["docker/login-action"] =
@@ -163,8 +167,12 @@ public partial class AgentToolingShould
             ["Verify project exists"] =
                 "guards a typo in the matrix; the local build compiles the solution, which a " +
                 "missing project makes impossible",
-            ["Point the moving names at this commit"] =
-                "moves tags inside the registry",
+            ["Record the digest"] =
+                "writes down the digest the build step just pushed",
+            ["Check the attestations both ways and move the names by digest"] =
+                "asks GitHub about the attestations of this run and moves tags inside the " +
+                "registry; what the script refuses is checked against stubs in " +
+                "scripts/deployment/check-attestation.sh",
 
             // deployment-smoke
             ["Generate the stand credentials"] =
@@ -177,8 +185,17 @@ public partial class AgentToolingShould
                 "reads the privileges of the database that pair started",
             ["The nightly dump holds no outbox rows and restores with an empty outbox table"] =
                 "dumps and restores the database that pair started",
+            ["Remove the pair and its volumes before the server layout"] =
+                "tears that pair down for the layout; nothing here starts one",
+            ["The server layout installs a signed release and boots back to it"] =
+                "installs the server layout as root with systemd and docker on a throwaway " +
+                "machine; the local gates run the same script without --layout, which needs none of them",
+            ["Releases roll out under the probe without a failed request"] =
+                "rolls releases out as root with systemd and docker on the layout the step before " +
+                "installed; the local gates run the same script without --layout, which checks the " +
+                "probe's verdict on made-up logs",
             ["Logs on failure"] =
-                "prints container logs of that pair",
+                "prints container logs of that pair and the journal of the layout's units",
 
             // codeql and zap-scan
             ["Build for analysis"] =

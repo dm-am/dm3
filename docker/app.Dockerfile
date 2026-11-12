@@ -76,6 +76,11 @@ RUN mkdir -p /data/geo && chown dmuser /data/geo
 COPY --from=build /app/out ./
 USER dmuser
 
+# A stage sees only the arguments it declares, so the one of the build stage does not reach
+# here. The release reads the image's revision from this label. Unset it is empty.
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+
 ENV RUNTIME_PROJECT=${PROJECT_NAME}.dll
 
 # exec, so dotnet becomes PID 1 and hears SIGTERM; with the shell as PID 1 every stop ended

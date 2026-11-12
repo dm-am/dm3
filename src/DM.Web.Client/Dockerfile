@@ -41,6 +41,19 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Where nginx serves /assets/ from. Compose mounts the shared volume here; without one the
+# directory is the container's own and the hook fills it at start, so the site works alike.
+RUN mkdir -p /var/lib/dm-front/assets
+
+# The stock entrypoint runs it before nginx and stops the start when it fails. --chmod
+# because a Windows checkout carries no exec bit, and the entrypoint skips a script without one.
+COPY --chmod=0755 publish-assets.sh /docker-entrypoint.d/40-publish-assets.sh
+
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
+
+# Last, because it changes every commit and would invalidate every layer below it. Unset it
+# is empty.
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"

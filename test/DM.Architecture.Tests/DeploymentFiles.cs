@@ -16,6 +16,8 @@ internal static class DeploymentFiles
     internal const string PopCompose = "docker-compose.pop.yml";
     internal const string NginxConfiguration = "nginx/nginx.conf";
     private const string EdgeLocations = "nginx/edge-locations.conf";
+    internal const string Upstreams = "nginx/upstreams";
+    internal const string LiveUpstreamsInclude = "include /etc/nginx/upstreams-live/*.conf;";
 
     internal static string DockerDirectory => Path.Combine(RepositoryLayout.Root, "docker");
 
@@ -26,9 +28,13 @@ internal static class DeploymentFiles
         return File.ReadAllText(path);
     }
 
-    // Both servers of the edge include the same locations, so nginx.conf alone has no routes.
+    // Both servers of the edge include the same locations, and the upstreams are the files the
+    // edge's command links at start, so nginx.conf alone has neither routes nor upstreams.
     internal static string EdgeAsAssembled() => Read(NginxConfiguration)
-        .Replace("include /etc/nginx/edge-locations.conf;", Read(EdgeLocations), StringComparison.Ordinal);
+        .Replace("include /etc/nginx/edge-locations.conf;", Read(EdgeLocations), StringComparison.Ordinal)
+        .Replace(LiveUpstreamsInclude,
+            Read($"{Upstreams}/api-primary.conf") + "\n" + Read($"{Upstreams}/front-primary.conf"),
+            StringComparison.Ordinal);
 
     /// <summary>The text between two markers, or null when the opening one is absent.</summary>
     internal static string? Between(string text, string opening, string closing)
