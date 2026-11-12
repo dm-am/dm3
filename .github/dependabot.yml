@@ -25,6 +25,7 @@ updates:
           - "Testcontainers*"
           - "TngTech.ArchUnitNET*"
           - "Microsoft.NET.Test.Sdk"
+          - "Microsoft.Testing.*"
 
   - package-ecosystem: npm
     directory: /src/DM.Web.Client

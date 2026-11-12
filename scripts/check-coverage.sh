@@ -9,7 +9,7 @@
 #
 # The results directory has to hold one run: a report merged out of two describes neither,
 # and the span check below refuses it. CI checks out clean; by hand pass it in fresh:
-#   dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults
+#   dotnet test --results-directory TestResults --coverage --coverage-output-format cobertura
 set -euo pipefail
 
 # Ratchet, as the frontend thresholds in src/DM.Web.Client/vite.config.ts: raise after a
@@ -29,24 +29,24 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$REPO_ROOT/scripts/lib/common.sh"
 RESULTS="${1:-$REPO_ROOT/TestResults}"
 
-if [ -z "$(find "$RESULTS" -name coverage.cobertura.xml -print -quit 2>/dev/null)" ]; then
+if [ -z "$(find "$RESULTS" -name '*.cobertura.xml' -print -quit 2>/dev/null)" ]; then
   echo "ERROR: no coverage report under $RESULTS." >&2
-  echo 'Collect it first: dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults' >&2
+  echo 'Collect it first: dotnet test --results-directory TestResults --coverage --coverage-output-format cobertura' >&2
   exit 1
 fi
 
-# One run, all of it. A GUID directory is a test PROJECT, not a run: one `dotnet test` of
-# the solution drops one per project, and keeping only the newest measures one project and
+# One run, all of it. A GUID-named report is a test PROJECT, not a run: one `dotnet test` of
+# the solution writes one per project, and keeping only the newest measures one project and
 # reports it as the solution. What must not be merged is two runs, told apart by span: the
 # reports of one run land within its duration (a build job may not exceed forty minutes),
 # so a spread of an hour means older reports lie here and the answer would be about neither.
-TIMES="$(find "$RESULTS" -name coverage.cobertura.xml -exec stat -c %Y {} + 2>/dev/null | sort -n)"
+TIMES="$(find "$RESULTS" -name '*.cobertura.xml' -exec stat -c %Y {} + 2>/dev/null | sort -n)"
 OLDEST="$(printf '%s\n' "$TIMES" | head -1)"
 LATEST="$(printf '%s\n' "$TIMES" | tail -1)"
 if [ -n "$OLDEST" ] && [ -n "$LATEST" ] && [ "$((LATEST - OLDEST))" -gt 3600 ]; then
   echo "ERROR: the reports under $RESULTS span more than an hour, so they come from more than one run." >&2
   echo 'Merging them measures no version in particular. Collect once into an empty directory:' >&2
-  echo '  rm -rf TestResults && dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults' >&2
+  echo '  rm -rf TestResults && dotnet test --results-directory TestResults --coverage --coverage-output-format cobertura' >&2
   exit 1
 fi
 
@@ -65,7 +65,7 @@ trap 'rm -rf "$MERGED"' EXIT
 # nobody typed proves the generator works. The file filter also silences the fifty lines of
 # "does not exist (any more)" that cleaning obj/ left in the report.
 "$TOOLS/reportgenerator" \
-  "-reports:$(host "$RESULTS")/**/coverage.cobertura.xml" \
+  "-reports:$(host "$RESULTS")/**/*.cobertura.xml" \
   "-targetdir:$(host "$MERGED")" \
   "-reporttypes:Cobertura;TextSummary" \
   "-assemblyfilters:-*.Tests;-DM.Testing" \

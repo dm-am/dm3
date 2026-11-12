@@ -155,7 +155,10 @@ public class MailQueueShould(MailDatabaseFixture fixture) : IAsyncLifetime
         var spans = new List<Activity>();
         using var listener = new ActivityListener
         {
-            ShouldListenTo = source => source.Name == DmActivitySource.Source.Name,
+            // The constant, not Source.Name: when this test runs first, the callback runs inside
+            // the initializer of DmActivitySource, where Source is still null, and the failed
+            // initializer breaks the source for every test after it.
+            ShouldListenTo = source => source.Name == DmActivitySource.Name,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = spans.Add,
         };

@@ -50,9 +50,10 @@ scrape_configs:
   # The log store is the one dependency whose failure erases its own evidence: a
   # sink cannot log that it failed to log. Applications write to the console as
   # well, so nothing is lost, but Grafana goes quiet and reads as a quiet site.
-  - job_name: 'loki'
+  # It has no health check either, so this target is the one place its health is read.
+  - job_name: 'victorialogs'
     static_configs:
-      - targets: ['dm-loki:3100']
+      - targets: ['dm-victorialogs:9428']
 
   # The contour watches itself, because nothing else is here to. Every rule in
   # this stack is posted to the receiver below, and a receiver that stopped

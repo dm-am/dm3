@@ -44,7 +44,7 @@ Unit по умолчанию: он дешевый, быстрый и указы�
 
 ```bash
 dotnet test
-dotnet test test/DM.Domain.Forum.Tests
+dotnet test --project test/DM.Domain.Forum.Tests
 dotnet test --filter "TopicService"
 ```
 
@@ -156,20 +156,20 @@ Spec лежит рядом с исходником ([PATTERNS.md](../conventions
 
 ```bash
 cd src/DM.Web.Client
-DM_MARKUP_SEED=-155307970 DM_MARKUP_PATH="0:0:3" npx vitest run --root src/ shared/lib/bbcode/bbcodeProperties.spec.ts
+DM_MARKUP_SEED=-155307970 DM_MARKUP_PATH="0:0:3" npx vitest run shared/lib/bbcode/bbcodeProperties.spec.ts
 ```
 
 По умолчанию сид у каждой проверки постоянный, и прогон пробует одни и те же тексты. Чтобы поискать дальше, `DM_MARKUP_RUNS` задает число текстов, `DM_MARKUP_SALT` на сервере и `DM_MARKUP_SEED` на клиенте сдвигают набор. Корпус для такого поиска пишется в отдельный файл, и клиент читает его оттуда же:
 
 ```bash
-DM_MARKUP_CORPUS=/tmp/corpus.json DM_MARKUP_RUNS=4000 DM_MARKUP_SALT=a dotnet test test/DM.Infrastructure.Core.Tests --filter BbMarkupCorpusShould
-cd src/DM.Web.Client && DM_MARKUP_CORPUS=/tmp/corpus.json npx vitest run --root src/ shared/lib/bbcode/bbcodeProperties.spec.ts -t corpus
+DM_MARKUP_CORPUS=/tmp/corpus.json DM_MARKUP_RUNS=4000 DM_MARKUP_SALT=a dotnet test --project test/DM.Infrastructure.Core.Tests --filter BbMarkupCorpusShould
+cd src/DM.Web.Client && DM_MARKUP_CORPUS=/tmp/corpus.json npx vitest run shared/lib/bbcode/bbcodeProperties.spec.ts -t corpus
 ```
 
 После правки сервера, алфавита или генератора корпус пишется заново и коммитится вместе с правкой:
 
 ```bash
-DM_MARKUP_CORPUS=write dotnet test test/DM.Infrastructure.Core.Tests --filter BbMarkupCorpusShould
+DM_MARKUP_CORPUS=write dotnet test --project test/DM.Infrastructure.Core.Tests --filter BbMarkupCorpusShould
 ```
 
 ### Что делать с находкой

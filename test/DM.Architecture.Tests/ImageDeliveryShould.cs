@@ -12,6 +12,8 @@ namespace DM.Architecture.Tests;
 // An image reference lives in the compose files, the Dockerfiles and the shell scripts.
 public class ImageDeliveryShould
 {
+    private const string GrafanaDockerfile = "grafana.Dockerfile";
+
     // A local build takes the registry's name, so later pulls never happen.
     [Fact]
     public void PullThePublishedImagesInsteadOfBuildingOnTheServer()
@@ -85,6 +87,7 @@ public class ImageDeliveryShould
         var dockerfileImages = new[]
             {
                 Path.Combine(DockerDirectory, "app.Dockerfile"),
+                Path.Combine(DockerDirectory, GrafanaDockerfile),
                 Path.Combine(RepositoryLayout.Root, "src", "DM.Web.Client", "Dockerfile"),
             }
             .SelectMany(path => File.ReadAllLines(path))
@@ -190,6 +193,35 @@ public class ImageDeliveryShould
         var dependabot = File.ReadAllText(Path.Combine(RepositoryLayout.Root, ".github", "dependabot.yml"));
         dependabot.Should().MatchRegex(@"package-ecosystem: docker-compose\s*\n\s*directory: /docker\b",
             "the docker entry reads Dockerfiles, and a pin nobody moves never receives a patch");
+    }
+
+    /// <remarks>
+    /// The log datasource is a plugin the Grafana image lacks, and an install at start reaches the
+    /// internet on every start. The image built here carries it, checked against the sha256 the
+    /// plugin's release publishes. A server builds it under a name no registry answers to, and the
+    /// release compares names, not Dockerfiles, so the name carries both versions: a bump the name
+    /// missed would keep the old image on every server.
+    /// </remarks>
+    [Fact]
+    public void BakeTheLogPluginIntoGrafanaUnderANameThatCarriesItsVersions()
+    {
+        var dockerfile = Read(GrafanaDockerfile);
+
+        dockerfile.Should().MatchRegex(@"(?m)^ARG PLUGIN_SHA256=[0-9a-f]{64}\s*$",
+            "a download nobody checks is whatever the release page serves that day");
+        dockerfile.Should().Contain("sha256sum -c",
+            "a checksum written down and never compared protects nothing");
+
+        var grafana = Regex.Match(dockerfile, @"(?m)^FROM grafana/grafana:(?<tag>[\w.-]+)\s*$");
+        var plugin = Regex.Match(dockerfile, @"(?m)^ARG PLUGIN_VERSION=v(?<version>[\w.-]+)\s*$");
+        grafana.Success.Should().BeTrue("the image starts from a pinned Grafana");
+        plugin.Success.Should().BeTrue("the plugin is pinned by its release");
+
+        var service = ServiceBlock(Read(BaseCompose), "grafana");
+        service.Should().Contain($"dockerfile: {GrafanaDockerfile}", "the stand builds the image the server builds");
+        service.Should().Contain(
+            $"image: 'dm-grafana:{grafana.Groups["tag"].Value}-{plugin.Groups["version"].Value}'",
+            "the name is what the release compares and what it builds when absent");
     }
 
     /// <remarks>The release reads which commit an image was built from out of its revision label.</remarks>

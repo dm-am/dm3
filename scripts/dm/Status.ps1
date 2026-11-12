@@ -118,7 +118,7 @@ function Show-Status {
     # a container the start command waits on cannot go missing from the screen.
     $infra = @("pg", "seaweedfs", "storage")
     $apps = @("api", "mail-worker", "notification-worker", "migration")
-    $tools = @("mailpit", "grafana", "prometheus", "alertmanager", "jaeger", "loki")
+    $tools = @("mailpit", "grafana", "prometheus", "alertmanager", "jaeger", "victorialogs")
 
     $all = @{}
     foreach ($line in $containers) {

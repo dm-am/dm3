@@ -35,7 +35,7 @@
 
 | Секция или ключ | Что задает | Где правило |
 |-----------------|------------|-------------|
-| `ConnectionStrings` | `Rdb` PostgreSQL, `Logs` Loki, `TracingEndpoint` трассы | [MONITORING.md](../guides/MONITORING.md) |
+| `ConnectionStrings` | `Rdb` PostgreSQL, `Logs` VictoriaLogs, `TracingEndpoint` трассы | [MONITORING.md](../guides/MONITORING.md) |
 | `CryptoConfiguration` | Ключ шифрования, его версия и прежние ключи на время смены | [SECURITY.md](../conventions/SECURITY.md#требования-к-токенам) |
 | `AuthenticationConfiguration` | Сроки сессий, учет активности, задержка и блокировка входа | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md#сессии) |
 | `TwoFactorConfiguration` | Второй фактор: имя в приложении, окна, попытки, коды восстановления, отсрочка отключения | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md#двухфакторная-аутентификация) |

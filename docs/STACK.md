@@ -179,8 +179,12 @@
 
 ### Тесты
 
-- `xunit.v3` 3.2.2, `xunit.runner.visualstudio` 3.1.5, `Microsoft.NET.Test.Sdk`
-  17.14.2 и `coverlet.collector` 6.0.4, тесты .NET и покрытие.
+- `xunit.v3` 4.0.2, тесты .NET. Прогон dotnet test идет через Microsoft.Testing.Platform,
+  его выбирает global.json.
+- `Microsoft.Testing.Extensions.CodeCoverage` 18.12.0, покрытие .NET в отчете
+  Cobertura. Сборщик coverlet работает только в VSTest.
+- `xunit.runner.visualstudio` 4.0.1 и `Microsoft.NET.Test.Sdk` 17.14.2, запуск
+  через VSTest для среды разработки, которая не умеет Microsoft.Testing.Platform.
 - `NSubstitute` 6.2.0, подстановки зависимостей.
   Альтернативы: Moq. Почему не он: инцидент SponsorLink в 4.20.0.
 - `AwesomeAssertions` 9.6.0, проверки в тестах.
@@ -188,7 +192,7 @@
   PostgreSQL.
 - `Microsoft.AspNetCore.Mvc.Testing` 10.0.15, хост API в интеграционных тестах.
 - `TngTech.ArchUnitNET.*` 0.13.5, архитектурные правила тестами.
-- `vitest` 4.1.12 с `@vitest/coverage-v8` 4.1.12, `@vue/test-utils` 2.5.1 и
+- `vitest` 5.1.0 с `@vitest/coverage-v8` 5.1.0, `@vue/test-utils` 2.5.1 и
   `jsdom` 31.0.0, тесты клиента и компонентов.
 - `fast-check` 4.10.2, тесты свойств разбора разметки.
 - `@playwright/test` 1.65.0, сквозные тесты против поднятого стенда.
@@ -245,8 +249,17 @@
   v0.35.0, доставка алертов письмом.
 - `prometheuscommunity/postgres-exporter` v0.20.1 и `prom/node-exporter` v1.12.1,
   метрики базы и сервера.
-- `grafana/grafana` 13.3.1, просмотр метрик, логов и трасс. `grafana/loki` 3.5.12,
-  хранилище логов. `jaegertracing/jaeger` 2.20.0, трассировка по OTLP. Выше 2.20 не
+- `grafana/grafana` 13.3.1, просмотр метрик, логов и трасс. Наш образ `dm-grafana`
+  добавляет к нему плагин victoriametrics-logs-datasource при сборке, с проверкой
+  sha256: установка при старте контейнера ходила бы в интернет на каждом старте.
+- `victoriametrics/victoria-logs` v1.53.0, хранилище логов: один процесс, срок
+  хранения одним флагом, без файла настроек. Принимает API записи Loki, поэтому
+  синк приложения прежний. Пробы здоровья в образе нет, о его отказе говорит
+  цель Prometheus.
+  Альтернативы: Loki. Почему не он: на одном узле требует полсотни строк настроек
+  схемы, кольца и компактора, а с 3.6 образ без оболочки, и ради пробы здоровья
+  Loki держали на старой ветке 3.5.
+- `jaegertracing/jaeger` 2.20.0, трассировка по OTLP. Выше 2.20 не
   поднимаем: с 2.21 Jaeger снял поиск API v1, а источник данных Jaeger в Grafana 13 ищет
   трассы им, и поиск в Grafana отвечает 404. Свой интерфейс Jaeger и переход к трассе по
   номеру из лога работают и на 2.23.

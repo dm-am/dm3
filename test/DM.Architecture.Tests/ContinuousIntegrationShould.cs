@@ -100,7 +100,7 @@ public class ContinuousIntegrationShould
         File.Exists(Path.Combine(RepositoryLayout.Root, "scripts", "check-coverage.sh"))
             .Should().BeTrue("the threshold lives beside the reason for it, in the script");
 
-        var collection = workflow.IndexOf("--collect:", StringComparison.Ordinal);
+        var collection = workflow.IndexOf("--coverage", StringComparison.Ordinal);
         var check = workflow.IndexOf("check-coverage.sh", StringComparison.Ordinal);
 
         check.Should().BeGreaterThan(-1, "a number nobody reads is a report, not a gate");

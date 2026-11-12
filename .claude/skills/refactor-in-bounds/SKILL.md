@@ -19,7 +19,7 @@ From [PROCESS.md](../../../docs/conventions/PROCESS.md): [the verdict of a gate 
 4. Steps are small, one kind of edit per step. A move and a cleanup are separate steps: a move does not rewrite the code, so the comparison shows a clean move, and the cleanup in the next step shows its own diff.
 5. Every step is proven, from the cheap to the costly:
    1. Compiler and lint. Client, from `src/DM.Web.Client`: `npm run type-check` (four configs, specs and e2e among them) and `npx eslint --max-warnings 0 <files>`. Server, from the root: `dotnet build DM.sln`, where a warning is an error.
-   2. Tests of what was touched: from `src/DM.Web.Client` `npx vitest run <specs and gate registers>`, from the root `dotnet test <test project>` for the touched modules.
+   2. Tests of what was touched: from `src/DM.Web.Client` `npx vitest run <specs and gate registers>`, from the root `dotnet test --project <test project>` for the touched modules.
    3. Comparison of the code of the step, from the root:
       - A move on the client is compared by the build. Before the step `node scripts/visual/compare-code.mjs --build --base-dir src/DM.Web.Client --save-base <scratchpad>/<step>-build --base-only`, after it `node scripts/visual/compare-code.mjs --build --baseline <scratchpad>/<step>-build`.
       - An edit of styles alone the same way, through `node scripts/visual/compare-css.mjs` with `--base-dir`, `--save-base <file> --base-only` and `--baseline <file>`.

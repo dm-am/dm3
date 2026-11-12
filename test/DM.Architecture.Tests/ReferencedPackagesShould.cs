@@ -76,9 +76,9 @@ public class ReferencedPackagesShould
     [
         new("Microsoft.EntityFrameworkCore.Design",
             "Design-time tooling for dotnet ef, never named in code; it goes with the last design-time factory."),
-        new("Microsoft.NET.Test.Sdk", "The test host entry point every test project needs."),
-        new("xunit.runner.visualstudio", "The adapter dotnet test finds the tests through."),
-        new("coverlet.collector", "The data collector the CI test step gathers coverage with."),
+        new("Microsoft.NET.Test.Sdk", "The VSTest host, for an IDE that does not run Microsoft.Testing.Platform."),
+        new("xunit.runner.visualstudio", "The VSTest adapter, for an IDE that does not run Microsoft.Testing.Platform."),
+        new("Microsoft.Testing.Extensions.CodeCoverage", "The extension the CI test step gathers coverage with."),
         new("NSubstitute.Analyzers.CSharp", "An analyzer: it reports through the compiler and never ships."),
     ];
 
