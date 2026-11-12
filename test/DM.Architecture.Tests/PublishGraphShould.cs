@@ -128,7 +128,7 @@ public class PublishGraphShould
 
     /// <remarks>
     /// Compose pins all four images to one tag, so a publisher pushes one immutable tag and the promotion
-    /// job moves the names by digest.
+    /// job moves the names by digest the run built.
     /// </remarks>
     [Fact]
     public void GiveTheMovingNamesOnceAndAfterEveryPublisher()
@@ -158,6 +158,91 @@ public class PublishGraphShould
 
         workflow.Should().Contain("type=sha,prefix=",
             "the tag a publisher does push has to name the commit it was built from");
+    }
+
+    private static string[] Publishers() => Jobs().Keys
+        .Where(name => name.StartsWith("publish", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(name => name, StringComparer.Ordinal)
+        .ToArray();
+
+    /// <remarks>
+    /// A release tag is made on a commit dev already built and attested; a run on the tag would
+    /// build a second set of digests that nobody signed.
+    /// </remarks>
+    [Fact]
+    public void RunOnBranchesAndTheScheduleOnly()
+    {
+        var lines = File.ReadAllLines(Path.Combine(RepositoryLayout.Root, Workflow));
+
+        var push = Array.FindIndex(lines, line => line == "  push:");
+        push.Should().BeGreaterThan(-1, "the workflow publishes on a push");
+
+        var trigger = lines
+            .Skip(push + 1)
+            .TakeWhile(line => line.Trim().Length == 0 || IndentOf(line) > 2)
+            .Where(WorkflowJobs.IsCode);
+
+        trigger.Should().NotContain(line => line.TrimStart().StartsWith("tags:", StringComparison.Ordinal),
+            "a push of a tag would build the release's images again");
+
+        string.Join("\n", lines.Where(WorkflowJobs.IsCode)).Should().NotContain("refs/tags",
+            "with no tag trigger a condition on a tag ref is a branch nobody takes");
+    }
+
+    /// <remarks>
+    /// A writer's run on dev can write the cache, and the next clean commit would ship its layers
+    /// under a correct attestation.
+    /// </remarks>
+    [Fact]
+    public void BuildThePublishedImagesWithoutAnImportedCache()
+    {
+        foreach (var publisher in Publishers())
+        {
+            var body = string.Join("\n", JobLines(publisher));
+
+            body.Should().NotContain("cache-from", $"{publisher} builds what it attests from the commit alone");
+            body.Should().NotContain("cache-to", $"{publisher} would leave a cache the next build could be told to read");
+        }
+    }
+
+    [Fact]
+    public void AttestEveryImageItPublishes()
+    {
+        var publishers = Publishers();
+        publishers.Should().NotBeEmpty("the rule is about the jobs that push images");
+
+        foreach (var publisher in publishers)
+        {
+            // The dash of a list item off, so that a key reads the same first in a step or later.
+            var lines = JobLines(publisher).Select(line => line.Trim().TrimStart('-').TrimStart()).ToList();
+
+            lines.Should().Contain("id-token: write",
+                $"{publisher} signs the attestation with the identity of the run");
+            lines.Should().Contain("attestations: write",
+                $"{publisher} stores the attestation where gh attestation verify reads it");
+            lines.Should().Contain(line => line.StartsWith("uses: actions/attest-build-provenance@", StringComparison.Ordinal),
+                $"{publisher} has to attest what it pushed");
+            lines.Should().Contain("subject-digest: ${{ steps.build.outputs.digest }}",
+                $"{publisher} attests the digest its build step pushed, not a tag that can move");
+            lines.Should().Contain(line => line.StartsWith("uses: actions/upload-artifact@", StringComparison.Ordinal),
+                $"{publisher} hands its digest to the promotion and to the release command");
+            lines.Should().Contain(line => line.StartsWith("name: digest-", StringComparison.Ordinal),
+                $"the artifact of {publisher} is found by the name digest-<image>");
+        }
+    }
+
+    [Fact]
+    public void PromoteTheDigestsTheRunBuilt()
+    {
+        var body = string.Join("\n", JobLines(Promotion));
+
+        body.Should().Contain("pattern: digest-*",
+            "the promotion moves the digests this run's publishers recorded");
+        body.Should().MatchRegex(
+            @"bash scripts/deployment/promote-images\.sh ""[^""]+"" ""\$GITHUB_REF"" ""\$GITHUB_SHA""",
+            "the script checks every attestation against the ref and the commit of this run");
+        body.Should().NotContain("imagetools",
+            "a name moved outside the script is moved without the checks");
     }
 
     [Fact]

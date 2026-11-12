@@ -2,9 +2,9 @@ name: .NET
 
 on:
   push:
+    # No tags: a release tag names a commit dev already built and attested, and a run on the
+    # tag would build a second set of digests that nobody signed.
     branches: [ main, dev ]
-    # The installer pins a release by tag, and a tag names one tree.
-    tags: [ 'v*' ]
   pull_request:
     branches: [ main, dev ]
   # The full set once a week on dev, the one branch a schedule runs on: what changes without a
@@ -22,7 +22,7 @@ permissions:
 # run from leaving orphaned digests.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !(github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
+  cancel-in-progress: ${{ !(github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') }}
 
 env:
   REGISTRY: ghcr.io
@@ -39,7 +39,7 @@ jobs:
   # after a red push that would compare against the red commit and skip the jobs that were
   # red. A tree diff holds across a force push, and a commit the clone no longer has is a
   # diff git cannot build, which the script answers with the full set. A pull request is
-  # compared with the merge base of its target. Tags and the schedule run everything. Built
+  # compared with the merge base of its target. The schedule runs everything. Built
   # in rather than dorny/paths-filter, which compares with github.event.before and would be
   # a second reader of the map.
   changes:
@@ -431,10 +431,14 @@ jobs:
     # Every check succeeded or was skipped by the map, written out because the implicit
     # success() counts a skipped check as a reason to skip the publisher; failed and cancelled
     # are named, since failure() alone lets a check cancelled by concurrency through.
-    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') }}
+    # id-token signs the attestation with the identity of this run (repository, workflow, ref,
+    # commit), which is what promote-images and the release command check.
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         include:
@@ -470,7 +474,10 @@ jobs:
         # publisher has finished: set per leg, "latest" ended up a mixture of commits.
         tags: type=sha,prefix=
 
+    # No build cache: a writer's run on dev can write it, and the next clean commit would ship
+    # those layers under a correct attestation.
     - name: Build and push image
+      id: build
       uses: docker/build-push-action@v7
       with:
         context: .
@@ -481,9 +488,29 @@ jobs:
         build-args: |
           PROJECT_NAME=${{ matrix.project }}
           SOURCE_REVISION=${{ github.sha }}
-        # A scope per image: unnamed, the builds overwrite one another's cache index.
-        cache-from: type=gha,scope=${{ matrix.image_suffix }}
-        cache-to: type=gha,mode=max,scope=${{ matrix.image_suffix }}
+
+    # Not pushed to the registry: gh attestation verify reads GitHub's API.
+    - uses: actions/attest-build-provenance@v4
+      with:
+        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.image_suffix }}
+        subject-digest: ${{ steps.build.outputs.digest }}
+        push-to-registry: false
+
+    # The digest, not the tag: promote-images and the release command move and sign these bytes.
+    - name: Record the digest
+      env:
+        IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.image_suffix }}
+        DIGEST: ${{ steps.build.outputs.digest }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/digest"
+        printf '%s@%s\n' "$IMAGE" "$DIGEST" > "$RUNNER_TEMP/digest/reference"
+
+    # overwrite: a re-run of one leg uploads its new digest under the same name.
+    - uses: actions/upload-artifact@v7
+      with:
+        name: digest-${{ matrix.image_suffix }}
+        path: ${{ runner.temp }}/digest/reference
+        overwrite: true
 
   # The frontend has its own context and Dockerfile, so it cannot ride the publish matrix.
   publish-frontend:
@@ -491,10 +518,13 @@ jobs:
     needs: [changes, build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security, docs]
     runs-on: ubuntu-24.04
     # The condition of publish.
-    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev') }}
+    # The permissions of publish, for the same attestation.
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
     - uses: actions/checkout@v7
 
@@ -516,21 +546,45 @@ jobs:
         # One tag naming a commit, as in publish.
         tags: type=sha,prefix=
 
+    # No build cache, as in publish. The revision goes in as the build argument the Dockerfile
+    # declares, so the label the release command reads is the image's own and not only the
+    # metadata action's.
     - name: Build and push image
+      id: build
       uses: docker/build-push-action@v7
       with:
         context: ./src/DM.Web.Client
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha,scope=front
-        cache-to: type=gha,mode=max,scope=front
+        build-args: |
+          SOURCE_REVISION=${{ github.sha }}
+
+    - uses: actions/attest-build-provenance@v4
+      with:
+        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-front
+        subject-digest: ${{ steps.build.outputs.digest }}
+        push-to-registry: false
+
+    - name: Record the digest
+      env:
+        IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-front
+        DIGEST: ${{ steps.build.outputs.digest }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/digest"
+        printf '%s@%s\n' "$IMAGE" "$DIGEST" > "$RUNNER_TEMP/digest/reference"
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: digest-front
+        path: ${{ runner.temp }}/digest/reference
+        overwrite: true
 
 # The moving names of the images, set once and after everything that could still fail. Each
-# publisher pushes one tag naming a commit; "latest", the branch name and the release tag
-# are what a deployment pulls, and set per matrix leg they could end up carrying a mixture.
-# imagetools create copies a manifest by digest, so the bytes a moving name resolves to are
-# the bytes that were tested.
+# publisher pushes one tag naming a commit; "latest" and the branch name are what a deployment
+# pulls, and set per matrix leg they could end up carrying a mixture. The names are copied
+# from the digests the publishers recorded, not from the short-commit tag, which a run of
+# another branch can overwrite, and only once each digest carries this run's attestation.
   promote-images:
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -539,7 +593,15 @@ jobs:
     permissions:
       contents: read
       packages: write
+      attestations: read
     steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/download-artifact@v8
+      with:
+        pattern: digest-*
+        path: ${{ runner.temp }}/digests
+
     - name: Log in to the registry
       uses: docker/login-action@v4
       with:
@@ -547,26 +609,11 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Point the moving names at this commit
-      run: |
-        SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-
-        NAMES=""
-        case "${{ github.ref }}" in
-          refs/heads/main) NAMES="latest main" ;;
-          refs/heads/dev)  NAMES="dev" ;;
-          refs/tags/v*)    NAMES="${GITHUB_REF#refs/tags/}" ;;
-        esac
-
-        # Nothing to move on a ref that publishes no name of its own.
-        [ -n "$NAMES" ] || exit 0
-
-        for image in api worker-mail worker-notification front; do
-          REPO="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-$image"
-          for name in $NAMES; do
-            docker buildx imagetools create --tag "$REPO:$name" "$REPO:$SHA"
-          done
-        done
+    # What each check is and why the two wrong ones must fail is in the script.
+    - name: Check the attestations both ways and move the names by digest
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: bash scripts/deployment/promote-images.sh "$RUNNER_TEMP/digests" "$GITHUB_REF" "$GITHUB_SHA"
 
   # A build context that does not exist, an overlay that no longer parses or a service
   # renamed out from under the installer must fail here, not on the server.
@@ -590,8 +637,20 @@ jobs:
     - name: The server installer must hold what it is written around
       run: bash scripts/deployment/check-server-installer.sh
 
+    - name: The release script must refuse every tag but a signed release
+      run: bash scripts/deployment/check-release-entry.sh
+
+    - name: The rollout probe must turn red on every failure a visitor would see
+      run: bash scripts/deployment/check-rollout.sh
+
     - name: The monitoring must parse, fire and reach a receiver
       run: bash scripts/deployment/check-monitoring.sh
+
+    - name: The release command must refuse what it is written to refuse
+      run: bash scripts/release/check-release.sh
+
+    - name: The attestation check must refuse what it is written to refuse
+      run: bash scripts/deployment/check-attestation.sh
 
     - name: Every shell script must pass shellcheck
       run: bash scripts/check-shell-scripts.sh
@@ -602,10 +661,22 @@ jobs:
   deployment-smoke:
     needs: [changes]
     if: needs.changes.outputs.deployment-smoke == 'true'
-    timeout-minutes: 30
+    # The server layout at the end starts the whole stack a second time, monitoring included,
+    # and then rolls some twenty releases out under the probe, each with a start gate of up to
+    # 90 s and a switch check of 30 s. To be lowered to what the first runs take.
+    timeout-minutes: 150
     runs-on: ubuntu-24.04
     steps:
+    # The whole history: the server layout's origin is pushed from this clone, and a mirror
+    # refuses to fetch from a shallow one.
     - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+    # The rollout probe holds a hub connection through the global WebSocket, which the Node the
+    # runner ships lacks. The same Node as everywhere else.
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24.22.2'
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
@@ -626,15 +697,19 @@ jobs:
       env:
         COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
         ASPNETCORE_ENVIRONMENT: Production
-      # Object storage comes first and with --wait: the site starts without it, so this line is
-      # where an image the registry no longer serves, or a bucket the server did not create,
-      # stops the job.
+        # The revision label the release script compares with the signed commit.
+        SOURCE_REVISION: ${{ github.sha }}
+      # All four application images are built first, since the server layout below runs them
+      # all. Object storage comes first and with --wait: the site starts without it, so this
+      # line is where an image the registry no longer serves, or a bucket the server did not
+      # create, stops the job.
       run: |
+        docker compose build dmapi dmfront dm-mail-worker dm-notification-worker
         docker compose up -d --wait storage seaweedfs
         docker compose up -d postgres mailpit jaeger
-        docker compose up -d --build --wait migration
-        docker compose up -d --build --wait dmapi
-        docker compose up -d --build --wait nginx
+        docker compose up -d --wait migration
+        docker compose up -d --wait dmapi
+        docker compose up -d --wait nginx
 
     # The same script an operator runs against the public address after the containers have
     # been replaced. The storage check and the nightly backup ride along: an operator runs
@@ -657,9 +732,31 @@ jobs:
     - name: The nightly dump holds no outbox rows and restores with an empty outbox table
       run: bash docker/scripts/check-dump-excludes-outbox.sh
 
+    # The layout gets its own shared file with fresh passwords, which the volumes of the pair
+    # above were initialised with other values for. The images stay: the layout runs them.
+    - name: Remove the pair and its volumes before the server layout
+      working-directory: docker
+      env:
+        COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
+      run: docker compose down -v
+
+    # Runs 0 and 8 of the release design: the images through a local registry, a signed tag of
+    # this commit from a local origin, the layout installed by its installer, a boot after a
+    # rollout died half way. What it holds is in the script.
+    - name: The server layout installs a signed release and boots back to it
+      run: sudo bash scripts/deployment/check-release-entry.sh --layout
+
+    # Runs 1 to 7 and 9 to 12 of the release design, from the layout the step before left. sudo
+    # resets PATH, and the probe needs the Node set up above.
+    - name: Releases roll out under the probe without a failed request
+      run: sudo env "PATH=$PATH" bash scripts/deployment/check-rollout.sh --layout
+
     - name: Logs on failure
       if: failure()
       working-directory: docker
       env:
         COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
-      run: docker compose logs --tail=200 nginx dmapi dmfront storage seaweedfs
+      run: |
+        docker compose logs --tail=200 nginx dmapi dmfront dm-mail-worker dm-notification-worker storage seaweedfs
+        sudo journalctl --no-pager -u dm3 -u 'dm3-release*'
+        sudo cat /var/lib/dm3/tried || true

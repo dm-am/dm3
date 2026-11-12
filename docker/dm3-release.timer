@@ -1,0 +1,13 @@
+[Unit]
+Description=DM3 release poll, a few minutes after boot and after each tick
+
+[Timer]
+# The monotonic clock: no decision of a release reads the wall clock, so a skewed one changes
+# nothing. Counted from the end of the last tick, so a long rollout is never overlapped.
+OnBootSec=5min
+OnUnitInactiveSec=5min
+AccuracySec=30s
+Unit=dm3-release.service
+
+[Install]
+WantedBy=timers.target

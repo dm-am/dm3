@@ -16,16 +16,19 @@ public class ImageDeliveryShould
     [Fact]
     public void PullThePublishedImagesInsteadOfBuildingOnTheServer()
     {
-        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        // Every start on a server goes through the release script.
+        var entry = File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "release-entry.sh"));
         var compose = Read(BaseCompose) + Read(PreviewCompose);
 
-        var starts = installer.Split('\n')
-            .Where(line => line.Contains("docker compose", StringComparison.Ordinal)
+        var starts = entry.Split('\n')
+            .Where(line => !line.TrimStart().StartsWith('#')
                            && line.Contains("up -d", StringComparison.Ordinal)).ToList();
 
-        starts.Should().NotBeEmpty().And.NotContain(line => line.Contains("--build", StringComparison.Ordinal),
-            "the deployment pulls the published image, and building it here replaces it " +
-            "with a local one under the same tag");
+        starts.Should().NotBeEmpty().And.OnlyContain(
+            line => line.Contains("--no-build", StringComparison.Ordinal)
+                    && line.Contains("--pull never", StringComparison.Ordinal),
+            "the deployment runs the images the release pulled by digest, and a build or a pull " +
+            "here would replace them with others under the same name");
 
         var localTags = compose.Split('\n')
             .Select(line => line.Trim())
@@ -123,8 +126,82 @@ public class ImageDeliveryShould
                 $"{reference} resolves to whatever the registry holds on the day it is pulled");
             name[(separator + 1)..].Should().NotBeEquivalentTo("latest",
                 $"{reference} follows the registry rather than this repository, so the same " +
-                "commit gives a different runtime a month later - and watchtower, the one that " +
-                "would decide it, mounts /var/run/docker.sock");
+                "commit gives a different runtime a month later");
         }
+    }
+
+    /// <remarks>
+    /// A release names each application image by digest through one variable, and without it the
+    /// stand and the point of presence keep the IMAGE_TAG form. The name of the variable follows
+    /// the image, so a service sharing an image (the migration and the API) shares its variable.
+    /// </remarks>
+    [Fact]
+    public void NameTheApplicationImagesByAVariableTheReleaseSets()
+    {
+        var references = (Read(BaseCompose) + "\n" + Read(PreviewCompose))
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("image:", StringComparison.Ordinal)
+                           && line.Contains("ghcr.io/dm-am/", StringComparison.Ordinal))
+            .Select(line => line[6..].Trim().Trim('\'', '"'))
+            .ToList();
+
+        references.Should().HaveCountGreaterThanOrEqualTo(5,
+            "the migration, the API, both workers and the frontend run published images");
+
+        var images = references.Select(reference =>
+        {
+            var match = Regex.Match(reference,
+                @"^\$\{(?<variable>DM_IMAGE_\w+):-ghcr\.io/dm-am/dm-(?<image>[a-z-]+):\$\{IMAGE_TAG:-latest\}\}$");
+            match.Success.Should().BeTrue(
+                $"{reference} has to take the release's digest when it is set and IMAGE_TAG otherwise");
+            match.Groups["variable"].Value.Should().Be(
+                "DM_IMAGE_" + match.Groups["image"].Value.ToUpperInvariant().Replace('-', '_'),
+                $"{reference}: one image, one variable, or a release sets one service and not the other");
+            return match.Groups["image"].Value;
+        }).Distinct();
+
+        images.Should().BeEquivalentTo(new[] { "api", "front", "worker-mail", "worker-notification" },
+            "the release carries the four application images and nothing else");
+    }
+
+    /// <remarks>
+    /// A rewritten tag would change the edge under a release that did not ask for it, and the edge
+    /// changes only by maintenance. Dependabot moves the pin, and the parse check reads the
+    /// configuration with the very image that serves it.
+    /// </remarks>
+    [Fact]
+    public void PinTheEdgeByTagAndDigest()
+    {
+        var image = ServiceBlock(Read(PreviewCompose), "nginx")
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Single(line => line.StartsWith("image:", StringComparison.Ordinal))[6..]
+            .Trim().Trim('\'', '"');
+
+        image.Should().MatchRegex(@"^nginx:[\w.-]+@sha256:[0-9a-f]{64}$",
+            "a tag alone can be rewritten under the running edge");
+
+        var check = File.ReadAllText(Path.Combine(
+            RepositoryLayout.Root, "scripts", "deployment", "check-nginx-configuration.sh"));
+        Regex.Match(check, @"^IMAGE=""(?<image>[^""]+)""", RegexOptions.Multiline).Groups["image"].Value
+            .Should().Be(image, "a configuration parsed by another nginx proves nothing about the edge");
+
+        var dependabot = File.ReadAllText(Path.Combine(RepositoryLayout.Root, ".github", "dependabot.yml"));
+        dependabot.Should().MatchRegex(@"package-ecosystem: docker-compose\s*\n\s*directory: /docker\b",
+            "the docker entry reads Dockerfiles, and a pin nobody moves never receives a patch");
+    }
+
+    /// <remarks>The release reads which commit an image was built from out of its revision label.</remarks>
+    [Theory]
+    [InlineData(BaseCompose, "migration")]
+    [InlineData(BaseCompose, "dmapi")]
+    [InlineData(BaseCompose, "dm-mail-worker")]
+    [InlineData(BaseCompose, "dm-notification-worker")]
+    [InlineData(PreviewCompose, "dmfront")]
+    public void LabelEveryDeliveredImageWithItsRevision(string file, string service)
+    {
+        ServiceBlock(Read(file), service).Should().Contain("SOURCE_REVISION: ${SOURCE_REVISION:-}",
+            $"{service} is built here, and both Dockerfiles turn the argument into the revision label");
     }
 }

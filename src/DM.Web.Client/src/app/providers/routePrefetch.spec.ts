@@ -48,6 +48,7 @@ vi.mock("./router", () => ({
 }));
 
 import { installRoutePrefetch } from "./routePrefetch";
+import { installPreloadErrorReload } from "./staleBundle";
 
 /** Past the pointer's wait in routePrefetch.ts, in milliseconds. */
 const AFTER_HOVER_DWELL = 100;
@@ -405,5 +406,39 @@ describe("route prefetch", () => {
     await settle(AFTER_HOVER_DWELL);
 
     expect(games).not.toHaveBeenCalled();
+  });
+});
+
+// A chunk of the old deploy is gone. A guess that fails is no reason to reload
+// the page the reader is reading: the click, if it comes, reloads to its target.
+describe("a prefetch of a chunk that is gone", () => {
+  const reload = vi.fn();
+  let stopReloading: () => void;
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.stubGlobal("location", { ...window.location, reload });
+    stopReloading = installPreloadErrorReload();
+  });
+
+  afterEach(() => {
+    stopReloading();
+    vi.unstubAllGlobals();
+  });
+
+  it("leaves the page where it is", async () => {
+    vi.mocked(games).mockImplementation(() => {
+      // As Vite's preload helper does before the import rejects.
+      window.dispatchEvent(new Event("vite:preloadError"));
+      return Promise.reject(new TypeError("Importing a module script failed."));
+    });
+
+    await wrapper.get("#games").trigger("mouseover");
+    // Promises settle between timers, as in a browser: hover() fires them all first.
+    await vi.advanceTimersByTimeAsync(AFTER_HOVER_DWELL);
+
+    expect(games).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem("dm_chunk_reload")).toBeNull();
   });
 });
