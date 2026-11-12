@@ -160,6 +160,29 @@ describe("ProfilePage avatar in the edit mode", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  // Without the pair the slot holds a 220 px square, and a tall file moves the rows under it.
+  it("stands a picked picture in its own proportions, not in the square", async () => {
+    vi.spyOn(uploadApi, "deleteUpload").mockResolvedValue(ok());
+    const wrapper = await withStoredPicture();
+
+    wrapper.getComponent(ProfilePictureUpload).vm.$emit("uploaded", {
+      uploadId: "upload-1",
+      file: new File([], "a"),
+      size: { width: 300, height: 450 },
+    });
+    await flushPromises();
+
+    // AvatarImg turns the pair into a box of the same proportions (AvatarImg.spec).
+    expect(drawn(wrapper)).toEqual({
+      originalUrl: "blob:picked",
+      originalWidth: 300,
+      originalHeight: 450,
+    });
+    expect(wrapper.get(".avatar-wrapper").classes()).not.toContain(
+      "avatar-wrapper-unsized",
+    );
+  });
+
   it("draws no picture after a reset, and Сохранить sends the reset", async () => {
     const reset = vi
       .spyOn(personalApi, "removeMyAvatar")

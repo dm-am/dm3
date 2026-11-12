@@ -4,22 +4,19 @@
     <a class="skip-link" href="#main">К основному содержимому</a>
     <div class="main" ref="scroll">
       <div class="content-container">
-        <div class="content-wrapper">
+        <div class="content-wrapper" :class="{ 'with-columns': hasColumns }">
           <Header />
           <div class="content-body">
             <!-- A page a letter leads to drops both columns: it is one action,
                  and its guest card stands alone (layout.md, "Колонки шелла"). -->
-            <aside v-if="!route.meta.fromLetter" class="sidebar-left">
+            <aside v-if="hasColumns" class="sidebar-left">
               <router-view name="left" />
             </aside>
             <main id="main" class="content" tabindex="-1">
               <router-view name="page" />
             </main>
             <!-- Only a route with a right outlet has the column (router.ts). -->
-            <aside
-              v-if="hasRightColumn && !route.meta.fromLetter"
-              class="sidebar-right"
-            >
+            <aside v-if="hasColumns && hasRightColumn" class="sidebar-right">
               <router-view name="right" />
             </aside>
           </div>
@@ -63,6 +60,9 @@ const route = useRoute();
 
 // Offers to move the account's time zone to the device's when the two differ.
 useTimeZoneCheck();
+
+// A page a letter leads to has neither column.
+const hasColumns = computed(() => !route.meta.fromLetter);
 
 // A route without the right outlet has no right column (router.ts).
 const hasRightColumn = computed(() =>
@@ -203,6 +203,11 @@ onUnmounted(() => {
 .content-wrapper
   position: relative
   flex: 1 0 auto
+
+  // A page with columns is taller than the window once loaded: the footer waits
+  // below the edge from the first frame, or the first block pushes it off.
+  &.with-columns
+    min-height: 100vh
 
 .content-body
   display: flex

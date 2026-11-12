@@ -42,9 +42,14 @@ export interface HelpEntry {
 const EXAMPLE_ADDRESS = "https://example.com/";
 
 // Made-up addresses draw nothing, so the pictures are the site's own d20; not the favicon, which a page
-// does not always load as a picture.
-const SMALL_PICTURE = "/images/markup-help-d20.png";
-const LARGE_PICTURE = "/apple-touch-icon.png";
+// does not always load as a picture. Their own sizes go with them, so the window opens at its height
+// before the files arrive.
+const SMALL_PICTURE = {
+  src: "/images/markup-help-d20.png",
+  width: 32,
+  height: 32,
+};
+const LARGE_PICTURE = { src: "/apple-touch-icon.png", width: 192, height: 192 };
 
 // A captioned spoiler keeps its caption on the open button, as the server draws it.
 const spoiler = (content: string, caption?: string) =>
@@ -62,9 +67,13 @@ const nsfw = (content: string) =>
 const hidden = (content: string, names?: string) =>
   `<span class="private-message" data-recipients="${privateRecipientsLine(names ? [names] : [])}">${content}</span>`;
 
-const image = (picture: string, width?: number) => {
+const image = (
+  picture: { src: string; width: number; height: number },
+  width?: number,
+) => {
   const img =
-    `<img src="${picture}" class="bb-image" data-bb-tag="img" ` +
+    `<img src="${picture.src}" width="${picture.width}" height="${picture.height}" ` +
+    `class="bb-image" data-bb-tag="img" ` +
     `decoding="async" referrerpolicy="no-referrer" alt="" />`;
   return width === undefined
     ? img

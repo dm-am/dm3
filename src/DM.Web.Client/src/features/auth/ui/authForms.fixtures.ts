@@ -1,8 +1,9 @@
-import { expect, vi } from "vitest";
-import type { VueWrapper } from "@vue/test-utils";
+import { expect, vi, type MockInstance } from "vitest";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { defineComponent, h, nextTick, type Component } from "vue";
 import type { Router } from "vue-router";
 import type { GeneralError } from "@/shared/api/models/common";
+import { SERVER_ERROR } from "@/shared/lib/errors/generalRefusal";
 import {
   mountPage,
   type Address,
@@ -43,8 +44,10 @@ export const problem = (
 });
 
 // The dialog frame is a vue-final-modal wrapper; the card inside it is the subject.
+// `busy` is declared so a spec can read whether the form locks its window.
 export const AuthDialogStub = defineComponent({
   name: "AuthDialog",
+  props: { busy: Boolean },
   setup:
     (_props, { slots }) =>
     () =>
@@ -77,8 +80,9 @@ export async function expectWaitRunsDown(
   expect(shut()).toBeUndefined();
 }
 
-// The spec has pressed into a limit with the interval faked. The modal keeps
-// the component mounted, so a running interval would outlive it.
+// The spec has pressed into a limit with the interval faked. The stub dialog
+// keeps the form mounted after beforeClose, so only the form's own handler, not
+// its unmount, can have stopped the interval.
 export async function expectWaitDropsOnClose(
   wrapper: Pick<VueWrapper, "find" | "findComponent">,
   stripSelector: string,
@@ -90,4 +94,52 @@ export async function expectWaitDropsOnClose(
 
   expect(vi.getTimerCount()).toBe(0);
   expect(wrapper.find(stripSelector).text()).toBe("");
+}
+
+/**
+ * An address form's button opens on anything typed, and the press on a broken
+ * address names the format under the field and sends nothing.
+ */
+export async function expectFormatNamedOnPress(
+  wrapper: Pick<VueWrapper, "find" | "text">,
+  field: string,
+  send: MockInstance,
+) {
+  const button = () => wrapper.find("button[type='submit']");
+
+  expect(button().attributes("disabled")).toBeDefined();
+
+  await wrapper.find(field).setValue("reader@");
+  expect(button().attributes("disabled")).toBeUndefined();
+
+  await wrapper.find("form").trigger("submit");
+  await flushPromises();
+
+  expect(send).not.toHaveBeenCalled();
+  expect(wrapper.text()).not.toContain("Проверьте почту");
+  const strip = wrapper.find(".auth-message");
+  expect(strip.text()).toBe("Неверный формат почты");
+  expect(strip.classes()).toContain("auth-message--error");
+}
+
+/**
+ * The form's window is locked from the press until the server answers, then
+ * open again: a close in between would lose the answer (UI_STANDARDS/dialogs.md).
+ * `request` is the call the press makes; it is held here until the press is done.
+ */
+export async function expectWindowLockedWhile(
+  request: MockInstance,
+  busy: () => unknown,
+  press: () => Promise<unknown>,
+) {
+  let answer = (_value: unknown) => {};
+  request.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+  expect(busy()).toBe(false);
+
+  await press();
+  expect(busy()).toBe(true);
+
+  answer({ data: null, error: problem(500, SERVER_ERROR) });
+  await flushPromises();
+  expect(busy()).toBe(false);
 }

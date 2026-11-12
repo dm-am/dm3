@@ -12,6 +12,8 @@ import {
   AuthDialogStub,
   expectWaitDropsOnClose,
   expectWaitRunsDown,
+  expectFormatNamedOnPress,
+  expectWindowLockedWhile,
   mountAuthForm,
 } from "./authForms.fixtures";
 
@@ -115,22 +117,12 @@ describe("the mailed removal request", () => {
     const send = vi
       .spyOn(accountApi, "requestTwoFactorRemoval")
       .mockResolvedValue({ data: null, error: null } as never);
-    const wrapper = await mountForm();
-    const button = () => wrapper.find("button[type='submit']");
 
-    expect(button().attributes("disabled")).toBeDefined();
-
-    await wrapper.find("#two-factor-removal-email").setValue("reader@");
-    expect(button().attributes("disabled")).toBeUndefined();
-
-    await wrapper.find("form").trigger("submit");
-    await flushPromises();
-
-    expect(send).not.toHaveBeenCalled();
-    expect(wrapper.text()).not.toContain("Проверьте почту");
-    const strip = wrapper.find(".auth-message");
-    expect(strip.text()).toBe("Неверный формат почты");
-    expect(strip.classes()).toContain("auth-message--error");
+    await expectFormatNamedOnPress(
+      await mountForm(),
+      "#two-factor-removal-email",
+      send,
+    );
   });
 
   it("keeps the strip under the field with nothing in it", async () => {
@@ -294,5 +286,29 @@ describe("the mailed removal request", () => {
 
       expect(wrapper.findAll("button")).toHaveLength(0);
     });
+  });
+});
+
+// The window takes its lock from the form: a close mid-request would unmount
+// the form and lose the answer (UI_STANDARDS/dialogs.md).
+describe("the removal window while the letter is asked for", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("is locked until the server answers", async () => {
+    const wrapper = await mountForm();
+
+    await expectWindowLockedWhile(
+      vi.spyOn(accountApi, "requestTwoFactorRemoval"),
+      () => wrapper.findComponent(AuthDialogStub).props("busy"),
+      async () => {
+        await wrapper
+          .find("#two-factor-removal-email")
+          .setValue("reader@dm.am");
+        await wrapper.find("form").trigger("submit");
+        await flushPromises();
+      },
+    );
   });
 });

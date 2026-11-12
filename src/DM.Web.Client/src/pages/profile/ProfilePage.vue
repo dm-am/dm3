@@ -179,7 +179,7 @@ const shownPicture = computed<UserPicture | undefined>(() => {
   const change = pendingChanges.value.avatarUploadId;
   if (!editing.value || change === undefined) return user.value?.picture;
   if (change === null) return {};
-  return avatarPreview.value ? { originalUrl: avatarPreview.value } : {};
+  return avatarPreview.value ?? {};
 });
 
 const hasShownPicture = computed(() => {

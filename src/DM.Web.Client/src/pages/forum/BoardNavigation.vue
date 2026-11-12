@@ -15,7 +15,7 @@ import { storeToRefs } from "pinia";
 import { useFlipReorder } from "@/shared/lib/composables/useFlipReorder";
 
 const route = useRoute();
-const { boards } = storeToRefs(useBoardsStore());
+const { boards, boardsError } = storeToRefs(useBoardsStore());
 
 // The route param names the board on every forum level; on the index it is absent.
 const activeAlias = computed(() => route.params.alias as string | undefined);
@@ -65,6 +65,16 @@ const hasNext = (idx: number) => idx < orderedBoards.value.length - 1;
       }}</span></template
     >
   </nav>
+  <!-- Until the boards are read, an empty line of the strip's own height holds
+       its place, so the page under it does not jump when the names come. A
+       failed read brings no names, so it holds nothing. -->
+  <div
+    v-else-if="!boards && !boardsError"
+    class="board-navigation board-navigation-placeholder"
+    aria-hidden="true"
+  >
+    <span class="board-link">&nbsp;</span>
+  </div>
 </template>
 
 <style scoped lang="sass">

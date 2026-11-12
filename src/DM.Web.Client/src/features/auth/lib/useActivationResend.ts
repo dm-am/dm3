@@ -34,5 +34,5 @@ export function useActivationResend(rateLimit: RateLimitNotice) {
     return "sent";
   };
 
-  return { resend, hours };
+  return { resend, resending, hours };
 }

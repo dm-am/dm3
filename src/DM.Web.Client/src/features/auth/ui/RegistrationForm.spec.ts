@@ -20,6 +20,9 @@ import {
   toPasswordStep,
 } from "./RegistrationForm.fixtures";
 
+import { AuthDialogStub } from "./authForms.fixtures";
+import { deferred } from "@/shared/lib/testing/tasks";
+
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
 );
@@ -364,5 +367,32 @@ describe("RegistrationForm", () => {
     expect(wrapper.find(".password-strength .warning-text").text()).toBe(
       "Не удалось выполнить запрос, попробуйте позже",
     );
+  });
+});
+
+// The window takes its lock from the form: a close mid-request would unmount
+// the form and lose the answer (UI_STANDARDS/dialogs.md).
+describe("the registration window while the account is asked for", () => {
+  beforeEach(resetRegistrationForm);
+
+  it("is locked until the server answers", async () => {
+    const answer = deferred<null>();
+    vi.mocked(register).mockReturnValue(answer.promise);
+    const wrapper = await mountForm();
+    const dialog = () => wrapper.findComponent(AuthDialogStub);
+    await toPasswordStep(wrapper);
+    expect(dialog().props("busy")).toBe(false);
+
+    await wrapper
+      .find("#registration-password")
+      .setValue("correct horse battery");
+    await acceptRules(wrapper);
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    expect(dialog().props("busy")).toBe(true);
+
+    answer.resolve(null);
+    await flushPromises();
+    expect(dialog().props("busy")).toBe(false);
   });
 });

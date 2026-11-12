@@ -11,7 +11,8 @@ import { DashSeparator } from "@/shared/ui/DashSeparator";
 defineProps<{
   token: string;
   title: string;
-  lines: number;
+  /** The rows of the default placeholder; a #skeleton slot replaces it. */
+  lines?: number;
   items: T[] | null;
   errored: boolean;
   empty: string;
@@ -20,12 +21,18 @@ defineProps<{
   forwardLabel: string;
 }>();
 
-defineSlots<{ item(props: { item: T }): unknown }>();
+defineSlots<{
+  item(props: { item: T }): unknown;
+  /** A placeholder shaped like the rows, where they are taller than a title. */
+  skeleton?(): unknown;
+}>();
 </script>
 
 <template>
   <SidebarBlock :token="token" :title="title">
-    <SidebarSkeleton v-if="items === null && !errored" :lines="lines" />
+    <slot v-if="items === null && !errored" name="skeleton">
+      <SidebarSkeleton :lines="lines" />
+    </slot>
     <li v-else-if="items === null" class="error-row">
       <SidebarLoadFailure @retry="retry" />
     </li>

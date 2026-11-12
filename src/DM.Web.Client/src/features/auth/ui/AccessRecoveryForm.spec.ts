@@ -12,6 +12,8 @@ import {
   AuthDialogStub,
   expectWaitDropsOnClose,
   expectWaitRunsDown,
+  expectFormatNamedOnPress,
+  expectWindowLockedWhile,
   mountAuthForm,
 } from "./authForms.fixtures";
 
@@ -68,22 +70,8 @@ describe("the recovery request", () => {
 
   it("opens the button on anything typed and names the format on the press", async () => {
     const send = answered("PasswordResetSent");
-    const wrapper = await mountForm();
-    const button = () => wrapper.find("button[type='submit']");
 
-    expect(button().attributes("disabled")).toBeDefined();
-
-    await wrapper.find("#recovery-email").setValue("reader@");
-    expect(button().attributes("disabled")).toBeUndefined();
-
-    await wrapper.find("form").trigger("submit");
-    await flushPromises();
-
-    expect(send).not.toHaveBeenCalled();
-    expect(wrapper.text()).not.toContain("Проверьте почту");
-    const strip = wrapper.find(".auth-message");
-    expect(strip.text()).toBe("Неверный формат почты");
-    expect(strip.classes()).toContain("auth-message--error");
+    await expectFormatNamedOnPress(await mountForm(), "#recovery-email", send);
   });
 
   describe("the open dialog", () => {
@@ -268,5 +256,27 @@ describe("the recovery request", () => {
         expect.objectContaining({ ownsRefusal: true, ownsRateLimit: true }),
       );
     });
+  });
+});
+
+// The window takes its lock from the form: a close mid-request would unmount
+// the form and lose the answer (UI_STANDARDS/dialogs.md).
+describe("the recovery window while the letter is asked for", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("is locked until the server answers", async () => {
+    const wrapper = await mountForm();
+
+    await expectWindowLockedWhile(
+      vi.spyOn(accountApi, "recover"),
+      () => wrapper.findComponent(AuthDialogStub).props("busy"),
+      async () => {
+        await wrapper.find("#recovery-email").setValue("reader@dm.am");
+        await wrapper.find("form").trigger("submit");
+        await flushPromises();
+      },
+    );
   });
 });

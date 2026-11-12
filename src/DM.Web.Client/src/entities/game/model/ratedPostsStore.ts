@@ -29,7 +29,7 @@ export const useRatedPostsStore = defineStore("ratedPosts", () => {
   const latest = createLatestRated(
     latestCache,
     best.bestOfWeek,
-    best.bestLoaded,
+    best.bestSettled,
     best.loadingBest,
   );
 
@@ -54,7 +54,11 @@ function createBestOfWeek(postCache: KeyedCache<Post | null>) {
   const bestOfWeek = ref<Post | null>(null);
   const loadingBest = ref(false);
   // Apart from latestLoaded, so the other widget does not flip to empty early.
+  // Only a real answer counts: after a refusal the retry shows the skeleton,
+  // not "no posts".
   const bestLoaded = ref(false);
+  // An answer or a refusal, which is all the latest block waits for.
+  const bestSettled = ref(false);
   const bestError = ref<string | null>(null);
 
   async function fetchBestOfWeek(force = false) {
@@ -64,6 +68,7 @@ function createBestOfWeek(postCache: KeyedCache<Post | null>) {
       if (cached !== undefined) {
         bestOfWeek.value = cached;
         bestLoaded.value = true;
+        bestSettled.value = true;
         return;
       }
     }
@@ -80,18 +85,27 @@ function createBestOfWeek(postCache: KeyedCache<Post | null>) {
       if (response.error) {
         // The post already shown stays.
         bestError.value = "Не удалось загрузить лучший пост недели";
+        bestLoaded.value = false;
       } else {
         const post = response.data?.resources[0] ?? null;
         bestOfWeek.value = post;
         postCache.set(bestOfWeekKey, post);
+        bestLoaded.value = true;
       }
     } finally {
       loadingBest.value = false;
-      bestLoaded.value = true;
+      bestSettled.value = true;
     }
   }
 
-  return { bestOfWeek, loadingBest, bestLoaded, bestError, fetchBestOfWeek };
+  return {
+    bestOfWeek,
+    loadingBest,
+    bestLoaded,
+    bestSettled,
+    bestError,
+    fetchBestOfWeek,
+  };
 }
 
 const latestRatedKey = "latest-rated";
@@ -104,25 +118,30 @@ const latestRatedKey = "latest-rated";
 function createLatestRated(
   latestCache: KeyedCache<Post[]>,
   bestOfWeek: Ref<Post | null>,
-  bestLoaded: Ref<boolean>,
+  bestSettled: Ref<boolean>,
   loadingBest: Ref<boolean>,
 ) {
   const candidates = ref<Post[]>([]);
   const loadingLatest = ref(false);
+  // A real answer, so a retry after a refusal shows the skeleton, not "no posts".
   const candidatesLoaded = ref(false);
+  const candidatesSettled = ref(false);
   const latestError = ref<string | null>(null);
 
-  // Not loaded until the best of the week is in too: picked earlier, the block
-  // could show the best post and then swap it for the next one.
+  // Nothing is picked until the best of the week is in too: picked earlier, the
+  // block could show the best post and then swap it for the next one.
+  const bothSettled = computed(
+    () => candidatesSettled.value && bestSettled.value,
+  );
   const latestLoaded = computed(
-    () => candidatesLoaded.value && bestLoaded.value,
+    () => candidatesLoaded.value && bestSettled.value,
   );
 
   // Picked once per pair of answers: while either request is out the block
   // keeps what it shows, a post or nothing, or a refresh picks against the
   // stale best and then again.
   const latestRated = computed<Post | null>((previous) => {
-    if (!latestLoaded.value) return null;
+    if (!bothSettled.value) return null;
     if (loadingLatest.value || loadingBest.value) return previous ?? null;
     const bestId = bestOfWeek.value?.id;
     return (
@@ -138,6 +157,7 @@ function createLatestRated(
       if (cached !== undefined) {
         candidates.value = cached;
         candidatesLoaded.value = true;
+        candidatesSettled.value = true;
         return;
       }
     }
@@ -152,14 +172,16 @@ function createLatestRated(
       });
       if (response.error) {
         latestError.value = "Не удалось загрузить последний оцененный пост";
+        candidatesLoaded.value = false;
       } else {
         const resources = response.data?.resources ?? [];
         candidates.value = resources;
         latestCache.set(latestRatedKey, resources);
+        candidatesLoaded.value = true;
       }
     } finally {
       loadingLatest.value = false;
-      candidatesLoaded.value = true;
+      candidatesSettled.value = true;
     }
   }
 
@@ -246,11 +268,12 @@ async function fetchBestPostOfUser(
     take: 1,
   });
   if (response.error) {
-    // Not cached: the retry button exists to ask again.
+    // Not cached: the retry button exists to ask again. Not loaded either, so
+    // the retry shows the skeleton and not "no posts".
     userBestPosts.value.set(username, {
       post: existing?.post ?? null,
       loading: false,
-      loaded: true,
+      loaded: false,
       error: "Не удалось загрузить лучший пост пользователя",
     });
     return;

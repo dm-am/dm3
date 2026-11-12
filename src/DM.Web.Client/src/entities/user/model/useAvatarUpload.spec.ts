@@ -79,6 +79,26 @@ describe("sending a picture up in the edit mode", () => {
     expect(avatar.refusal.value).toBeNull();
   });
 
+  // The preview stands in the file's own proportions only if it knows them before it decodes.
+  it("hands over the pixels of the file with the upload", async () => {
+    vi.spyOn(uploadApi, "directUpload").mockResolvedValue(
+      answered({ id: "upload-1" }),
+    );
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => ({ width: 300, height: 450, close: vi.fn() })),
+    );
+    const { avatar, handed } = render();
+    const file = picked();
+
+    await avatar.uploadFile(file);
+    vi.unstubAllGlobals();
+
+    expect(handed).toEqual([
+      { uploadId: "upload-1", file, size: { width: 300, height: 450 } },
+    ]);
+  });
+
   // A drop and a paste never pass the accept filter of the picker.
   it("refuses a format the server would not take, before anything goes up", async () => {
     const upload = vi.spyOn(uploadApi, "directUpload");

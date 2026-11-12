@@ -8,6 +8,7 @@ import { signIn, completeSecondFactor } from "@/entities/user";
 import { AuthDialog } from "@/shared/ui/Layout";
 import { toast } from "./authForms.doubles";
 import { expectWaitRunsDown, problem } from "./authForms.fixtures";
+import { deferred } from "@/shared/lib/testing/tasks";
 import LoginForm from "./LoginForm.vue";
 import {
   atSecondFactor,
@@ -302,5 +303,47 @@ describe("LoginForm", () => {
 
       expect(document.activeElement).toBe(wrapper.find("#password").element);
     });
+  });
+});
+
+// A close mid-request would unmount the form and lose the answer
+// (UI_STANDARDS/dialogs.md): the cross waits, dimmed, until the server answers.
+describe("the login window while the server is asked", () => {
+  beforeEach(resetLoginForm);
+
+  const cross = (wrapper: Awaited<ReturnType<typeof mountForm>>) =>
+    wrapper.get("button.auth-close");
+
+  it("does not close by the cross while the password is checked", async () => {
+    const answer = deferred<ReturnType<typeof wrongPair>>();
+    vi.mocked(signIn).mockReturnValue(answer.promise);
+
+    const wrapper = await submitCredentials();
+    const form = wrapper.findComponent(LoginForm);
+    expect(cross(wrapper).attributes("aria-disabled")).toBe("true");
+    await cross(wrapper).trigger("click");
+    expect(form.emitted("cancel")).toBeUndefined();
+
+    answer.resolve(wrongPair());
+    await flushPromises();
+    expect(cross(wrapper).attributes("aria-disabled")).toBeUndefined();
+    await cross(wrapper).trigger("click");
+    expect(form.emitted("cancel")).toHaveLength(1);
+  });
+
+  it("does not close by the cross while the code is checked", async () => {
+    const answer = deferred<null>();
+    const wrapper = await atSecondFactor();
+    vi.mocked(completeSecondFactor).mockReturnValue(answer.promise);
+    const form = wrapper.findComponent(LoginForm);
+
+    await typeCode(wrapper, "123456");
+    expect(cross(wrapper).attributes("aria-disabled")).toBe("true");
+    await cross(wrapper).trigger("click");
+    expect(form.emitted("cancel")).toBeUndefined();
+
+    answer.resolve(null);
+    await flushPromises();
+    expect(cross(wrapper).attributes("aria-disabled")).toBeUndefined();
   });
 });
