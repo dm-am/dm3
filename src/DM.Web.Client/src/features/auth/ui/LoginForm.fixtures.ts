@@ -30,15 +30,24 @@ export function wrongPair() {
 
 const clock = { now: 0 };
 
+/** Off the document for a spec that counts a faked setInterval. */
+type Placement = { attached?: boolean };
+
 // Attached: focus and selection are only observable in a document.
-export const mountForm = (prefillEmail?: string) =>
+export const mountForm = (
+  prefillEmail?: string,
+  { attached = true }: Placement = {},
+) =>
   mountAuthForm(LoginForm, {
     props: prefillEmail === undefined ? {} : { prefillEmail },
-    attachTo: document.body,
+    attachTo: attached ? document.body : undefined,
   });
 
-export async function submitCredentials(email = "reader@dm.am") {
-  const wrapper = await mountForm();
+export async function submitCredentials(
+  email = "reader@dm.am",
+  placement: Placement = {},
+) {
+  const wrapper = await mountForm(undefined, placement);
   await flushPromises();
 
   clock.now += 10_000;
@@ -51,9 +60,9 @@ export async function submitCredentials(email = "reader@dm.am") {
   return wrapper;
 }
 
-export async function atSecondFactor() {
+export async function atSecondFactor(placement: Placement = {}) {
   signIn.mockResolvedValue({ stage: "secondFactor" });
-  return submitCredentials();
+  return submitCredentials(undefined, placement);
 }
 
 // No submit: a whole code starts its own check.

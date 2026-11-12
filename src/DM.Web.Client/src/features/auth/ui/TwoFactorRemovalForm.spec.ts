@@ -28,8 +28,8 @@ const mountForm = () =>
     stubs: { AuthDialog: AuthDialogStub },
   });
 
-async function submit(email = "reader@dm.am") {
-  const wrapper = await mountForm();
+async function submit(email = "reader@dm.am", mount = mountForm) {
+  const wrapper = await mount();
 
   await wrapper.find("#two-factor-removal-email").setValue(email);
   await wrapper.find("form").trigger("submit");
@@ -218,20 +218,20 @@ describe("the mailed removal request", () => {
       vi.useRealTimers();
     });
 
-    it("stands under the field, shuts the button, and runs down", async () => {
-      limited(3);
-      const wrapper = await submit();
-
-      expect(wrapper.text()).not.toContain("Проверьте почту");
-      expect(wrapper.find("#two-factor-removal-email").exists()).toBe(true);
-      expect(toast.warning).not.toHaveBeenCalled();
-      await expectWaitRunsDown(wrapper, ".auth-message");
-    });
+    // Off the document: jsdom keeps the focus of an attached page with a
+    // setInterval of its own, which the faked interval would count as a wait.
+    const mountOffDocument = () =>
+      mountAuthForm(TwoFactorRemovalForm, {
+        stubs: { AuthDialog: AuthDialogStub },
+      });
 
     // The modal keeps the component mounted, so a running interval would outlive it.
+    // First in the block: an attached form here fails every time, not one run in many.
     it("drops the wait when the dialog closes", async () => {
       limited(30);
-      const wrapper = await submit();
+      const wrapper = await submit(undefined, mountOffDocument);
+      // A real frame of jsdom runs out before the close, the order a loaded runner met.
+      await new Promise((resolve) => setTimeout(resolve, 50));
       expect(vi.getTimerCount()).toBe(1);
 
       wrapper.findComponent({ name: "AuthDialog" }).vm.$emit("beforeClose");
@@ -241,9 +241,19 @@ describe("the mailed removal request", () => {
       expect(wrapper.find(".auth-message").text()).toBe("");
     });
 
+    it("stands under the field, shuts the button, and runs down", async () => {
+      limited(3);
+      const wrapper = await submit(undefined, mountOffDocument);
+
+      expect(wrapper.text()).not.toContain("Проверьте почту");
+      expect(wrapper.find("#two-factor-removal-email").exists()).toBe(true);
+      expect(toast.warning).not.toHaveBeenCalled();
+      await expectWaitRunsDown(wrapper, ".auth-message");
+    });
+
     it("drops the wait when the card leaves the page", async () => {
       limited(30);
-      const wrapper = await submit();
+      const wrapper = await submit(undefined, mountOffDocument);
       expect(vi.getTimerCount()).toBe(1);
 
       wrapper.unmount();

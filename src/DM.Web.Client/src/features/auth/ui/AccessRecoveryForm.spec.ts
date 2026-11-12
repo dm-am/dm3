@@ -179,19 +179,20 @@ describe("the recovery request", () => {
         vi.useRealTimers();
       });
 
-      it("stands under the field, shuts the button, and runs down", async () => {
-        refused(429, "Слишком много запросов", 3);
-        const wrapper = await submit(await mountForm());
-
-        expect(wrapper.text()).not.toContain("Проверьте почту");
-        expect(toast.warning).not.toHaveBeenCalled();
-        await expectWaitRunsDown(wrapper, ".auth-message");
-      });
+      // Off the document: jsdom keeps the focus of an attached page with a
+      // setInterval of its own, which the faked interval would count as a wait.
+      const mountOffDocument = () =>
+        mountAuthForm(AccessRecoveryForm, {
+          stubs: { AuthDialog: AuthDialogStub },
+        });
 
       // The modal keeps the component mounted, so a running interval would outlive it.
+      // First in the block: an attached form here fails every time, not one run in many.
       it("drops the wait when the dialog closes", async () => {
         refused(429, "Слишком много запросов", 30);
-        const wrapper = await submit(await mountForm());
+        const wrapper = await submit(await mountOffDocument());
+        // A real frame of jsdom runs out before the close, the order a loaded runner met.
+        await new Promise((resolve) => setTimeout(resolve, 50));
         expect(vi.getTimerCount()).toBe(1);
 
         wrapper.findComponent({ name: "AuthDialog" }).vm.$emit("beforeClose");
@@ -201,9 +202,18 @@ describe("the recovery request", () => {
         expect(wrapper.find(".auth-message").text()).toBe("");
       });
 
+      it("stands under the field, shuts the button, and runs down", async () => {
+        refused(429, "Слишком много запросов", 3);
+        const wrapper = await submit(await mountOffDocument());
+
+        expect(wrapper.text()).not.toContain("Проверьте почту");
+        expect(toast.warning).not.toHaveBeenCalled();
+        await expectWaitRunsDown(wrapper, ".auth-message");
+      });
+
       it("drops the wait when the card leaves the page", async () => {
         refused(429, "Слишком много запросов", 30);
-        const wrapper = await submit(await mountForm());
+        const wrapper = await submit(await mountOffDocument());
         expect(vi.getTimerCount()).toBe(1);
 
         wrapper.unmount();

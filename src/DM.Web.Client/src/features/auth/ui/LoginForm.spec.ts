@@ -138,19 +138,43 @@ describe("LoginForm", () => {
       vi.useRealTimers();
     });
 
+    // Off the document: jsdom keeps the focus of an attached page with a
+    // setInterval of its own, which the faked interval would count as a wait.
+    const offDocument = { attached: false };
+
+    // The modal keeps the component mounted, so a running interval would outlive it.
+    // First in the block: an attached form here fails every time, not one run in many.
+    it("drops the wait when the dialog closes", async () => {
+      vi.mocked(signIn).mockResolvedValue(
+        refused(429, "Слишком много запросов", 30),
+      );
+
+      const wrapper = await submitCredentials(undefined, offDocument);
+      // A real frame of jsdom runs out before the close, the order a loaded runner met.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(vi.getTimerCount()).toBe(1);
+
+      // Emitted directly: the modal tier that raises it is mocked.
+      wrapper.findComponent(AuthDialog).vm.$emit("beforeClose");
+      await nextTick();
+
+      expect(vi.getTimerCount()).toBe(0);
+      expect(wrapper.find("#login-password-message").text()).toBe("");
+    });
+
     it("stands under the password, shuts the button, and runs down", async () => {
       vi.mocked(signIn).mockResolvedValue(
         refused(429, "Слишком много запросов", 3),
       );
 
-      const wrapper = await submitCredentials();
+      const wrapper = await submitCredentials(undefined, offDocument);
 
       expect(toast.warning).not.toHaveBeenCalled();
       await expectWaitRunsDown(wrapper, "#login-password-message");
     });
 
     it("stands under the code as well, and holds the check back", async () => {
-      const wrapper = await atSecondFactor();
+      const wrapper = await atSecondFactor(offDocument);
       vi.mocked(completeSecondFactor).mockResolvedValue(
         problem(429, "Слишком много запросов", 2),
       );
@@ -184,7 +208,7 @@ describe("LoginForm", () => {
         refused(429, "Слишком много запросов"),
       );
 
-      const wrapper = await submitCredentials();
+      const wrapper = await submitCredentials(undefined, offDocument);
 
       expect(wrapper.find("#login-password-message").text()).toBe(
         "Слишком много попыток, попробуйте позже",
@@ -194,29 +218,12 @@ describe("LoginForm", () => {
       ).toBeUndefined();
     });
 
-    // The modal keeps the component mounted, so a running interval would outlive it.
-    it("drops the wait when the dialog closes", async () => {
-      vi.mocked(signIn).mockResolvedValue(
-        refused(429, "Слишком много запросов", 30),
-      );
-
-      const wrapper = await submitCredentials();
-      expect(vi.getTimerCount()).toBe(1);
-
-      // Emitted directly: the modal tier that raises it is mocked.
-      wrapper.findComponent(AuthDialog).vm.$emit("beforeClose");
-      await nextTick();
-
-      expect(vi.getTimerCount()).toBe(0);
-      expect(wrapper.find("#login-password-message").text()).toBe("");
-    });
-
     it("drops the wait when the form leaves the page", async () => {
       vi.mocked(signIn).mockResolvedValue(
         refused(429, "Слишком много запросов", 30),
       );
 
-      const wrapper = await submitCredentials();
+      const wrapper = await submitCredentials(undefined, offDocument);
       expect(vi.getTimerCount()).toBe(1);
 
       wrapper.unmount();
