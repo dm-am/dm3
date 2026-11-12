@@ -3,7 +3,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
-import { nextTick } from "vue";
 import { accountApi } from "@/entities/user";
 import { Api } from "@/shared/api";
 import AccessRecoveryForm from "./AccessRecoveryForm.vue";
@@ -11,6 +10,7 @@ import { toast } from "./authForms.doubles";
 import {
   address,
   AuthDialogStub,
+  expectWaitDropsOnClose,
   expectWaitRunsDown,
   mountAuthForm,
 } from "./authForms.fixtures";
@@ -179,31 +179,34 @@ describe("the recovery request", () => {
         vi.useRealTimers();
       });
 
+      // Off the document: jsdom keeps the focus of an attached page with a
+      // setInterval of its own, which the faked interval would count as a wait.
+      const mountOffDocument = () =>
+        mountAuthForm(AccessRecoveryForm, {
+          stubs: { AuthDialog: AuthDialogStub },
+        });
+
+      // First in the block: an attached form here fails every time, not one run in many.
+      it("drops the wait when the dialog closes", async () => {
+        refused(429, "Слишком много запросов", 30);
+        const wrapper = await submit(await mountOffDocument());
+        // A real frame of jsdom runs out before the close, the order a loaded runner met.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        await expectWaitDropsOnClose(wrapper, ".auth-message");
+      });
+
       it("stands under the field, shuts the button, and runs down", async () => {
         refused(429, "Слишком много запросов", 3);
-        const wrapper = await submit(await mountForm());
+        const wrapper = await submit(await mountOffDocument());
 
         expect(wrapper.text()).not.toContain("Проверьте почту");
         expect(toast.warning).not.toHaveBeenCalled();
         await expectWaitRunsDown(wrapper, ".auth-message");
       });
 
-      // The modal keeps the component mounted, so a running interval would outlive it.
-      it("drops the wait when the dialog closes", async () => {
-        refused(429, "Слишком много запросов", 30);
-        const wrapper = await submit(await mountForm());
-        expect(vi.getTimerCount()).toBe(1);
-
-        wrapper.findComponent({ name: "AuthDialog" }).vm.$emit("beforeClose");
-        await nextTick();
-
-        expect(vi.getTimerCount()).toBe(0);
-        expect(wrapper.find(".auth-message").text()).toBe("");
-      });
-
       it("drops the wait when the card leaves the page", async () => {
         refused(429, "Слишком много запросов", 30);
-        const wrapper = await submit(await mountForm());
+        const wrapper = await submit(await mountOffDocument());
         expect(vi.getTimerCount()).toBe(1);
 
         wrapper.unmount();

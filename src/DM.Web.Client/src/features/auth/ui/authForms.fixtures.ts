@@ -76,3 +76,18 @@ export async function expectWaitRunsDown(
   expect(strip.text()).toBe("");
   expect(shut()).toBeUndefined();
 }
+
+// The spec has pressed into a limit with the interval faked. The modal keeps
+// the component mounted, so a running interval would outlive it.
+export async function expectWaitDropsOnClose(
+  wrapper: Pick<VueWrapper, "find" | "findComponent">,
+  stripSelector: string,
+) {
+  expect(vi.getTimerCount()).toBe(1);
+
+  wrapper.findComponent({ name: "AuthDialog" }).vm.$emit("beforeClose");
+  await nextTick();
+
+  expect(vi.getTimerCount()).toBe(0);
+  expect(wrapper.find(stripSelector).text()).toBe("");
+}
