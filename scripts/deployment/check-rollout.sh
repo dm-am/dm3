@@ -214,7 +214,12 @@ zero_failure() {
   bad="$(docker events --since "$RUN_SINCE" --until "$(date +%s)" --filter type=container --filter event=kill \
     --format '{{.Actor.Attributes.name}} {{.Actor.Attributes.signal}}' | awk -v names="$containers" '$1 ~ names && $2 == 9')"
   test -z "$bad" || fail "$1: containers outlived their grace and were killed: $bad"
-  bad="$(docker logs --since "$RUN_SINCE" dm-nginx 2>&1 | grep -E 'upstream|" 5[0-9]{2} ' | head -n 5 || true)"
+  # A hub connection stays on the container that took it: when that container stops, the edge
+  # logs the reset of each such connection and the client reconnects to the twin. The probe
+  # counts those as hub disconnects. Every other upstream error is a failed request.
+  bad="$(docker logs --since "$RUN_SINCE" dm-nginx 2>&1 |
+    grep -vE '(recv|send)\(\) failed \((104|32): [^)]*\) while proxying upgraded connection' |
+    grep -E 'upstream|" 5[0-9]{2} ' | head -n 5 || true)"
   test -z "$bad" || fail "$1: the edge logged upstream errors or 5xx: $bad"
   stand_is_current
   smoke

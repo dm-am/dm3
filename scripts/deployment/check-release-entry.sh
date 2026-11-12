@@ -263,7 +263,11 @@ offline() {
   test "$(max_tried_version)" = v1.3.0 || fail "the highest tried version is $(max_tried_version), not v1.3.0"
   listing="$(for k in $(seq 0 24); do annotated "$((100 + k))" "v3.0.$k"; done)"
   test "$(candidates "$listing" v1.1.0 | grep -c '^try')" = 20 || fail "a tick would try more than twenty tags"
-  candidates "$listing" v1.1.0 | head -n 1 | grep -q "	v3.0.24	" || fail "a tick does not start from the highest tag"
+  # Taken whole first: head leaves after one line, and a longer listing would then write
+  # into a closed pipe, which pipefail counts as a failure.
+  local order
+  order="$(candidates "$listing" v1.1.0)"
+  head -n 1 <<< "$order" | grep -q "	v3.0.24	" || fail "a tick does not start from the highest tag"
   rm -f "$DM3_STATE/tried" "$DM3_STATE/rejected"
 
   echo "a release waits when the headroom would leave less than a tenth of the memory"
@@ -449,7 +453,9 @@ STUB
     has 'dm_release{field="fetched"} 1700000000'
     has 'dm_release{field="rejected"} 2'
     test "$(grep -c 'field="failed"' "$prom")" = 1 || fail "the metric carries more than the newest failure"
-    verb_status | grep -q "^waiting: v1.4.0" || fail "status does not say what waits"
+    # Into a file, as with the status cases above.
+    verb_status > "$WORK/status" || fail "status failed while a release waits"
+    grep -q "^waiting: v1.4.0" "$WORK/status" || fail "status does not say what waits: $(cat "$WORK/status")"
     rm -f "$DM3_STATE/tried" "$DM3_STATE/waiting" "$DM3_STATE/fetched"
   fi
 
