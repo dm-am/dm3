@@ -386,6 +386,10 @@ services:
       - '127.0.0.1:3000:3000'
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      # The plugin directory is the image's and read-only to Grafana: without this every start
+      # downloads Grafana's bundled apps and updates, fails to write them there and logs an
+      # error for each. Nothing here uses them.
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
