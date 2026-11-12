@@ -30,8 +30,8 @@ docker logs dm-mail-worker --tail 50
 powershell -File .\scripts\dm.ps1 status
 
 # Tests: the solution, or one project by path
-dotnet test DM.sln
-dotnet test test/DM.Domain.Game.Tests
+dotnet test --solution DM.sln
+dotnet test --project test/DM.Domain.Game.Tests
 ```
 
 A glob over the test projects is no shortcut: PowerShell passes it as a

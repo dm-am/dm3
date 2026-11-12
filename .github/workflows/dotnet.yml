@@ -126,7 +126,7 @@ jobs:
       run: npm ci
       working-directory: src/DM.Web.Client
     - name: Test
-      run: dotnet test --no-build -c Release --verbosity normal --logger trx --results-directory TestResults --collect:"XPlat Code Coverage"
+      run: dotnet test --no-build -c Release --verbosity normal --report-xunit-trx --results-directory TestResults --coverage --coverage-output-format cobertura
     # A threshold on the merged coverage; the numbers live next to the reason in the script.
     - name: Coverage threshold
       run: bash scripts/check-coverage.sh
@@ -141,7 +141,7 @@ jobs:
       if: always()
       with:
         name: coverage-reports
-        path: TestResults/**/coverage.cobertura.xml
+        path: TestResults/**/*.cobertura.xml
         if-no-files-found: error
     # Swagger is not served in production, so the integration suite writes the contract out
     # for diffing between builds.
@@ -418,7 +418,7 @@ jobs:
       run: npm ci
       working-directory: src/DM.Web.Client
     - name: Architecture tests
-      run: dotnet test test/DM.Architecture.Tests -c Release --verbosity normal
+      run: dotnet test --project test/DM.Architecture.Tests -c Release --verbosity normal
     - name: Client unit tests
       if: needs.changes.outputs.frontend != 'true'
       run: npm run test:coverage

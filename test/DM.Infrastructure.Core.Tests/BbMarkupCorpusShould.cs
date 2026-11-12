@@ -53,7 +53,7 @@ public class BbMarkupCorpusShould
         stored.Should().Be(written,
             "markupCorpus.golden.json is what the client's preview, its reverse conversion and its markup " +
             "check are compared with, and it no longer says what the server answers. Write it again with " +
-            "DM_MARKUP_CORPUS=write dotnet test test/DM.Infrastructure.Core.Tests --filter BbMarkupCorpusShould, " +
+            "DM_MARKUP_CORPUS=write dotnet test --project test/DM.Infrastructure.Core.Tests --filter BbMarkupCorpusShould, " +
             "then run the client's bbcodeProperties.spec.ts against it");
     }
 

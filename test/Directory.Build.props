@@ -5,13 +5,10 @@
     <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
     <ItemGroup>
-        <!-- Required by the "XPlat Code Coverage" data collector: without this
-             package the collect switch is accepted, the run succeeds, and no
-             coverage file is produced at all. -->
-        <PackageReference Include="coverlet.collector">
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-            <PrivateAssets>all</PrivateAssets>
-        </PackageReference>
+        <!-- The extension behind the coverage switch of dotnet test. DM.Testing is a
+             library and no test application, so it does not take it. -->
+        <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage"
+                          Condition="'$(MSBuildProjectName)' != 'DM.Testing'" />
         <!-- The NSubstitute guard belongs here and not next to the library:
              analyzer assets are private by default, so they never arrive with
              the transitive NSubstitute the domain suites get through DM.Testing

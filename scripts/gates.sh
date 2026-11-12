@@ -112,7 +112,7 @@ in_root() { (cd "$ROOT" && "$@"); }
 # report merged from several states of the code describes none of them.
 backend_tests() {
   rm -rf "$ROOT/TestResults" &&
-    dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo --results-directory "$ROOT/TestResults" --collect:"XPlat Code Coverage"
+    dotnet test --solution "$ROOT/DM.sln" --no-build -c Release --results-directory "$ROOT/TestResults" --coverage --coverage-output-format cobertura
 }
 
 # Gates that take tens of minutes or need docker and a network run only on request, as in the
@@ -146,10 +146,10 @@ step frontend "Стенд кадров: типы" in_root src/DM.Web.Client/node
 step frontend "Стенд кадров: линт и формат" in_root src/DM.Web.Client/node_modules/.bin/eslint --config src/DM.Web.Client/eslint.config.js --max-warnings 0 "scripts/visual/**/*.ts"
 # The docs job: architecture tests alone. The map calls it only when build is not needed,
 # and build runs the same tests below.
-step docs "Документы: архитектурные тесты Release" dotnet test "$ROOT/test/DM.Architecture.Tests" -c Release --nologo
+step docs "Документы: архитектурные тесты Release" dotnet test --project "$ROOT/test/DM.Architecture.Tests" -c Release
 step build "Бэкенд: форматирование" dotnet format "$ROOT/DM.sln" whitespace --verify-no-changes
 step build "Бэкенд: сборка Release" dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
-step build "Бэкенд: архитектурные тесты Release" dotnet test "$ROOT/test/DM.Architecture.Tests" --no-build -c Release --nologo
+step build "Бэкенд: архитектурные тесты Release" dotnet test --project "$ROOT/test/DM.Architecture.Tests" --no-build -c Release
 # The whole compose-topology job: it needs only docker and takes twenty-two seconds, so it
 # is not split.
 if full_requested; then
