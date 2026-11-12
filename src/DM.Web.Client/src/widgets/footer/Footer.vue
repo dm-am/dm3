@@ -30,10 +30,21 @@
       <div>
         Дизайн логотипа —
         <router-link
+          v-slot="{ href, navigate, isActive, isExactActive }"
           :to="{ name: 'profile', params: { username: 'Azur' } }"
-          @click="rickroll"
-          >Azur</router-link
+          custom
         >
+          <a
+            :href="href"
+            :class="{
+              'router-link-active': isActive,
+              'router-link-exact-active': isExactActive,
+            }"
+            :aria-current="isExactActive ? 'page' : undefined"
+            @click="rickroll($event, navigate)"
+            >Azur</a
+          >
+        </router-link>
       </div>
     </div>
 
@@ -58,9 +69,14 @@ import { siteTime } from "@/shared/lib/utils/datetime";
 
 const currentYear = siteTime().year();
 
-// Plain left click only; a modified click opens the real profile.
-function rickroll(event: MouseEvent) {
+// A ctrl, shift or meta click, or a button other than the left one, is handed
+// to the router link and opens the real profile; any other click, Alt among
+// them, goes to the video. One handler
+// decides, so a plain click never starts the router's navigation to the profile
+// (its route chunk and requests) on the way out to the video.
+function rickroll(event: MouseEvent, navigate: (event: MouseEvent) => unknown) {
   if (event.ctrlKey || event.shiftKey || event.metaKey || event.button !== 0) {
+    navigate(event);
     return;
   }
   event.preventDefault();

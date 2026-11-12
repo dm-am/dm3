@@ -56,6 +56,34 @@ internal partial class PostRepository
 
     public async Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query, Guid viewerId)
     {
+        var sortedQuery = await RatedPosts(query);
+
+        var totalCount = await sortedQuery.CountAsync();
+
+        var rawData = await sortedQuery
+            .Skip(query.Skip)
+            .Take(query.Take)
+            .Select(RatedPostRowProjection)
+            .ToArrayAsync();
+
+        var posts = rawData.Select(ToRatedPost).ToArray();
+
+        // One batched query (IN(characterIds)) for avatar URLs, instead
+        // of a correlated Uploads subquery per row in the main projection.
+        await EnrichWithCharacterPictures(posts);
+        await EnrichWithAttachments(posts);
+
+        await AttachGames(posts, viewerId);
+
+        return (posts, totalCount);
+    }
+
+    /// <summary>
+    /// The posts of the feed the query admits, each with its rating, in the order
+    /// asked. Shared by the count and the page.
+    /// </summary>
+    internal async Task<IOrderedQueryable<PostWithRating>> RatedPosts(PostsQuery query)
+    {
         // Read-only path feeding the home-page widgets (best of week, latest
         // featured, Pulse). PostWithRating holds an entity reference, but no
         // entity is ever materialised: the terminals are CountAsync and a
@@ -87,30 +115,12 @@ internal partial class PostRepository
             query.CreatedFromUtc, query.CreatedToUtc);
 
         baseQuery = WhereReviewed(baseQuery, query);
+        baseQuery = PostFilters.WhereHasReviews(baseQuery, query.HasReviews);
 
         var projectedQuery = PostFilters.WhereRated(baseQuery.Select(PostFilters.WithRating),
-            query.HasReviews, query.MinRating, query.MaxRating);
+            query.MinRating, query.MaxRating);
 
-        var sortedQuery = SortRated(projectedQuery, query);
-
-        var totalCount = await sortedQuery.CountAsync();
-
-        var rawData = await sortedQuery
-            .Skip(query.Skip)
-            .Take(query.Take)
-            .Select(RatedPostRowProjection)
-            .ToArrayAsync();
-
-        var posts = rawData.Select(ToRatedPost).ToArray();
-
-        // One batched query (IN(characterIds)) for avatar URLs, instead
-        // of a correlated Uploads subquery per row in the main projection.
-        await EnrichWithCharacterPictures(posts);
-        await EnrichWithAttachments(posts);
-
-        await AttachGames(posts, viewerId);
-
-        return (posts, totalCount);
+        return SortRated(projectedQuery, query);
     }
 
     private IQueryable<DbPost> WhereReviewed(IQueryable<DbPost> baseQuery, PostsQuery query)

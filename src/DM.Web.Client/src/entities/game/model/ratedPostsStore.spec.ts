@@ -74,10 +74,111 @@ describe("useRatedPostsStore", () => {
   it("picks the latest rated post by the freshest review, with no week window", async () => {
     await useRatedPostsStore().fetchLatestRated();
 
+    // Two whatever the best of the week is: the request does not wait for it.
     expect(mockGetRatedPosts).toHaveBeenCalledWith({
       sortBy: "lastreview",
       hasReviews: true,
-      take: 1,
+      take: 2,
+    });
+  });
+
+  // The latest block must not repeat the best of the week.
+  describe("latest rated post", () => {
+    const post = (id: string) => ({ id }) as never;
+
+    function answer(sortBy: string, ids: string[]) {
+      mockGetRatedPosts.mockImplementation(async (params) => ({
+        data: {
+          resources: (params.sortBy === sortBy ? ids : ["best"]).map(post),
+        },
+        error: null,
+      }));
+    }
+
+    it("skips the best of the week", async () => {
+      answer("lastreview", ["best", "p-2"]);
+      const store = useRatedPostsStore();
+
+      await Promise.all([store.fetchBestOfWeek(), store.fetchLatestRated()]);
+
+      expect(store.latestRated?.id).toBe("p-2");
+    });
+
+    it("shows the best of the week when it is the only rated post", async () => {
+      answer("lastreview", ["best"]);
+      const store = useRatedPostsStore();
+
+      await Promise.all([store.fetchBestOfWeek(), store.fetchLatestRated()]);
+
+      expect(store.latestRated?.id).toBe("best");
+    });
+
+    it("picks nothing before the best of the week is in", async () => {
+      answer("lastreview", ["best", "p-2"]);
+      const store = useRatedPostsStore();
+
+      await store.fetchLatestRated();
+
+      // Picked now it would be "best", and then swapped for "p-2".
+      expect(store.latestRated).toBeNull();
+      expect(store.latestLoaded).toBe(false);
+
+      await store.fetchBestOfWeek();
+
+      expect(store.latestRated?.id).toBe("p-2");
+      expect(store.latestLoaded).toBe(true);
+    });
+
+    it("takes the first when the best of the week failed to load", async () => {
+      mockGetRatedPosts.mockImplementation(async (params) =>
+        params.sortBy === "rating"
+          ? { data: null, error: { status: 500 } }
+          : { data: { resources: [post("p-1"), post("p-2")] }, error: null },
+      );
+      const store = useRatedPostsStore();
+
+      await Promise.all([store.fetchBestOfWeek(), store.fetchLatestRated()]);
+
+      expect(store.latestRated?.id).toBe("p-1");
+    });
+
+    it("changes the block once on a refresh, whichever answer lands first", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-11-12T10:00:00Z"));
+      const pending = new Map<string, (ids: string[]) => void>();
+      mockGetRatedPosts.mockImplementation(
+        (params: { sortBy: string }) =>
+          new Promise((resolve) =>
+            pending.set(params.sortBy, (ids) =>
+              resolve({ data: { resources: ids.map(post) }, error: null }),
+            ),
+          ),
+      );
+      const settle = () => new Promise((r) => setTimeout(r, 0));
+      const store = useRatedPostsStore();
+
+      store.fetchBestOfWeek();
+      store.fetchLatestRated();
+      pending.get("rating")!(["A"]);
+      pending.get("lastreview")!(["A", "B"]);
+      await settle();
+      const seen = [store.latestRated?.id];
+
+      // Back on the home page after both entries aged out.
+      vi.setSystemTime(new Date("2026-11-12T10:05:01Z"));
+      store.fetchBestOfWeek();
+      store.fetchLatestRated();
+      await settle();
+      seen.push(store.latestRated?.id);
+      pending.get("lastreview")!(["C", "A"]);
+      await settle();
+      // Picked now against the stale best it would be "C", then "A".
+      seen.push(store.latestRated?.id);
+      pending.get("rating")!(["C"]);
+      await settle();
+      seen.push(store.latestRated?.id);
+
+      expect(seen).toEqual(["B", "B", "B", "A"]);
     });
   });
 
@@ -126,20 +227,21 @@ describe("useRatedPostsStore", () => {
       expect(mockGetRatedPosts).toHaveBeenCalledTimes(3);
     });
 
-    it("re-reads the latest rated post when another one is excluded", async () => {
+    it("keeps the two candidates of the latest block under one entry", async () => {
       mockGetRatedPosts.mockResolvedValue({
         data: { resources: [post("p-1"), post("p-2")] },
         error: null,
       });
       const store = useRatedPostsStore();
 
-      await store.fetchLatestRated("p-1");
-      await store.fetchLatestRated("p-2");
+      await store.fetchLatestRated();
+      await store.fetchBestOfWeek();
+      await store.fetchLatestRated();
 
-      // The answer is picked out of the page BY the excluded id, so one entry
-      // for both would hand the second call the post it asked to avoid.
+      // Best of the week and latest once each: the pick out of the two is made
+      // on the client, so a new best of the week needs no new page.
       expect(mockGetRatedPosts).toHaveBeenCalledTimes(2);
-      expect(store.latestRated?.id).toBe("p-1");
+      expect(store.latestRated?.id).toBe("p-2");
     });
 
     it("keeps one entry per profile", async () => {
@@ -162,7 +264,7 @@ describe("useRatedPostsStore", () => {
       await store.fetchBestOfWeek();
       await store.fetchBestOfWeek(true);
       await store.fetchLatestRated();
-      await store.fetchLatestRated(undefined, true);
+      await store.fetchLatestRated(true);
       await store.fetchBestPostOfUser("Alice");
       await store.fetchBestPostOfUser("Alice", true);
 

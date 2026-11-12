@@ -1,7 +1,7 @@
 // The rated-post widgets of the home page and the profile, cached so a way back does not refetch.
 
 import { defineStore } from "pinia";
-import { ref, type Ref } from "vue";
+import { computed, ref, type Ref } from "vue";
 import type { Post } from "./postTypes";
 import postApi from "../api/postApi";
 import { getWeekStartUtc } from "@/shared/lib/utils/datetime";
@@ -16,12 +16,22 @@ const RATED_POST_TTL = 300_000;
 export const useRatedPostsStore = defineStore("ratedPosts", () => {
   const postCache = createKeyedCache<Post | null>({
     ttlMs: RATED_POST_TTL,
-    // Two singletons plus one entry per profile visited in five minutes.
+    // The best of the week plus one entry per profile visited in five minutes.
     maxEntries: 32,
+  });
+  // The latest block keeps both candidates, so it holds a page and not a post.
+  const latestCache = createKeyedCache<Post[]>({
+    ttlMs: RATED_POST_TTL,
+    maxEntries: 1,
   });
 
   const best = createBestOfWeek(postCache);
-  const latest = createLatestRated(postCache);
+  const latest = createLatestRated(
+    latestCache,
+    best.bestOfWeek,
+    best.bestLoaded,
+    best.loadingBest,
+  );
 
   return {
     bestOfWeek: best.bestOfWeek,
@@ -84,24 +94,49 @@ function createBestOfWeek(postCache: KeyedCache<Post | null>) {
   return { bestOfWeek, loadingBest, bestLoaded, bestError, fetchBestOfWeek };
 }
 
-// The excluded post is part of the key: two exclusions are two answers.
-const latestRatedKey = (excludeId?: string) =>
-  `latest-rated:${excludeId ?? ""}`;
+const latestRatedKey = "latest-rated";
 
-function createLatestRated(postCache: KeyedCache<Post | null>) {
-  const latestRated = ref<Post | null>(null);
+/**
+ * The home page's second block, which must not repeat the first. Its request
+ * does not wait for the best of the week: it always takes two candidates, and
+ * the post is picked out of them once both answers are in.
+ */
+function createLatestRated(
+  latestCache: KeyedCache<Post[]>,
+  bestOfWeek: Ref<Post | null>,
+  bestLoaded: Ref<boolean>,
+  loadingBest: Ref<boolean>,
+) {
+  const candidates = ref<Post[]>([]);
   const loadingLatest = ref(false);
-  const latestLoaded = ref(false);
+  const candidatesLoaded = ref(false);
   const latestError = ref<string | null>(null);
 
-  /** @param excludeId The best post of the week, so the home page does not show it twice. */
-  async function fetchLatestRated(excludeId?: string, force = false) {
-    const key = latestRatedKey(excludeId);
+  // Not loaded until the best of the week is in too: picked earlier, the block
+  // could show the best post and then swap it for the next one.
+  const latestLoaded = computed(
+    () => candidatesLoaded.value && bestLoaded.value,
+  );
+
+  // Picked once per pair of answers: while either request is out the post on
+  // screen stays, or a refresh picks against the stale best and then again.
+  const latestRated = computed<Post | null>((previous) => {
+    if (!latestLoaded.value) return null;
+    if (previous && (loadingLatest.value || loadingBest.value)) return previous;
+    const bestId = bestOfWeek.value?.id;
+    return (
+      candidates.value.find((p) => p.id !== bestId) ??
+      candidates.value[0] ??
+      null
+    );
+  });
+
+  async function fetchLatestRated(force = false) {
     if (!force) {
-      const cached = postCache.get(key);
+      const cached = latestCache.get(latestRatedKey);
       if (cached !== undefined) {
-        latestRated.value = cached;
-        latestLoaded.value = true;
+        candidates.value = cached;
+        candidatesLoaded.value = true;
         return;
       }
     }
@@ -112,21 +147,18 @@ function createLatestRated(postCache: KeyedCache<Post | null>) {
       const response = await postApi.getRatedPosts({
         sortBy: "lastreview",
         hasReviews: true,
-        take: excludeId ? 2 : 1,
+        take: 2,
       });
       if (response.error) {
         latestError.value = "Не удалось загрузить последний оцененный пост";
       } else {
         const resources = response.data?.resources ?? [];
-        const post = excludeId
-          ? (resources.find((p) => p.id !== excludeId) ?? resources[0] ?? null)
-          : (resources[0] ?? null);
-        latestRated.value = post;
-        postCache.set(key, post);
+        candidates.value = resources;
+        latestCache.set(latestRatedKey, resources);
       }
     } finally {
       loadingLatest.value = false;
-      latestLoaded.value = true;
+      candidatesLoaded.value = true;
     }
   }
 
