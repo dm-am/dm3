@@ -3,17 +3,17 @@
 
 function Start-Infrastructure {
     # The list is declared before the step that reports it, so the failure line cannot carry
-    # a hand-typed total.
+    # a hand-typed total. Not the log store: it has no health check, the sink waits for it on
+    # its own, and LogStorageDown says when it is gone.
     $infraServices = @(
         @{ Name = "dm-pg"; Label = "Postgres" },
         @{ Name = "dm-seaweedfs"; Label = "SeaweedFS" },
-        @{ Name = "dm-storage"; Label = "Storage" },
-        @{ Name = "dm-loki"; Label = "Loki" }
+        @{ Name = "dm-storage"; Label = "Storage" }
     )
 
     # alertmanager comes up with prometheus: started apart, prometheus evaluates its rules
     # into nothing.
-    if (-not (Invoke-Step -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres storage seaweedfs mailpit jaeger loki prometheus alertmanager grafana")) {
+    if (-not (Invoke-Step -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres storage seaweedfs mailpit jaeger victorialogs prometheus alertmanager grafana")) {
         Write-FailedStep -Label "Infrastructure" -Current 0 -Total $infraServices.Count -Detail "start failed"
         exit 1
     }

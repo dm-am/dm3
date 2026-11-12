@@ -15,18 +15,22 @@ datasources:
     url: http://dm-jaeger:16686
     editable: false
 
-  - name: Loki
-    type: loki
+  # The plugin is baked into the image by docker/grafana.Dockerfile.
+  - name: VictoriaLogs
+    type: victoriametrics-logs-datasource
     access: proxy
-    url: http://dm-loki:3100
+    url: http://dm-victorialogs:9428
     editable: false
     jsonData:
       # Every log line carries the trace id, written by the log sink out of the
       # event, so a log opens the trace it belongs to without a copy-paste. The
       # name matters as much as the value: an enricher writing a property of this
       # name has it renamed by the sink, and this expression then matches nothing.
+      # A regex over the line, since the store keeps the line unparsed.
       derivedFields:
         - name: TraceId
           matcherRegex: '"TraceId":"(\w+)"'
+          matcherType: regex
           url: '$${__value.raw}'
+          urlDisplayLabel: Trace
           datasourceUid: jaeger

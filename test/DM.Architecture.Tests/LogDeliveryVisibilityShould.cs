@@ -8,7 +8,7 @@ using Xunit;
 namespace DM.Architecture.Tests;
 
 /// <remarks>
-/// A sink reports nothing about itself by contract, and Loki drops silently after retrying. The
+/// A sink reports nothing about itself by contract, and drops silently after retrying. The
 /// diagnostic stream, a scrape target on the store and a rule close that; the guide's queries are
 /// asserted with them.
 /// </remarks>
@@ -28,7 +28,7 @@ public class LogDeliveryVisibilityShould
     private static readonly Regex DeclaredLabel = new(
         @"new LokiLabel\s*{\s*Key\s*=\s*""([\w-]+)""", RegexOptions.Compiled);
 
-    /// <summary>A LogQL stream selector, as the guide writes one.</summary>
+    /// <summary>A LogsQL stream filter, as the guide writes one.</summary>
     private static readonly Regex StreamSelector = new(
         @"^\{([^}]*)\}", RegexOptions.Compiled | RegexOptions.Multiline);
 
@@ -67,7 +67,7 @@ public class LogDeliveryVisibilityShould
 
         // The container name rather than the service name: every target in this
         // file addresses containers, and a service name resolves to nothing here.
-        var container = Regex.Match(compose, @"loki:\s*\n\s*container_name:\s*'([\w-]+)'");
+        var container = Regex.Match(compose, @"victorialogs:\s*\n\s*container_name:\s*'([\w-]+)'");
         container.Success.Should().BeTrue("the compose file names the log store container");
 
         var target = Regex.Match(scrape,
@@ -100,7 +100,7 @@ public class LogDeliveryVisibilityShould
             .SelectMany(match => SelectorKey.Matches(match.Groups[1].Value))
             .Select(match => match.Groups[1].Value)
             .ToHashSet();
-        used.Should().NotBeEmpty("the guide shows LogQL examples, and finding none passes everything");
+        used.Should().NotBeEmpty("the guide shows LogsQL examples, and finding none passes everything");
 
         used.Should().BeSubsetOf(real,
             "a selector on a label the sink never attaches returns nothing, which reads " +
@@ -112,8 +112,29 @@ public class LogDeliveryVisibilityShould
                 $"the guide states which labels exist, and {label} is one of them");
         }
 
-        Guide.Should().NotMatchRegex(@"\|\s*json\s*\|[^\n]*\blevel\b",
+        Guide.Should().NotMatchRegex(@"\|\s*(?:unpack_)?json\b[^\n]*\blevel\b",
             "severity is a label and never a field of the line, so parsing the body for " +
             "it filters everything away");
+    }
+
+    /// <summary>
+    /// The store parses a JSON line into fields unless told not to, and the trace link reads the line.
+    /// </summary>
+    /// <remarks>
+    /// Parsed, the line loses its message: the sink writes it as "Message", and the store keeps an
+    /// empty one under its own name. The derived field then matches nothing, and TraceLinkShould,
+    /// which reads the push the sink makes, cannot see what the store does with it.
+    /// </remarks>
+    [Fact]
+    public void KeepTheLineAsTheSinkWroteIt()
+    {
+        var compose = File.ReadAllText(Path.Combine(Root, "docker", "docker-compose.yml"));
+        var datasources = File.ReadAllText(Path.Combine(
+            Root, "docker", "grafana", "provisioning", "datasources", "datasources.yml"));
+
+        DeploymentFiles.ServiceBlock(compose, "victorialogs").Should().Contain("-loki.disableMessageParsing",
+            "a parsed line is no longer the text the derived field reads");
+        datasources.Should().MatchRegex(@"matcherType:\s*regex",
+            "the trace id is found in the line, and the plugin's default matcher reads a field");
     }
 }
