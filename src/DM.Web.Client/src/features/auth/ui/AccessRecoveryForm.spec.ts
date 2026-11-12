@@ -3,7 +3,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
-import { nextTick } from "vue";
 import { accountApi } from "@/entities/user";
 import { Api } from "@/shared/api";
 import AccessRecoveryForm from "./AccessRecoveryForm.vue";
@@ -11,6 +10,7 @@ import { toast } from "./authForms.doubles";
 import {
   address,
   AuthDialogStub,
+  expectWaitDropsOnClose,
   expectWaitRunsDown,
   mountAuthForm,
 } from "./authForms.fixtures";
@@ -186,20 +186,11 @@ describe("the recovery request", () => {
           stubs: { AuthDialog: AuthDialogStub },
         });
 
-      // The modal keeps the component mounted, so a running interval would outlive it.
       // First in the block: an attached form here fails every time, not one run in many.
       it("drops the wait when the dialog closes", async () => {
         refused(429, "Слишком много запросов", 30);
         const wrapper = await submit(await mountOffDocument());
-        // A real frame of jsdom runs out before the close, the order a loaded runner met.
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        expect(vi.getTimerCount()).toBe(1);
-
-        wrapper.findComponent({ name: "AuthDialog" }).vm.$emit("beforeClose");
-        await nextTick();
-
-        expect(vi.getTimerCount()).toBe(0);
-        expect(wrapper.find(".auth-message").text()).toBe("");
+        await expectWaitDropsOnClose(wrapper, ".auth-message");
       });
 
       it("stands under the field, shuts the button, and runs down", async () => {
