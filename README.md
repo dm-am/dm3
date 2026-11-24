@@ -56,6 +56,7 @@ references/, справка:
 
 - [GLOSSARY](./docs/references/GLOSSARY.md): термины
 - [CONFIGURATION](./docs/references/CONFIGURATION.md): где лежат настройки
+- [DM2](./docs/references/dm2/README.md): опись функций DM2, образца DM3
 
 В корне docs/ документы о проекте целиком:
 
