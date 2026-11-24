@@ -214,8 +214,8 @@ public class InterfaceVocabularyShould
 
     /// <summary>
     /// Every file outside the client a person reads Russian in: every markdown file a commit carries and
-    /// the server sources. The client checks itself; audit reports and the description of DM2 quote what
-    /// they name (<see cref="HandwrittenDocuments.ForeignSiteDescription"/>).
+    /// the server sources. The client checks itself; audit reports and the parts of the DM2 description
+    /// quote what they name (<see cref="HandwrittenDocuments.DescribesForeignSite"/>).
     /// </summary>
     private static IEnumerable<string> ReadableText(string root)
     {

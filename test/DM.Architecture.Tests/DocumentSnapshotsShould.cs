@@ -13,8 +13,9 @@ namespace DM.Architecture.Tests;
 /// </summary>
 /// <remarks>
 /// Dates in both spellings (26.09.2026, 2026-08-25) outside quotes and code, and counts: a number
-/// before a noun the tree has more or fewer of with every change, or after "всего". The description of
-/// DM2 is left out: its dates and counts are what was seen on that site (<see cref="HandwrittenDocuments.ForeignSiteDescription"/>).
+/// before a noun the tree has more or fewer of with every change, or after "всего". The parts of the
+/// DM2 description are left out: their dates and counts are what was seen on that site
+/// (<see cref="HandwrittenDocuments.DescribesForeignSite"/>).
 /// </remarks>
 public class DocumentSnapshotsShould
 {
