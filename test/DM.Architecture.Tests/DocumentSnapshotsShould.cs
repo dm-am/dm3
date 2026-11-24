@@ -13,7 +13,8 @@ namespace DM.Architecture.Tests;
 /// </summary>
 /// <remarks>
 /// Dates in both spellings (26.09.2026, 2026-08-25) outside quotes and code, and counts: a number
-/// before a noun the tree has more or fewer of with every change, or after "всего".
+/// before a noun the tree has more or fewer of with every change, or after "всего". The description of
+/// DM2 is left out: its dates and counts are what was seen on that site (<see cref="HandwrittenDocuments.ForeignSiteDescription"/>).
 /// </remarks>
 public class DocumentSnapshotsShould
 {
@@ -47,7 +48,7 @@ public class DocumentSnapshotsShould
         documents.Should().HaveCountGreaterThan(30, "a rule that reads a handful of documents checks little");
 
         var snapshots = new List<string>();
-        foreach (var document in documents)
+        foreach (var document in documents.Where(document => !HandwrittenDocuments.DescribesForeignSite(document.Path)))
         {
             var prose = document.Lines.Where(line => line.IsProse).Select(line => Prose(line.Text)).ToList();
             foreach (var (kind, patterns) in new[] { (Date, Dates), (Count, Counts) })

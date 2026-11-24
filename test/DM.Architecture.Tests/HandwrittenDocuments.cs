@@ -17,6 +17,17 @@ internal static class HandwrittenDocuments
 
     private const string AuditReport = "AUDIT-";
 
+    /// <summary>
+    /// The description of DM2, the site DM3 succeeds. It quotes that site in its own words and spelling, and
+    /// its dates and numbers are what was seen there and when, so the rules for DM3's own wording, typography
+    /// and snapshots leave it out, as they leave out the audit reports that quote what they name.
+    /// </summary>
+    public const string ForeignSiteDescription = "docs/references/dm2/";
+
+    /// <param name="path">Path from the repository root, forward slashes.</param>
+    public static bool DescribesForeignSite(string path) =>
+        path.StartsWith(ForeignSiteDescription, StringComparison.Ordinal);
+
     private static readonly Regex Fence = new(@"^\s*(?:```|~~~)\s*(?<language>[\w#+-]*)", RegexOptions.Compiled);
 
     private static readonly Regex CodeSpan = new(@"(`+)[^`\n]*?\1", RegexOptions.Compiled);

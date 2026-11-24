@@ -214,14 +214,16 @@ public class InterfaceVocabularyShould
 
     /// <summary>
     /// Every file outside the client a person reads Russian in: every markdown file a commit carries and
-    /// the server sources. The client checks itself; audit reports quote what they name.
+    /// the server sources. The client checks itself; audit reports and the description of DM2 quote what
+    /// they name (<see cref="HandwrittenDocuments.ForeignSiteDescription"/>).
     /// </summary>
     private static IEnumerable<string> ReadableText(string root)
     {
         foreach (var file in RepositoryFiles.CommittableFiles())
         {
             if (file.EndsWith(".md", StringComparison.OrdinalIgnoreCase) &&
-                !Relative(root, file).StartsWith("AUDIT-", StringComparison.Ordinal))
+                !Relative(root, file).StartsWith("AUDIT-", StringComparison.Ordinal) &&
+                !HandwrittenDocuments.DescribesForeignSite(Relative(root, file)))
             {
                 yield return file;
             }
