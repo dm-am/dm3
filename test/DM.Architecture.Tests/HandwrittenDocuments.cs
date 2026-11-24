@@ -18,15 +18,18 @@ internal static class HandwrittenDocuments
     private const string AuditReport = "AUDIT-";
 
     /// <summary>
-    /// The description of DM2, the site DM3 succeeds. It quotes that site in its own words and spelling, and
-    /// its dates and numbers are what was seen there and when, so the rules for DM3's own wording, typography
-    /// and snapshots leave it out, as they leave out the audit reports that quote what they name.
+    /// The description of DM2, the site DM3 succeeds. Its parts quote that site in its own words and spelling,
+    /// and their dates and numbers are what was seen there and when, so the rules for DM3's own wording,
+    /// typography and snapshots leave the parts out, as they leave out the audit reports that quote what they
+    /// name. The folder's README is our own text and stays under every rule.
     /// </summary>
     public const string ForeignSiteDescription = "docs/references/dm2/";
 
+    /// <summary>True for a part of the description of DM2, false for its README and every other document.</summary>
     /// <param name="path">Path from the repository root, forward slashes.</param>
     public static bool DescribesForeignSite(string path) =>
-        path.StartsWith(ForeignSiteDescription, StringComparison.Ordinal);
+        path.StartsWith(ForeignSiteDescription, StringComparison.Ordinal) &&
+        path != ForeignSiteDescription + "README.md";
 
     private static readonly Regex Fence = new(@"^\s*(?:```|~~~)\s*(?<language>[\w#+-]*)", RegexOptions.Compiled);
 
